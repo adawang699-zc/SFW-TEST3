@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+{% block title %}端口扫描{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">端口扫描</div>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        使用本地 Agent 扫描目标设备的端口开放状态
+    </p>
+</div>
+
+<div class="card">
+    <div class="card-header">选择扫描 Agent</div>
+    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <p style="color: var(--text-secondary);">加载中...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">扫描配置</div>
+
+    <div class="form-group">
+        <label class="form-label">目标 IP</label>
+        <input type="text" id="target-ip" class="form-input" placeholder="例如: 192.168.1.100">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">端口范围</label>
+        <input type="text" id="port-range" class="form-input" value="1-1000" placeholder="例如: 1-1000 或 22,80,443">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">扫描类型</label>
+        <select id="scan-type" class="form-input">
+            <option value="tcp">TCP 扫描</option>
+        </select>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+        <button class="btn btn-primary" onclick="startScan()" id="start-btn">开始扫描</button>
+        <button class="btn btn-danger" onclick="stopScan()" id="stop-btn" style="display: none;">停止扫描</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">扫描进度</div>
+    <div id="progress-display">
+        <div style="background: var(--bg-dark); height: 24px; border-radius: 12px; overflow: hidden;">
+            <div id="progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); transition: width 0.3s;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; color: var(--text-secondary);">
+            <span id="progress-text">等待开始...</span>
+            <span id="progress-percent">0%</span>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">扫描结果</div>
+    <div id="scan-results">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>端口</th>
+                    <th>状态</th>
+                    <th>类型</th>
+                </tr>
+            </thead>
+            <tbody id="results-table">
+                <tr><td colspan="3" style="color: var(--text-secondary);">暂无结果</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="results-summary" style="color: var(--text-secondary); margin-top: 12px;">
+        发现 <span id="open-count">0</span> 个开放端口
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedAgentId = null;
+let scanInterval = null;
+let currentTarget = null;
+
+async function loadAgents() {
+    try {
+        const result = await apiRequest('/api/agents/list/');
+        const container = document.getElementById('agent-selector');
+
+        if (result.agents && result.agents.length > 0) {
+            let html = '';
+            result.agents.forEach(agent => {
+                if (agent.status === 'running') {
+                    html += `
+                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer; border: 2px solid var(--border);">
+                            <div class="agent-id">${agent.agent_id}</div>
+                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address}</div>
+                            <div class="status-badge status-running">运行中</div>
+                        </div>
+                    `;
+                }
+            });
+            container.innerHTML = html || '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
+        } else {
+            container.innerHTML = '<p style="color: var(--text-secondary);">请先启动 Agent</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p style="color: var(--danger);">加载失败</p>';
+    }
+}
+
+function selectAgent(agentId) {
+    selectedAgentId = agentId;
+    document.querySelectorAll('.agent-card').forEach(card => {
+        const id = card.querySelector('.agent-id').textContent;
+        card.style.borderColor = id === agentId ? 'var(--primary)' : 'var(--border)';
+    });
+}
+
+async function startScan() {
+    if (!selectedAgentId) {
+        showToast('请先选择 Agent', 'error');
+        return;
+    }
+
+    const targetIp = document.getElementById('target-ip').value.trim();
+    const portRange = document.getElementById('port-range').value.trim();
+    const scanType = document.getElementById('scan-type').value;
+
+    if (!targetIp) {
+        showToast('请输入目标 IP', 'error');
+        return;
+    }
+
+    currentTarget = targetIp;
+
+    try {
+        const result = await apiRequest('/api/start_scan/', 'POST', {
+            agent_id: selectedAgentId,
+            target_ip: targetIp,
+            port_range: portRange,
+            scan_type: scanType
+        });
+
+        if (result.status === 'scanning') {
+            showToast('扫描已开始');
+            document.getElementById('start-btn').style.display = 'none';
+            document.getElementById('stop-btn').style.display = 'inline-block';
+            document.getElementById('progress-text').textContent = `扫描目标: ${targetIp}`;
+            document.getElementById('results-table').innerHTML = '<tr><td colspan="3" style="color: var(--text-secondary);">扫描进行中...</td></tr>';
+            document.getElementById('open-count').textContent = '0';
+            scanInterval = setInterval(updateScanProgress, 1000);
+        } else {
+            showToast('启动失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function stopScan() {
+    try {
+        const result = await apiRequest('/api/stop_scan/', 'POST', { agent_id: selectedAgentId });
+        if (result.status === 'stopped') {
+            showToast('扫描已停止');
+            document.getElementById('start-btn').style.display = 'inline-block';
+            document.getElementById('stop-btn').style.display = 'none';
+            if (scanInterval) clearInterval(scanInterval);
+            // 获取最终结果
+            fetchFinalResults();
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function updateScanProgress() {
+    if (!selectedAgentId) return;
+
+    try {
+        const result = await apiRequest('/api/scan_progress/', 'POST', { agent_id: selectedAgentId });
+
+        if (result.running || result.progress > 0) {
+            // 更新进度条
+            const progress = result.progress || 0;
+            document.getElementById('progress-bar').style.width = progress + '%';
+            document.getElementById('progress-percent').textContent = progress + '%';
+
+            if (result.results_count) {
+                document.getElementById('open-count').textContent = result.results_count;
+            }
+
+            // 扫描完成
+            if (!result.running && progress >= 100) {
+                clearInterval(scanInterval);
+                document.getElementById('start-btn').style.display = 'inline-block';
+                document.getElementById('stop-btn').style.display = 'none';
+                document.getElementById('progress-text').textContent = '扫描完成';
+                fetchFinalResults();
+            }
+        }
+    } catch (e) {
+        console.error('获取进度失败:', e);
+    }
+}
+
+async function fetchFinalResults() {
+    if (!selectedAgentId) return;
+
+    try {
+        const result = await apiRequest('/api/scan_results/', 'POST', { agent_id: selectedAgentId });
+
+        if (result.results && result.results.length > 0) {
+            renderResults(result.results);
+            document.getElementById('open-count').textContent = result.results.length;
+        } else {
+            document.getElementById('results-table').innerHTML = '<tr><td colspan="3" style="color: var(--text-secondary);">未发现开放端口</td></tr>';
+        }
+    } catch (e) {
+        console.error('获取结果失败:', e);
+    }
+}
+
+function renderResults(results) {
+    const tbody = document.getElementById('results-table');
+
+    tbody.innerHTML = results.map(r => `
+        <tr>
+            <td><span style="background: var(--primary); padding: 2px 8px; border-radius: 4px;">${r.port}</span></td>
+            <td><span style="color: var(--success);">● 开放</span></td>
+            <td>${r.type || 'TCP'}</td>
+        </tr>
+    `).join('');
+}
+
+function showToast(message, type = 'success') {
+    // 简单提示
+    const toast = document.createElement('div');
+    toast.style.cssText = `position: fixed; top: 80px; right: 20px; padding: 12px 24px; background: ${type === 'error' ? 'var(--danger)' : 'var(--success)'}; color: white; border-radius: 8px; z-index: 9999;`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2000);
+}
+
+window.onload = loadAgents;
+</script>
+{% endblock %}

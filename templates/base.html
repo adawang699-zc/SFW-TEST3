@@ -1,0 +1,450 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% csrf_token %}
+    <title>{% block title %}Ubuntu 多 Agent 部署平台{% endblock %}</title>
+    <style>
+        /* ========== 深色工业风主题 ========== */
+        :root {
+            --bg-deep: #0f0f23;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-light: #0f3460;
+
+            --primary: #ff6b35;
+            --primary-light: #ff8f66;
+            --secondary: #00a896;
+            --secondary-light: #00c9b1;
+            --accent: #004e89;
+
+            --success: #38b000;
+            --warning: #f9c74f;
+            --danger: #d00000;
+
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;
+            --text-muted: #6c6c6c;
+
+            --border: rgba(255, 255, 255, 0.1);
+            --glow: 0 0 40px rgba(255, 107, 53, 0.3);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* 导航栏 */
+        .navbar {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            height: 56px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .navbar-brand {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+            text-decoration: none;
+        }
+
+        .navbar-time {
+            margin-left: 24px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            width: 220px;
+            height: calc(100vh - 56px);
+            background: var(--bg-dark);
+            border-right: 1px solid var(--border);
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 107, 53, 0.1);
+            color: var(--primary);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.2), rgba(255, 107, 53, 0.05));
+            color: var(--primary);
+            border-left: 3px solid var(--primary);
+        }
+
+        .nav-link i {
+            margin-right: 12px;
+            width: 20px;
+        }
+
+        /* 内容区 */
+        .content {
+            margin-left: 220px;
+            margin-top: 56px;
+            padding: 24px;
+            min-height: calc(100vh - 56px);
+        }
+
+        /* 卡片 */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .card-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-header::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            margin-right: 12px;
+            border-radius: 2px;
+        }
+
+        /* 按钮 */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 4px 20px rgba(255, 107, 53, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--secondary);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.85rem;
+        }
+
+        /* 表格 */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: rgba(255, 107, 53, 0.1);
+            color: var(--primary);
+            padding: 12px;
+            text-align: left;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table td {
+            padding: 12px;
+            color: var(--text-primary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table tr:hover td {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* 状态指示器 */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+        }
+
+        .status-running {
+            background: rgba(56, 176, 0, 0.2);
+            color: var(--success);
+        }
+
+        .status-stopped {
+            background: rgba(208, 0, 0, 0.2);
+            color: var(--danger);
+        }
+
+        .status-management {
+            background: rgba(0, 168, 150, 0.2);
+            color: var(--secondary);
+        }
+
+        /* 网卡卡片 */
+        .interface-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .interface-card:hover {
+            border-color: rgba(255, 107, 53, 0.3);
+        }
+
+        .interface-card.management {
+            border-color: var(--secondary);
+            background: rgba(0, 168, 150, 0.1);
+        }
+
+        .interface-card.bound {
+            border-color: var(--primary);
+        }
+
+        .interface-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .interface-ip {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+
+        /* Agent 卡片 */
+        .agent-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .agent-card.running {
+            border-color: var(--success);
+        }
+
+        .agent-id {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* 表单 */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 16px rgba(255, 107, 53, 0.2);
+        }
+
+        /* 工具栏 */
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; position: relative; height: auto; }
+            .content { margin-left: 0; }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <a href="{% url 'main:home' %}" class="navbar-brand">Ubuntu 多 Agent 部署平台</a>
+        <span class="navbar-time" id="realtime-clock">系统时间: <span id="clock">--:--:--</span></span>
+    </nav>
+
+    <!-- 侧边栏 -->
+    <div class="sidebar">
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'home' %}active{% endif %}" href="{% url 'main:home' %}">
+                <i>🏠</i>首页
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'agent_manage' %}active{% endif %}" href="{% url 'main:agent_manage' %}">
+                <i>🔌</i>网卡 & Agent
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'device_monitor' %}active{% endif %}" href="{% url 'main:device_monitor' %}">
+                <i>🖥️</i>测试设备
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'packet_send' %}active{% endif %}" href="{% url 'main:packet_send' %}">
+                <i>📡</i>报文发送
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'industrial_protocol' %}active{% endif %}" href="{% url 'main:industrial_protocol' %}">
+                <i>⚙️</i>工控协议
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'port_scan' %}active{% endif %}" href="{% url 'main:port_scan' %}">
+                <i>🔍</i>端口扫描
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'packet_replay' %}active{% endif %}" href="{% url 'main:packet_replay' %}">
+                <i>🔄</i>报文回放
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'syslog_receiver' %}active{% endif %}" href="{% url 'main:syslog_receiver' %}">
+                <i>📋</i>Syslog 接收
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'snmp' %}active{% endif %}" href="{% url 'main:snmp' %}">
+                <i>📊</i>SNMP 管理
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'dhcp_client' %}active{% endif %}" href="{% url 'main:dhcp_client' %}">
+                <i>🖥️</i>DHCP 客户端
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'knowledge_base' %}active{% endif %}" href="{% url 'main:knowledge_base' %}">
+                <i>📚</i>知识库管理
+            </a>
+        </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'license_management' %}active{% endif %}" href="{% url 'main:license_management' %}">
+                <i>🔑</i>授权管理
+            </a>
+        </div>
+    </div>
+
+    <!-- 内容区 -->
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // 实时时钟
+        function updateClock() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('zh-CN', { hour12: false });
+            document.getElementById('clock').textContent = time;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // API 请求封装
+        async function apiRequest(url, method = 'GET', data = null) {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                }
+            };
+            if (data) options.body = JSON.stringify(data);
+
+            const response = await fetch(url, options);
+            return response.json();
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

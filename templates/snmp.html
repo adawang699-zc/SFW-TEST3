@@ -1,0 +1,351 @@
+{% extends 'base.html' %}
+{% block title %}SNMP 管理{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <!-- SNMP GET/WALK -->
+    <div class="card">
+        <div class="card-header">SNMP 查询</div>
+
+        <div class="form-group">
+            <label class="form-label">设备 IP *</label>
+            <input type="text" id="snmp-ip" class="form-input" placeholder="例如: 192.168.1.100">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">SNMP 版本</label>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary" id="btn-v1" style="flex: 1;">V1</button>
+                <button class="btn btn-primary" id="btn-v2c" style="flex: 1;">V2C</button>
+                <button class="btn btn-secondary" id="btn-v3" style="flex: 1;">V3</button>
+            </div>
+        </div>
+
+        <!-- V1/V2C 配置 -->
+        <div id="v1-v2c-config">
+            <div class="form-group">
+                <label class="form-label">Community</label>
+                <input type="text" id="snmp-community" class="form-input" value="public">
+            </div>
+        </div>
+
+        <!-- V3 配置 -->
+        <div id="v3-config" style="display: none;">
+            <div class="form-group">
+                <label class="form-label">安全用户名</label>
+                <input type="text" id="snmp-username" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">安全级别</label>
+                <select id="snmp-level" class="form-input">
+                    <option value="noAuthNoPriv">不认证不加密</option>
+                    <option value="authNoPriv">只认证不加密</option>
+                    <option value="authPriv">既认证又加密</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">认证密码</label>
+                <input type="password" id="snmp-auth-pass" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">加密密码</label>
+                <input type="password" id="snmp-priv-pass" class="form-input">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">端口</label>
+            <input type="number" id="snmp-port" class="form-input" value="161">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">OID *</label>
+            <input type="text" id="snmp-oid" class="form-input" placeholder="例如: 1.3.6.1.2.1.1.1.0">
+            <small style="color: var(--text-muted);">常用: 1.3.6.1.2.1.1.1.0 (系统描述), 1.3.6.1.2.1.1.3.0 (运行时间)</small>
+        </div>
+
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);">
+                <input type="checkbox" id="snmp-walk">
+                使用 WALK（遍历 OID 子树）
+            </label>
+        </div>
+
+        <button class="btn btn-primary" id="btn-query" style="width: 100%;">查询</button>
+
+        <div style="margin-top: 20px;">
+            <label class="form-label">查询结果</label>
+            <div id="snmp-result" style="background: var(--bg-dark); padding: 16px; border-radius: 10px; min-height: 150px; font-family: monospace; color: var(--text-secondary);">
+                等待查询...
+            </div>
+        </div>
+    </div>
+
+    <!-- SNMPTRAP 接收 -->
+    <div class="card">
+        <div class="card-header">SNMPTRAP 接收</div>
+
+        <div class="form-group">
+            <label class="form-label">监听端口</label>
+            <input type="number" id="trap-port" class="form-input" value="162">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">安全用户名（V3）</label>
+            <input type="text" id="trap-username" class="form-input" placeholder="留空则接受所有 V3 用户">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">安全级别（V3）</label>
+            <select id="trap-level" class="form-input">
+                <option value="noAuthNoPriv">不认证不加密</option>
+                <option value="authNoPriv">只认证不加密</option>
+                <option value="authPriv">既认证又加密</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">认证密码（V3）</label>
+            <input type="password" id="trap-auth-pass" class="form-input">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">加密密码（V3）</label>
+            <input type="password" id="trap-priv-pass" class="form-input">
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-success" id="btn-trap-start">启动</button>
+            <button class="btn btn-danger" id="btn-trap-stop" style="display: none;">停止</button>
+            <button class="btn btn-secondary" id="btn-trap-clear">清屏</button>
+        </div>
+
+        <div style="margin-top: 16px;">
+            <span class="status-badge status-stopped" id="trap-status">未运行</span>
+            <span style="color: var(--text-secondary); margin-left: 12px;">TRAP 数: <span id="trap-count">0</span></span>
+        </div>
+
+        <div style="margin-top: 20px; max-height: 400px; overflow-y: auto;">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th style="width: 140px;">时间</th>
+                        <th style="width: 120px;">来源 IP</th>
+                        <th>OID 值</th>
+                    </tr>
+                </thead>
+                <tbody id="trap-table">
+                    <tr><td colspan="3" style="color: var(--text-secondary);">暂无 TRAP</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let snmpVersion = 'v2c';
+let trapUpdateInterval = null;
+
+// SNMP 版本切换
+document.getElementById('btn-v1').addEventListener('click', function() {
+    snmpVersion = 'v1';
+    updateVersionButtons();
+});
+document.getElementById('btn-v2c').addEventListener('click', function() {
+    snmpVersion = 'v2c';
+    updateVersionButtons();
+});
+document.getElementById('btn-v3').addEventListener('click', function() {
+    snmpVersion = 'v3';
+    updateVersionButtons();
+});
+
+function updateVersionButtons() {
+    document.getElementById('btn-v1').className = snmpVersion === 'v1' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-v2c').className = snmpVersion === 'v2c' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-v3').className = snmpVersion === 'v3' ? 'btn btn-primary' : 'btn btn-secondary';
+
+    document.getElementById('v1-v2c-config').style.display = snmpVersion === 'v3' ? 'none' : 'block';
+    document.getElementById('v3-config').style.display = snmpVersion === 'v3' ? 'block' : 'none';
+}
+
+// SNMP 查询
+document.getElementById('btn-query').addEventListener('click', async function() {
+    const ip = document.getElementById('snmp-ip').value.trim();
+    const oid = document.getElementById('snmp-oid').value.trim();
+    const port = parseInt(document.getElementById('snmp-port').value) || 161;
+    const walk = document.getElementById('snmp-walk').checked;
+
+    if (!ip || !oid) {
+        showToast('请输入 IP 和 OID', 'error');
+        return;
+    }
+
+    const payload = {
+        ip: ip,
+        oid: oid,
+        version: snmpVersion,
+        port: port,
+        walk: walk
+    };
+
+    if (snmpVersion === 'v1' || snmpVersion === 'v2c') {
+        payload.community = document.getElementById('snmp-community').value || 'public';
+    } else {
+        payload.security_username = document.getElementById('snmp-username').value;
+        payload.security_level = document.getElementById('snmp-level').value;
+        payload.auth_password = document.getElementById('snmp-auth-pass').value;
+        payload.priv_password = document.getElementById('snmp-priv-pass').value;
+    }
+
+    const resultDiv = document.getElementById('snmp-result');
+    resultDiv.innerHTML = '<span style="color: var(--secondary);">查询中...</span>';
+
+    const result = await apiRequest('/api/snmp/get/', 'POST', payload);
+
+    if (result.success && result.data && result.data.length > 0) {
+        let html = '<table class="table" style="margin: 0;"><thead><tr><th>OID</th><th>值</th><th>类型</th></tr></thead><tbody>';
+        result.data.forEach(item => {
+            html += `<tr><td>${escapeHtml(item.oid)}</td><td>${escapeHtml(item.value)}</td><td>${escapeHtml(item.type)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        resultDiv.innerHTML = html;
+    } else if (result.success) {
+        resultDiv.innerHTML = '<span style="color: var(--text-muted);">无数据</span>';
+    } else {
+        resultDiv.innerHTML = `<span style="color: var(--danger);">错误: ${escapeHtml(result.error)}</span>`;
+    }
+});
+
+// TRAP 接收器控制
+async function fetchTrapStatus() {
+    const result = await apiRequest('/api/snmp/trap/status/');
+    const badge = document.getElementById('trap-status');
+    const btnStart = document.getElementById('btn-trap-start');
+    const btnStop = document.getElementById('btn-trap-stop');
+    const portInput = document.getElementById('trap-port');
+
+    if (result.status.running) {
+        badge.className = 'status-badge status-running';
+        badge.textContent = `运行中 (端口: ${result.status.port})`;
+        btnStart.style.display = 'none';
+        btnStop.style.display = 'inline-block';
+        portInput.disabled = true;
+
+        if (!trapUpdateInterval) {
+            trapUpdateInterval = setInterval(fetchTraps, 1000);
+        }
+    } else {
+        badge.className = 'status-badge status-stopped';
+        badge.textContent = '未运行';
+        btnStart.style.display = 'inline-block';
+        btnStop.style.display = 'none';
+        portInput.disabled = false;
+
+        if (trapUpdateInterval) {
+            clearInterval(trapUpdateInterval);
+            trapUpdateInterval = null;
+        }
+    }
+
+    document.getElementById('trap-count').textContent = result.status.trap_count;
+}
+
+async function fetchTraps() {
+    const result = await apiRequest('/api/snmp/trap/traps/?limit=1000');
+    renderTraps(result.traps || []);
+    document.getElementById('trap-count').textContent = result.traps ? result.traps.length : 0;
+}
+
+function renderTraps(traps) {
+    const tbody = document.getElementById('trap-table');
+
+    if (traps.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="color: var(--text-secondary);">暂无 TRAP</td></tr>';
+        return;
+    }
+
+    traps = traps.reverse();
+
+    tbody.innerHTML = traps.map(trap => {
+        const oidValues = (trap.oid_values || []).map(item =>
+            `${escapeHtml(item.oid)} = ${escapeHtml(item.value)}`
+        ).join('<br>');
+
+        return `
+            <tr>
+                <td style="white-space: nowrap;">${escapeHtml(trap.timestamp)}</td>
+                <td><span style="background: var(--primary); padding: 2px 8px; border-radius: 4px; font-size: 0.85rem;">${escapeHtml(trap.source_ip)}</span></td>
+                <td style="word-break: break-all; font-size: 0.85rem;">${oidValues || '-'}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showToast(message, type = 'success') {
+    alert(message);
+}
+
+// 启动 TRAP
+document.getElementById('btn-trap-start').addEventListener('click', async function() {
+    const port = parseInt(document.getElementById('trap-port').value) || 162;
+
+    const payload = {
+        action: 'start',
+        port: port,
+        security_username: document.getElementById('trap-username').value,
+        security_level: document.getElementById('trap-level').value,
+        auth_password: document.getElementById('trap-auth-pass').value,
+        priv_password: document.getElementById('trap-priv-pass').value
+    };
+
+    const result = await apiRequest('/api/snmp/trap/control/', 'POST', payload);
+
+    if (result.success) {
+        showToast(result.message);
+        fetchTrapStatus();
+    } else {
+        showToast(result.message || result.error, 'error');
+    }
+});
+
+// 停止 TRAP
+document.getElementById('btn-trap-stop').addEventListener('click', async function() {
+    const result = await apiRequest('/api/snmp/trap/control/', 'POST', { action: 'stop' });
+
+    if (result.success) {
+        showToast(result.message);
+        fetchTrapStatus();
+    } else {
+        showToast(result.message || result.error, 'error');
+    }
+});
+
+// 清屏
+document.getElementById('btn-trap-clear').addEventListener('click', async function() {
+    if (!confirm('确定清空所有 TRAP？')) return;
+
+    const result = await apiRequest('/api/snmp/trap/clear/', 'POST');
+
+    if (result.success) {
+        showToast(result.message);
+        fetchTraps();
+    }
+});
+
+// 页面初始化
+window.onload = function() {
+    fetchTrapStatus();
+    fetchTraps();
+    setInterval(fetchTrapStatus, 5000);
+};
+</script>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}Syslog 接收{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">Syslog 日志接收</div>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        UDP Syslog 服务器，接收网络设备的日志报文
+    </p>
+
+    <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: end;">
+        <div>
+            <label class="form-label">监听端口</label>
+            <input type="number" id="syslog-port" class="form-input" value="514" min="1" max="65535">
+        </div>
+        <div>
+            <label class="form-label">IP 过滤（可选）</label>
+            <input type="text" id="syslog-filter-ip" class="form-input" placeholder="留空表示不过滤">
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-success" id="btn-start">启动</button>
+            <button class="btn btn-danger" id="btn-stop" style="display: none;">停止</button>
+            <button class="btn btn-secondary" id="btn-clear">清屏</button>
+        </div>
+    </div>
+
+    <div style="margin-top: 16px;">
+        <span class="status-badge status-stopped" id="status-badge">未运行</span>
+        <span style="color: var(--text-secondary); margin-left: 12px;">日志数: <span id="log-count">0</span></span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">日志列表</div>
+    <div style="max-height: 600px; overflow-y: auto;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th style="width: 140px;">时间</th>
+                    <th style="width: 120px;">IP</th>
+                    <th style="width: 100px;">主机名</th>
+                    <th style="width: 60px;">Facility</th>
+                    <th style="width: 60px;">Severity</th>
+                    <th style="width: 80px;">Tag</th>
+                    <th>消息</th>
+                </tr>
+            </thead>
+            <tbody id="log-table">
+                <tr><td colspan="7" style="color: var(--text-secondary);">暂无日志</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let updateInterval = null;
+let currentFilterIp = '';
+
+async function fetchStatus() {
+    const result = await apiRequest('/api/syslog/status/');
+    const badge = document.getElementById('status-badge');
+    const btnStart = document.getElementById('btn-start');
+    const btnStop = document.getElementById('btn-stop');
+    const portInput = document.getElementById('syslog-port');
+
+    if (result.status.running) {
+        badge.className = 'status-badge status-running';
+        badge.textContent = `运行中 (端口: ${result.status.port})`;
+        btnStart.style.display = 'none';
+        btnStop.style.display = 'inline-block';
+        portInput.disabled = true;
+
+        if (!updateInterval) {
+            updateInterval = setInterval(fetchLogs, 1000);
+        }
+    } else {
+        badge.className = 'status-badge status-stopped';
+        badge.textContent = '未运行';
+        btnStart.style.display = 'inline-block';
+        btnStop.style.display = 'none';
+        portInput.disabled = false;
+
+        if (updateInterval) {
+            clearInterval(updateInterval);
+            updateInterval = null;
+        }
+    }
+
+    document.getElementById('log-count').textContent = result.status.log_count;
+    if (result.status.filter_ip) {
+        document.getElementById('syslog-filter-ip').value = result.status.filter_ip;
+        currentFilterIp = result.status.filter_ip;
+    }
+}
+
+async function fetchLogs() {
+    const filterIp = document.getElementById('syslog-filter-ip').value.trim();
+    const url = `/api/syslog/logs/?limit=1000${filterIp ? '&filter_ip=' + encodeURIComponent(filterIp) : ''}`;
+    const result = await apiRequest(url);
+
+    renderLogs(result.logs);
+    document.getElementById('log-count').textContent = result.logs.length;
+}
+
+function renderLogs(logs) {
+    const tbody = document.getElementById('log-table');
+
+    if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-secondary);">暂无日志</td></tr>';
+        return;
+    }
+
+    // 反转顺序，最新的在顶部
+    logs = logs.reverse();
+
+    tbody.innerHTML = logs.map(log => {
+        const severityClass = log.severity <= 3 ? 'color: var(--danger)' : log.severity <= 5 ? 'color: var(--warning)' : 'color: var(--secondary)';
+        return `
+            <tr>
+                <td style="white-space: nowrap;">${escapeHtml(log.timestamp)}</td>
+                <td><span style="background: var(--primary); padding: 2px 8px; border-radius: 4px; font-size: 0.85rem;">${escapeHtml(log.ip)}</span></td>
+                <td>${escapeHtml(log.hostname || '-')}</td>
+                <td style="text-align: center;">${log.facility}</td>
+                <td style="text-align: center; ${severityClass}">${log.severity}</td>
+                <td>${escapeHtml(log.tag || '-')}</td>
+                <td style="word-break: break-all;">${escapeHtml(log.message)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showToast(message, type = 'success') {
+    alert(message);
+}
+
+// 启动按钮
+document.getElementById('btn-start').addEventListener('click', async function() {
+    const port = parseInt(document.getElementById('syslog-port').value);
+
+    if (!port || port < 1 || port > 65535) {
+        showToast('请输入有效端口', 'error');
+        return;
+    }
+
+    const result = await apiRequest('/api/syslog/control/', 'POST', { action: 'start', port: port });
+
+    if (result.success) {
+        showToast(result.message);
+        fetchStatus();
+    } else {
+        showToast(result.message || result.error, 'error');
+    }
+});
+
+// 停止按钮
+document.getElementById('btn-stop').addEventListener('click', async function() {
+    const result = await apiRequest('/api/syslog/control/', 'POST', { action: 'stop' });
+
+    if (result.success) {
+        showToast(result.message);
+        fetchStatus();
+    } else {
+        showToast(result.message || result.error, 'error');
+    }
+});
+
+// 清屏按钮
+document.getElementById('btn-clear').addEventListener('click', async function() {
+    if (!confirm('确定清空所有日志？')) return;
+
+    const result = await apiRequest('/api/syslog/clear/', 'POST');
+
+    if (result.success) {
+        showToast(result.message);
+        fetchLogs();
+    } else {
+        showToast(result.message || result.error, 'error');
+    }
+});
+
+// IP 过滤变化时应用
+document.getElementById('syslog-filter-ip').addEventListener('change', async function() {
+    const filterIp = this.value.trim();
+    const result = await apiRequest('/api/syslog/filter/', 'POST', { filter_ip: filterIp });
+
+    if (result.success) {
+        currentFilterIp = filterIp;
+        fetchLogs();
+    }
+});
+
+// 页面初始化
+window.onload = function() {
+    fetchStatus();
+    fetchLogs();
+    setInterval(fetchStatus, 5000);
+};
+</script>
+{% endblock %}

@@ -1,0 +1,20 @@
+# Django 用户 sudo 权限配置
+# 允许 Django 管理 Agent systemd 服务
+
+# Agent 服务管理
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl start agent-*
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop agent-*
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart agent-*
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl status agent-*
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl enable agent-*
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl disable agent-*
+
+# systemd 管理
+django ALL=(ALL) NOPASSWD: /usr/bin/systemctl daemon-reload
+
+# 服务文件管理
+django ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/systemd/system/agent-*.service
+django ALL=(ALL) NOPASSWD: /usr/bin/rm /etc/systemd/system/agent-*.service
+
+# 日志查看
+django ALL=(ALL) NOPASSWD: /usr/bin/journalctl -u agent-*

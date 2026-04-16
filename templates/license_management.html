@@ -1,0 +1,378 @@
+{% extends 'base.html' %}
+{% block title %}授权管理{% endblock %}
+
+{% block content %}
+<!-- 密码验证模态框 -->
+<div id="passwordModal" style="display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border-radius: 16px; padding: 24px; max-width: 400px; width: 100%; border: 1px solid var(--border);">
+        <div style="color: var(--warning); font-size: 1.1rem; font-weight: 600; margin-bottom: 16px;">
+            授权管理 - 安全验证
+        </div>
+        <div style="color: var(--text-secondary); margin-bottom: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+            <small>安全提示：授权管理功能需要管理员权限，每次访问都需要重新验证身份。</small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">管理员密码</label>
+            <input type="password" class="form-input" id="adminPassword" placeholder="请输入管理员密码">
+        </div>
+        <div id="passwordError" style="color: var(--danger); margin-bottom: 12px; display: none;">密码错误</div>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-primary" onclick="verifyPassword()">验证密码</button>
+            <button class="btn btn-secondary" onclick="cancelAuth()">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 未认证提示 -->
+<div id="unauthenticatedHint" style="display: none;">
+    <div class="card">
+        <div class="card-header">授权管理</div>
+        <div style="color: var(--text-secondary); text-align: center; padding: 30px;">
+            <div style="font-size: 2rem; margin-bottom: 16px;">🔒</div>
+            <div style="font-size: 1.1rem; margin-bottom: 8px;">授权管理功能需要身份验证</div>
+            <div style="margin-bottom: 16px;">请输入管理员密码以访问授权管理功能</div>
+            <button class="btn btn-primary" onclick="showPasswordModal()">重新验证</button>
+        </div>
+    </div>
+</div>
+
+<!-- 已认证主内容 -->
+<div id="mainContent" style="display: none;">
+    <div class="card">
+        <div class="card-header">授权管理 <span class="status-badge status-running" id="authStatus" style="display: none;">已验证</span></div>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            知识库授权和设备授权管理
+        </p>
+    </div>
+
+    <div class="card">
+        <div class="card-header">功能模块</div>
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button class="btn btn-primary" onclick="switchLicenseTab('knowledge')" id="tab-knowledge">知识库授权</button>
+            <button class="btn btn-secondary" onclick="switchLicenseTab('device')" id="tab-device">设备授权</button>
+            <button class="btn btn-danger btn-sm" onclick="logout()" style="margin-left: auto;">退出验证</button>
+        </div>
+    </div>
+
+    <!-- 知识库授权 -->
+    <div class="card" id="knowledge-section">
+        <div class="card-header">知识库授权配置</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">产品序列号 (机器码)</label>
+                    <input type="text" class="form-input" id="machine_code" placeholder="例如: 1234567890abcdefghijklmnopqrstuvwxyz">
+                    <small style="color: var(--text-muted);">用于生成授权文件的唯一标识</small>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">漏洞库期限 (年)</label>
+                        <input type="number" class="form-input" id="vul_expire" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">病毒库期限 (年)</label>
+                        <input type="number" class="form-input" id="virus_expire" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">规则库期限 (年)</label>
+                        <input type="number" class="form-input" id="rules_expire" value="1" min="1" max="100">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="generateKnowledgeLicense()" id="generateKnowledgeBtn">生成知识库授权</button>
+                <button class="btn btn-success" onclick="downloadKnowledgeLicense()" id="downloadKnowledgeBtn" style="display: none; margin-left: 12px;">下载授权文件</button>
+            </div>
+
+            <div>
+                <div class="form-group">
+                    <label class="form-label">授权解密验证</label>
+                    <input type="text" class="form-input" id="license_file_path" placeholder="授权文件完整路径">
+                    <small style="color: var(--text-muted);">例如: C:\\Users\\Desktop\\序列号.lic</small>
+                </div>
+                <button class="btn btn-secondary" onclick="decryptLicense()">解密验证授权</button>
+
+                <div id="decryptResult" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                    <div style="color: var(--text-secondary); margin-bottom: 8px;">解密结果:</div>
+                    <pre id="decryptContent" style="color: var(--text-primary); white-space: pre-wrap; max-height: 200px; overflow-y: auto;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备授权 -->
+    <div class="card" id="device-section" style="display: none;">
+        <div class="card-header">设备授权配置</div>
+        <div style="padding: 12px; background: var(--bg-dark); border-radius: 8px; margin-bottom: 16px;">
+            <small style="color: var(--text-secondary);">远程授权服务器：10.40.24.17 (tdhx/tdhx@2017)</small>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">授权方式</label>
+                    <select class="form-input" id="license_method" onchange="toggleAuthName()">
+                        <option value="DR">DR</option>
+                        <option value="dev-Code">dev-Code</option>
+                    </select>
+                </div>
+
+                <div class="form-group" id="auth_name_group">
+                    <label class="form-label">授权机构名称</label>
+                    <input type="text" class="form-input" id="auth_name" value="北京天地和兴科技股份有限公司武汉研发中心测试专用授权">
+                    <small style="color: var(--text-muted);">DR 方式需要授权机构名称</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">设备机器码</label>
+                    <input type="text" class="form-input" id="device_machine_code" placeholder="例如: 5a2c544613553aa4bed38e6ecbe739c0">
+                    <small style="color: var(--text-muted);">目标设备的唯一机器码标识</small>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-secondary" onclick="testConnection()">测试连接</button>
+                    <button class="btn btn-success" onclick="generateDeviceLicense()">生成设备授权</button>
+                </div>
+            </div>
+
+            <div>
+                <div id="deviceDownloadSection" style="display: none; padding: 16px; background: rgba(56, 176, 0, 0.1); border-radius: 8px;">
+                    <div style="color: var(--success); margin-bottom: 12px;">设备授权文件生成成功！</div>
+                    <button class="btn btn-primary" onclick="downloadDeviceLicense()">下载授权文件</button>
+                    <small id="deviceDownloadFilename" style="color: var(--text-muted); margin-top: 8px; display: block;"></small>
+                </div>
+                <div id="noDeviceDownload" style="color: var(--text-muted); text-align: center; padding: 30px;">
+                    请先生成设备授权
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作日志 -->
+    <div class="card" id="logSection" style="display: none;">
+        <div class="card-header">操作日志</div>
+        <div id="operationLogs" style="height: 200px; overflow-y: auto; background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+            <div style="color: var(--text-muted); text-align: center;">暂无操作记录</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ADMIN_PASSWORD = 'secAdmin#123456';
+let isAuthenticated = false;
+let currentLicenseContent = null;
+let currentLicenseFilename = null;
+let currentDeviceLicenseContent = null;
+let currentDeviceLicenseFilename = null;
+
+function showPasswordModal() {
+    document.getElementById('passwordModal').style.display = 'flex';
+    document.getElementById('adminPassword').value = '';
+    document.getElementById('passwordError').style.display = 'none';
+    document.getElementById('adminPassword').focus();
+}
+
+function verifyPassword() {
+    const password = document.getElementById('adminPassword').value;
+    if (password === ADMIN_PASSWORD) {
+        isAuthenticated = true;
+        document.getElementById('passwordModal').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+        document.getElementById('authStatus').style.display = 'inline-block';
+        document.getElementById('logSection').style.display = 'block';
+        document.getElementById('unauthenticatedHint').style.display = 'none';
+        addLog('管理员身份验证成功', 'success');
+    } else {
+        document.getElementById('passwordError').style.display = 'block';
+        document.getElementById('adminPassword').value = '';
+        addLog('管理员身份验证失败 - 密码错误', 'error');
+    }
+}
+
+function cancelAuth() {
+    document.getElementById('passwordModal').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('unauthenticatedHint').style.display = 'block';
+    addLog('用户取消了身份验证', 'warning');
+}
+
+function logout() {
+    isAuthenticated = false;
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('logSection').style.display = 'none';
+    document.getElementById('authStatus').style.display = 'none';
+    document.getElementById('unauthenticatedHint').style.display = 'block';
+    showPasswordModal();
+    addLog('已退出管理员模式', 'warning');
+}
+
+function switchLicenseTab(tab) {
+    document.getElementById('knowledge-section').style.display = tab === 'knowledge' ? 'block' : 'none';
+    document.getElementById('device-section').style.display = tab === 'device' ? 'block' : 'none';
+    document.getElementById('tab-knowledge').className = tab === 'knowledge' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('tab-device').className = tab === 'device' ? 'btn btn-primary' : 'btn btn-secondary';
+}
+
+function addLog(message, type = 'info') {
+    const logs = document.getElementById('operationLogs');
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+
+    if (logs.querySelector('.text-muted')) logs.innerHTML = '';
+    logs.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;"><small style="color: var(--text-muted);">[${time}]</small> ${message}</div>`;
+    logs.scrollTop = logs.scrollHeight;
+}
+
+function generateKnowledgeLicense() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
+
+    const machineCode = document.getElementById('machine_code').value.trim();
+    const vulExpire = parseInt(document.getElementById('vul_expire').value);
+    const virusExpire = parseInt(document.getElementById('virus_expire').value);
+    const rulesExpire = parseInt(document.getElementById('rules_expire').value);
+
+    if (!machineCode) { addLog('请填写产品序列号', 'error'); return; }
+
+    addLog(`开始生成知识库授权 - 序列号: ${machineCode}`);
+
+    apiRequest('/api/license/knowledge/generate/', 'POST', {
+        machine_code: machineCode,
+        vul_expire: vulExpire,
+        virus_expire: virusExpire,
+        rules_expire: rulesExpire
+    }).then(data => {
+        if (data.success) {
+            currentLicenseContent = data.content;
+            currentLicenseFilename = data.filename;
+            document.getElementById('downloadKnowledgeBtn').style.display = 'inline-block';
+            addLog(`知识库授权生成成功 - 文件: ${data.filename}`, 'success');
+            if (data.message) addLog(data.message, 'info');
+        } else {
+            addLog(`知识库授权生成失败: ${data.error}`, 'error');
+        }
+    });
+}
+
+function downloadKnowledgeLicense() {
+    if (!currentLicenseContent || !currentLicenseFilename) { addLog('没有可下载的文件', 'error'); return; }
+
+    try {
+        const binary = atob(currentLicenseContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = currentLicenseFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`授权文件已下载: ${currentLicenseFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
+
+function decryptLicense() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
+
+    const filePath = document.getElementById('license_file_path').value.trim();
+    if (!filePath) { addLog('请输入授权文件路径', 'error'); return; }
+
+    addLog(`开始解密授权文件: ${filePath}`);
+
+    apiRequest('/api/license/knowledge/decrypt/', 'POST', { file_path: filePath }).then(data => {
+        if (data.success) {
+            document.getElementById('decryptResult').style.display = 'block';
+            document.getElementById('decryptContent').textContent = data.content;
+            addLog('授权文件解密成功', 'success');
+        } else {
+            document.getElementById('decryptResult').style.display = 'none';
+            addLog(`解密失败: ${data.error}`, 'error');
+        }
+    });
+}
+
+function toggleAuthName() {
+    const method = document.getElementById('license_method').value;
+    const group = document.getElementById('auth_name_group');
+    const input = document.getElementById('auth_name');
+
+    if (method === 'dev-Code') {
+        group.style.display = 'none';
+        input.removeAttribute('required');
+    } else {
+        group.style.display = 'block';
+        input.setAttribute('required', 'required');
+    }
+    addLog(`切换授权方式: ${method}`, 'info');
+}
+
+function testConnection() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
+
+    addLog('测试授权服务器连接...');
+
+    apiRequest('/api/license/device/test_connection/', 'POST').then(data => {
+        if (data.success) {
+            addLog('授权服务器连接成功', 'success');
+        } else {
+            addLog(`授权服务器连接失败: ${data.error}`, 'error');
+        }
+    });
+}
+
+function generateDeviceLicense() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
+
+    const method = document.getElementById('license_method').value;
+    const authName = document.getElementById('auth_name').value.trim();
+    const machineCode = document.getElementById('device_machine_code').value.trim();
+
+    if (method === 'DR' && !authName) { addLog('DR 方式需要填写授权机构名称', 'error'); return; }
+    if (!machineCode) { addLog('请填写设备机器码', 'error'); return; }
+
+    addLog(`开始生成设备授权 - 方式: ${method}, 机器码: ${machineCode}`);
+
+    apiRequest('/api/license/device/generate/', 'POST', {
+        name: authName,
+        machine_code: machineCode,
+        method: method
+    }).then(data => {
+        if (data.success) {
+            // 设备授权返回的是原始二进制内容，需要编码
+            const bytes = new Uint8Array(data.content);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            currentDeviceLicenseContent = btoa(binary);
+            currentDeviceLicenseFilename = data.filename;
+
+            document.getElementById('deviceDownloadSection').style.display = 'block';
+            document.getElementById('noDeviceDownload').style.display = 'none';
+            document.getElementById('deviceDownloadFilename').textContent = `文件名: ${data.filename}`;
+            addLog(`设备授权生成成功 - 文件: ${data.filename}`, 'success');
+        } else {
+            addLog(`设备授权生成失败: ${data.error}`, 'error');
+        }
+    }).catch(e => addLog(`请求失败: ${e.message}`, 'error'));
+}
+
+function downloadDeviceLicense() {
+    if (!currentDeviceLicenseContent || !currentDeviceLicenseFilename) { addLog('没有可下载的授权文件', 'error'); return; }
+
+    try {
+        const binary = atob(currentDeviceLicenseContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = currentDeviceLicenseFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`授权文件已下载: ${currentDeviceLicenseFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
+
+// 页面加载时显示密码验证
+window.onload = showPasswordModal;
+</script>
+{% endblock %}

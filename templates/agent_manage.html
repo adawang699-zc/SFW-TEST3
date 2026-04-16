@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% block title %}网卡 & Agent 管理{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">网卡扫描</div>
+    <div class="toolbar">
+        <button class="btn btn-primary" onclick="scanInterfaces()">
+            🔍 扫描网卡
+        </button>
+        <button class="btn btn-secondary" onclick="refreshStatus()">
+            🔄 刷新状态
+        </button>
+    </div>
+    <p style="color: var(--text-secondary); font-size: 0.85rem;">
+        管理网卡: <strong style="color: var(--secondary);">{{ management_interface }}</strong>
+        （此网卡用于 Django Web 服务，不参与 Agent 绑定）
+    </p>
+</div>
+
+<div class="card">
+    <div class="card-header">网卡列表</div>
+    <div id="interface-list">
+        <p style="color: var(--text-secondary);">点击"扫描网卡"获取系统网卡信息...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">已绑定 Agent</div>
+    <div id="agent-list">
+        <p style="color: var(--text-secondary);">暂无 Agent...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Agent 日志</div>
+    <div id="agent-logs" style="background: var(--bg-dark); padding: 16px; border-radius: 8px; font-family: monospace; max-height: 300px; overflow-y: auto; color: var(--text-secondary);">
+        选择 Agent 查看日志...
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedAgent = null;
+
+// 扫描网卡
+async function scanInterfaces() {
+    try {
+        const result = await apiRequest('/api/interfaces/scan/', 'POST');
+        if (result.success) {
+            renderInterfaces(result.interfaces);
+            showToast(`扫描到 ${result.count} 个网卡`);
+        } else {
+            showToast('扫描失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 刷新状态
+async function refreshStatus() {
+    await loadInterfaces();
+    await loadAgents();
+}
+
+// 加载网卡列表
+async function loadInterfaces() {
+    try {
+        const result = await apiRequest('/api/interfaces/list/');
+        if (result.interfaces) {
+            renderInterfaces(result.interfaces);
+        }
+    } catch (e) {
+        console.error('加载网卡失败:', e);
+    }
+}
+
+// 渲染网卡列表
+function renderInterfaces(interfaces) {
+    const container = document.getElementById('interface-list');
+
+    if (interfaces.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">未检测到网卡</p>';
+        return;
+    }
+
+    let html = '';
+    interfaces.forEach(iface => {
+        const isManagement = iface.is_management;
+        const hasAgent = iface.has_agent;
+
+        let cardClass = 'interface-card';
+        if (isManagement) cardClass += ' management';
+        if (hasAgent) cardClass += ' bound';
+
+        html += `
+            <div class="${cardClass}">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="interface-name">${iface.name}</div>
+                        <div class="interface-ip">${iface.ip_address} ${iface.speed ? '(' + iface.speed + ' Mbps)' : ''}</div>
+                    </div>
+                    <div>
+                        ${isManagement ?
+                            '<span class="status-badge status-management">管理网卡</span>' :
+                            (hasAgent ?
+                                `<span class="status-badge status-running">已绑定 Agent</span>
+                                 <button class="btn btn-sm btn-danger" onclick="deleteAgent('${iface.agent_id}')">删除 Agent</button>` :
+                                `<button class="btn btn-sm btn-primary" onclick="createAgent('${iface.name}')">创建 Agent</button>`
+                            )
+                        }
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// 加载 Agent 列表
+async function loadAgents() {
+    try {
+        const result = await apiRequest('/api/agents/list/');
+        if (result.agents) {
+            renderAgents(result.agents);
+        }
+    } catch (e) {
+        console.error('加载 Agent 失败:', e);
+    }
+}
+
+// 渲染 Agent 列表
+function renderAgents(agents) {
+    const container = document.getElementById('agent-list');
+
+    if (agents.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">暂无 Agent，请选择网卡创建</p>';
+        return;
+    }
+
+    let html = '<table class="table"><thead><tr><th>Agent ID</th><th>网卡</th><th>IP</th><th>端口</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+
+    agents.forEach(agent => {
+        const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
+        const statusText = agent.status === 'running' ? '运行中' : '已停止';
+
+        html += `
+            <tr>
+                <td><span class="agent-id">${agent.agent_id}</span></td>
+                <td>${agent.interface_name}</td>
+                <td>${agent.ip_address}</td>
+                <td>${agent.port}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td>
+                    ${agent.status === 'running' ?
+                        `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>` :
+                        `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>`
+                    }
+                    <button class="btn btn-sm btn-secondary" onclick="showLogs('${agent.agent_id}')">日志</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// 创建 Agent
+async function createAgent(interfaceName) {
+    try {
+        const result = await apiRequest('/api/agents/create/', 'POST', {
+            interface_name: interfaceName
+        });
+
+        if (result.success) {
+            showToast(`Agent ${result.agent.agent_id} 创建成功`);
+            await refreshStatus();
+        } else {
+            showToast('创建失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 删除 Agent
+async function deleteAgent(agentId) {
+    if (!confirm(`确定删除 Agent ${agentId}?`)) return;
+
+    try {
+        const result = await apiRequest('/api/agents/delete/', 'POST', {
+            agent_id: agentId
+        });
+
+        if (result.success) {
+            showToast(result.message);
+            await refreshStatus();
+        } else {
+            showToast('删除失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 启动 Agent
+async function startAgent(agentId) {
+    try {
+        showToast(`正在启动 Agent ${agentId}...`);
+        const result = await apiRequest('/api/agents/start/', 'POST', {
+            agent_id: agentId
+        });
+
+        if (result.success) {
+            showToast(`Agent ${agentId} 启动成功`);
+            await loadAgents();
+        } else {
+            showToast('启动失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 停止 Agent
+async function stopAgent(agentId) {
+    try {
+        const result = await apiRequest('/api/agents/stop/', 'POST', {
+            agent_id: agentId
+        });
+
+        if (result.success) {
+            showToast(`Agent ${agentId} 已停止`);
+            await loadAgents();
+        } else {
+            showToast('停止失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 查看日志
+async function showLogs(agentId) {
+    selectedAgent = agentId;
+
+    try {
+        const result = await apiRequest(`/api/agents/logs/?agent_id=${agentId}&lines=100`);
+
+        if (result.success) {
+            const logsContainer = document.getElementById('agent-logs');
+            logsContainer.innerHTML = `<pre style="color: var(--text-secondary); white-space: pre-wrap;">${result.logs}</pre>`;
+        } else {
+            showToast('获取日志失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// Toast 提示
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed;
+        top: 70px;
+        right: 24px;
+        padding: 12px 24px;
+        background: ${type === 'error' ? 'var(--danger)' : 'var(--success)'};
+        color: white;
+        border-radius: 8px;
+        z-index: 9999;
+        animation: fadeIn 0.3s;
+    `;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    setTimeout(() => toast.remove(), 3000);
+}
+
+// 页面加载时自动扫描
+window.onload = async function() {
+    await scanInterfaces();
+    await loadAgents();
+};
+</script>
+{% endblock %}

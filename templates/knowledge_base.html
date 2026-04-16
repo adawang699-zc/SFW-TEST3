@@ -1,0 +1,914 @@
+{% extends 'base.html' %}
+{% block title %}知识库管理{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">知识库管理</div>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        管理预定义服务、漏洞库和病毒库升级包
+    </p>
+</div>
+
+<div class="card">
+    <div class="card-header">功能模块</div>
+    <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+        <button class="btn btn-primary" onclick="switchTab('service')" id="tab-service">预定义服务</button>
+        <button class="btn btn-secondary" onclick="switchTab('vul')" id="tab-vul">漏洞库</button>
+        <button class="btn btn-secondary" onclick="switchTab('virus')" id="tab-virus">病毒库</button>
+    </div>
+</div>
+
+<!-- 预定义服务 -->
+<div class="card" id="service-section">
+    <div class="card-header">预定义服务模板管理</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+            <div class="form-group">
+                <label class="form-label">已保存的模板</label>
+                <div style="display: flex; gap: 8px;">
+                    <select class="form-input" id="savedTemplates" style="flex: 1;">
+                        <option value="">-- 选择已保存的模板 --</option>
+                    </select>
+                    <button class="btn btn-sm btn-primary" onclick="loadTemplate()">加载</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteTemplate()">删除</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">上传新模板</label>
+                <div id="dropZone" style="border: 2px dashed var(--border); padding: 30px; text-align: center; cursor: pointer; border-radius: 10px; transition: all 0.3s;">
+                    <div style="color: var(--text-secondary);">点击或拖拽上传 JSON 文件</div>
+                    <small style="color: var(--text-muted);">支持 .json 格式</small>
+                    <input type="file" id="fileInput" accept=".json" style="display: none;">
+                </div>
+            </div>
+
+            <div id="fileInfo" style="display: none; padding: 12px; background: rgba(0, 168, 150, 0.1); border-radius: 8px; margin-bottom: 16px;">
+                <span style="color: var(--secondary);">已选择: </span>
+                <span id="fileName" style="color: var(--primary);"></span>
+                <button onclick="clearFile()" style="float: right; background: transparent; border: none; color: var(--danger); cursor: pointer;">清除</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">模板名称</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="form-input" id="templateName" placeholder="模板名称（保存时填写）">
+                    <button class="btn btn-success btn-sm" onclick="saveTemplate()" id="saveTemplateBtn" disabled>保存</button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">版本号</label>
+                    <input type="text" class="form-input" id="version" placeholder="如: 2026041601">
+                    <small style="color: var(--text-muted);">格式：YYYYMMDD+序号</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">更新时间</label>
+                    <input type="text" class="form-input" id="updateTime" placeholder="如: 2026/04/16">
+                    <small style="color: var(--text-muted);">格式：YYYY/MM/DD</small>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-primary" onclick="createPackage()" id="createPackageBtn" disabled>生成升级包</button>
+                <button class="btn btn-success" onclick="downloadPackage()" id="downloadPackageBtn" disabled>下载升级包</button>
+            </div>
+        </div>
+
+        <div>
+            <div class="form-group">
+                <label class="form-label">升级到设备</label>
+                <p style="color: var(--text-secondary); margin-bottom: 12px;">系统会自动获取设备 Cookie，支持上传外部升级包</p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">设备 IP 地址</label>
+                <input type="text" class="form-input" id="deviceIp" placeholder="如: 10.40.20.41">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">外部升级包（可选）</label>
+                <input type="file" class="form-input" id="externalPackageFile" accept=".bin,.lib" style="padding: 8px;">
+                <small style="color: var(--text-muted);">提供外部包时将优先使用外部包</small>
+            </div>
+
+            <div id="packageStatus" style="padding: 12px; background: var(--bg-dark); border-radius: 8px; margin-bottom: 16px;">
+                <span style="color: var(--text-secondary);">请先生成升级包或上传外部包</span>
+            </div>
+
+            <button class="btn btn-primary" onclick="upgradeToDevice()" id="upgradeBtn" disabled>升级到设备</button>
+
+            <div id="upgradeResult" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                <div style="color: var(--text-secondary); margin-bottom: 8px;">升级响应:</div>
+                <pre id="upgradeResponse" style="color: var(--text-primary); white-space: pre-wrap; word-break: break-all;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 漏洞库 -->
+<div class="card" id="vul-section" style="display: none;">
+    <div class="card-header">漏洞库制作</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+            <div class="form-group">
+                <label class="form-label">已保存的模板</label>
+                <div style="display: flex; gap: 8px;">
+                    <select class="form-input" id="savedVulTemplates" style="flex: 1;">
+                        <option value="">-- 选择已保存的模板 --</option>
+                    </select>
+                    <button class="btn btn-sm btn-primary" onclick="loadVulTemplate()">加载</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteVulTemplate()">删除</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">上传 ZIP 文件</label>
+                <div id="dropZoneVul" style="border: 2px dashed var(--border); padding: 30px; text-align: center; cursor: pointer; border-radius: 10px;">
+                    <div style="color: var(--text-secondary);">点击或拖拽上传 ZIP 文件</div>
+                    <small style="color: var(--text-muted);">需包含 build_time 和 version 文件</small>
+                    <input type="file" id="vulFileInput" accept=".zip" style="display: none;">
+                </div>
+            </div>
+
+            <div id="vulFileInfo" style="display: none; padding: 12px; background: rgba(0, 168, 150, 0.1); border-radius: 8px; margin-bottom: 16px;">
+                <span style="color: var(--secondary);">已选择: </span>
+                <span id="vulFileName" style="color: var(--primary);"></span>
+                <button onclick="clearVulFile()" style="float: right; background: transparent; border: none; color: var(--danger); cursor: pointer;">清除</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">模板名称</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="form-input" id="vulTemplateName" placeholder="模板名称">
+                    <button class="btn btn-success btn-sm" onclick="saveVulTemplate()" id="saveVulTemplateBtn" disabled>保存</button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">build_time</label>
+                    <input type="text" class="form-input" id="vulBuildTime" placeholder="如: 2026-03-09">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">version</label>
+                    <input type="text" class="form-input" id="vulVersion" placeholder="如: 2026030901">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-primary" onclick="createVulPackage()" id="createVulBtn" disabled>生成漏洞库升级包</button>
+                <button class="btn btn-success" onclick="downloadVulPackage()" id="downloadVulBtn" disabled>下载升级包</button>
+            </div>
+        </div>
+
+        <div>
+            <div class="form-group">
+                <label class="form-label">升级漏洞库到设备</label>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">设备 IP 地址</label>
+                <input type="text" class="form-input" id="vulDeviceIp" placeholder="如: 10.40.20.41">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">外部升级包（可选）</label>
+                <input type="file" class="form-input" id="vulExternalPackageFile" accept=".lib" style="padding: 8px;">
+            </div>
+
+            <div id="vulPackageStatus" style="padding: 12px; background: var(--bg-dark); border-radius: 8px; margin-bottom: 16px;">
+                <span style="color: var(--text-secondary);">请先生成升级包或上传外部包</span>
+            </div>
+
+            <button class="btn btn-primary" onclick="upgradeVulToDevice()" id="upgradeVulBtn" disabled>升级漏洞库</button>
+
+            <div id="vulUpgradeResult" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                <div style="color: var(--text-secondary); margin-bottom: 8px;">升级响应:</div>
+                <pre id="vulUpgradeResponse" style="color: var(--text-primary); white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 病毒库 -->
+<div class="card" id="virus-section" style="display: none;">
+    <div class="card-header">病毒库制作</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div>
+            <div class="form-group">
+                <label class="form-label">已保存的模板</label>
+                <div style="display: flex; gap: 8px;">
+                    <select class="form-input" id="savedVirusTemplates" style="flex: 1;">
+                        <option value="">-- 选择已保存的模板 --</option>
+                    </select>
+                    <button class="btn btn-sm btn-primary" onclick="loadVirusTemplate()">加载</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteVirusTemplate()">删除</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">上传 ZIP 文件</label>
+                <div id="dropZoneVirus" style="border: 2px dashed var(--border); padding: 30px; text-align: center; cursor: pointer; border-radius: 10px;">
+                    <div style="color: var(--text-secondary);">点击或拖拽上传 ZIP 文件</div>
+                    <small style="color: var(--text-muted);">需包含 vul_time 和 version 文件</small>
+                    <input type="file" id="virusFileInput" accept=".zip" style="display: none;">
+                </div>
+            </div>
+
+            <div id="virusFileInfo" style="display: none; padding: 12px; background: rgba(0, 168, 150, 0.1); border-radius: 8px; margin-bottom: 16px;">
+                <span style="color: var(--secondary);">已选择: </span>
+                <span id="virusFileName" style="color: var(--primary);"></span>
+                <button onclick="clearVirusFile()" style="float: right; background: transparent; border: none; color: var(--danger); cursor: pointer;">清除</button>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">模板名称</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" class="form-input" id="virusTemplateName" placeholder="模板名称">
+                    <button class="btn btn-success btn-sm" onclick="saveVirusTemplate()" id="saveVirusTemplateBtn" disabled>保存</button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">vul_time</label>
+                    <input type="text" class="form-input" id="virusVulTime" placeholder="如: 2026-03-09">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">version</label>
+                    <input type="text" class="form-input" id="virusVersion" placeholder="如: 2026030901">
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-primary" onclick="createVirusPackage()" id="createVirusBtn" disabled>生成病毒库升级包</button>
+                <button class="btn btn-success" onclick="downloadVirusPackage()" id="downloadVirusBtn" disabled>下载升级包</button>
+            </div>
+        </div>
+
+        <div>
+            <div class="form-group">
+                <label class="form-label">升级病毒库到设备</label>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">设备 IP 地址</label>
+                <input type="text" class="form-input" id="virusDeviceIp" placeholder="如: 10.40.20.41">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">外部升级包（可选）</label>
+                <input type="file" class="form-input" id="virusExternalPackageFile" accept=".lib" style="padding: 8px;">
+            </div>
+
+            <div id="virusPackageStatus" style="padding: 12px; background: var(--bg-dark); border-radius: 8px; margin-bottom: 16px;">
+                <span style="color: var(--text-secondary);">请先生成升级包或上传外部包</span>
+            </div>
+
+            <button class="btn btn-primary" onclick="upgradeVirusToDevice()" id="upgradeVirusBtn" disabled>升级病毒库</button>
+
+            <div id="virusUpgradeResult" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                <div style="color: var(--text-secondary); margin-bottom: 8px;">升级响应:</div>
+                <pre id="virusUpgradeResponse" style="color: var(--text-primary); white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作日志 -->
+<div class="card">
+    <div class="card-header">操作日志</div>
+    <div id="operationLogs" style="height: 200px; overflow-y: auto; background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+        <div style="color: var(--text-muted); text-align: center;">暂无操作记录</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let templateContent = null;
+let packageContent = null;
+let packageFilename = null;
+let vulFileContent = null;
+let vulFileObject = null;
+let vulPackageContent = null;
+let vulPackageFilename = null;
+let virusFileContent = null;
+let virusFileObject = null;
+let virusPackageContent = null;
+let virusPackageFilename = null;
+let externalPackageContent = null;
+
+function switchTab(tab) {
+    document.getElementById('service-section').style.display = tab === 'service' ? 'block' : 'none';
+    document.getElementById('vul-section').style.display = tab === 'vul' ? 'block' : 'none';
+    document.getElementById('virus-section').style.display = tab === 'virus' ? 'block' : 'none';
+
+    document.getElementById('tab-service').className = tab === 'service' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('tab-vul').className = tab === 'vul' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('tab-virus').className = tab === 'virus' ? 'btn btn-primary' : 'btn btn-secondary';
+}
+
+function addLog(message, type = 'info') {
+    const logs = document.getElementById('operationLogs');
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+
+    if (logs.querySelector('.text-muted')) logs.innerHTML = '';
+    logs.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;"><small style="color: var(--text-muted);">[${time}]</small> ${message}</div>`;
+    logs.scrollTop = logs.scrollHeight;
+}
+
+function setDefaultVersion() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    document.getElementById('updateTime').value = `${y}/${m}/${d}`;
+    document.getElementById('version').value = `${y}${m}${d}01`;
+}
+setDefaultVersion();
+
+// 模板列表加载
+function loadTemplateList() {
+    apiRequest('/api/knowledge/templates/').then(data => {
+        if (data.success) {
+            const sel = document.getElementById('savedTemplates');
+            sel.innerHTML = '<option value="">-- 选择已保存的模板 --</option>';
+            data.templates.forEach(t => sel.innerHTML += `<option value="${t.name}">${t.name} (${t.time})</option>`);
+        }
+    });
+}
+loadTemplateList();
+
+function loadVulTemplateList() {
+    apiRequest('/api/knowledge/vul/templates/').then(data => {
+        if (data.success) {
+            const sel = document.getElementById('savedVulTemplates');
+            sel.innerHTML = '<option value="">-- 选择已保存的模板 --</option>';
+            data.templates.forEach(t => sel.innerHTML += `<option value="${t.name}">${t.name} (${t.time})</option>`);
+        }
+    });
+}
+loadVulTemplateList();
+
+function loadVirusTemplateList() {
+    apiRequest('/api/knowledge/virus/templates/').then(data => {
+        if (data.success) {
+            const sel = document.getElementById('savedVirusTemplates');
+            sel.innerHTML = '<option value="">-- 选择已保存的模板 --</option>';
+            data.templates.forEach(t => sel.innerHTML += `<option value="${t.name}">${t.name} (${t.time})</option>`);
+        }
+    });
+}
+loadVirusTemplateList();
+
+// 文件上传处理
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.onclick = () => fileInput.click();
+dropZone.ondragover = e => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; };
+dropZone.ondragleave = e => { e.preventDefault(); dropZone.style.borderColor = 'var(--border)'; };
+dropZone.ondrop = e => { e.preventDefault(); dropZone.style.borderColor = 'var(--border)'; if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); };
+fileInput.onchange = e => { if (e.target.files[0]) handleFile(e.target.files[0]); };
+
+function handleFile(file) {
+    if (!file.name.endsWith('.json')) { addLog('请上传 JSON 格式文件', 'error'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            JSON.parse(e.target.result);
+            templateContent = e.target.result;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('templateName').value = file.name.replace('.json', '');
+            document.getElementById('createPackageBtn').disabled = false;
+            document.getElementById('saveTemplateBtn').disabled = false;
+            addLog(`已加载模板文件: ${file.name}`, 'success');
+        } catch (err) { addLog('文件内容不是有效的 JSON 格式', 'error'); }
+    };
+    reader.readAsText(file);
+}
+
+window.clearFile = function() {
+    templateContent = null;
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('fileInput').value = '';
+    document.getElementById('createPackageBtn').disabled = true;
+    document.getElementById('saveTemplateBtn').disabled = true;
+    updatePackageStatus();
+};
+
+// 外部包上传
+document.getElementById('externalPackageFile').onchange = function(e) {
+    if (e.target.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const bytes = new Uint8Array(e.target.result);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+            externalPackageContent = btoa(binary);
+            addLog(`已加载外部升级包: ${e.target.files[0].name}`, 'success');
+            updatePackageStatus();
+        };
+        reader.readAsArrayBuffer(e.target.files[0]);
+    }
+};
+
+function updatePackageStatus() {
+    const el = document.getElementById('packageStatus');
+    const btn = document.getElementById('upgradeBtn');
+    if (externalPackageContent) {
+        el.innerHTML = '<span style="color: var(--secondary);">使用外部升级包</span>';
+        btn.disabled = false;
+    } else if (packageContent) {
+        el.innerHTML = `<span style="color: var(--success);">升级包已生成: ${packageFilename}</span>`;
+        btn.disabled = false;
+    } else {
+        el.innerHTML = '<span style="color: var(--text-secondary);">请先生成升级包或上传外部包</span>';
+        btn.disabled = true;
+    }
+}
+
+// 模板操作
+function loadTemplate() {
+    const name = document.getElementById('savedTemplates').value;
+    if (!name) { addLog('请选择要加载的模板', 'warning'); return; }
+
+    apiRequest(`/api/knowledge/templates/${encodeURIComponent(name)}/`).then(data => {
+        if (data.success) {
+            templateContent = data.content;
+            document.getElementById('fileName').textContent = name + '.json';
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('templateName').value = name;
+            document.getElementById('createPackageBtn').disabled = false;
+            document.getElementById('saveTemplateBtn').disabled = false;
+            addLog(`已加载模板: ${name}`, 'success');
+        } else { addLog(`加载失败: ${data.error}`, 'error'); }
+    });
+}
+
+function deleteTemplate() {
+    const name = document.getElementById('savedTemplates').value;
+    if (!name) { addLog('请选择要删除的模板', 'warning'); return; }
+    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
+
+    apiRequest('/api/knowledge/templates/delete/', 'POST', { name }).then(data => {
+        if (data.success) {
+            addLog(`已删除模板: ${name}`, 'success');
+            loadTemplateList();
+            if (document.getElementById('templateName').value === name) clearFile();
+        } else { addLog(`删除失败: ${data.error}`, 'error'); }
+    });
+}
+
+function saveTemplate() {
+    if (!templateContent) { addLog('请先上传模板文件', 'error'); return; }
+    const name = document.getElementById('templateName').value.trim();
+    if (!name) { addLog('请输入模板名称', 'error'); return; }
+
+    apiRequest('/api/knowledge/templates/save/', 'POST', { name, content: templateContent }).then(data => {
+        if (data.success) { addLog(`模板已保存: ${name}`, 'success'); loadTemplateList(); }
+        else { addLog(`保存失败: ${data.error}`, 'error'); }
+    });
+}
+
+// 升级包操作
+function createPackage() {
+    if (!templateContent) { addLog('请先上传模板文件', 'error'); return; }
+    const version = document.getElementById('version').value.trim() || '1.0.0';
+    const time = document.getElementById('updateTime').value.trim();
+
+    addLog(`开始生成升级包 (版本: ${version}, 时间: ${time})`);
+
+    apiRequest('/api/knowledge/create/', 'POST', { template_content: templateContent, version, time }).then(data => {
+        if (data.success) {
+            packageContent = data.content;
+            packageFilename = data.filename;
+            document.getElementById('downloadPackageBtn').disabled = false;
+            updatePackageStatus();
+            addLog(`升级包生成成功: ${data.filename}`, 'success');
+        } else { addLog(`升级包生成失败: ${data.error}`, 'error'); }
+    });
+}
+
+function downloadPackage() {
+    if (!packageContent || !packageFilename) { addLog('没有可下载的升级包', 'error'); return; }
+    try {
+        const binary = atob(packageContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = packageFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`升级包已下载: ${packageFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
+
+function upgradeToDevice() {
+    const ip = document.getElementById('deviceIp').value.trim();
+    if (!ip) { addLog('请输入设备 IP 地址', 'error'); return; }
+    const content = externalPackageContent || packageContent;
+    if (!content) { addLog('请先生成升级包或上传外部包', 'error'); return; }
+
+    addLog(`开始升级知识库到设备: ${ip}`);
+
+    apiRequest('/api/knowledge/upgrade/', 'POST', { ip, content, auto_get_cookie: true }).then(data => {
+        document.getElementById('upgradeResult').style.display = 'block';
+        if (data.success) {
+            document.getElementById('upgradeResponse').textContent = data.response;
+            addLog(`升级成功: ${ip}`, 'success');
+        } else {
+            document.getElementById('upgradeResponse').textContent = data.error;
+            addLog(`升级失败: ${data.error}`, 'error');
+        }
+    });
+}
+
+// ===== 漏洞库 =====
+const dropZoneVul = document.getElementById('dropZoneVul');
+const vulFileInput = document.getElementById('vulFileInput');
+
+dropZoneVul.onclick = () => vulFileInput.click();
+dropZoneVul.ondragover = e => { e.preventDefault(); dropZoneVul.style.borderColor = 'var(--primary)'; };
+dropZoneVul.ondragleave = e => { e.preventDefault(); dropZoneVul.style.borderColor = 'var(--border)'; };
+dropZoneVul.ondrop = e => { e.preventDefault(); dropZoneVul.style.borderColor = 'var(--border)'; if (e.dataTransfer.files[0]) handleVulFile(e.dataTransfer.files[0]); };
+vulFileInput.onchange = e => { if (e.target.files[0]) handleVulFile(e.target.files[0]); };
+
+function handleVulFile(file) {
+    if (!file.name.endsWith('.zip')) { addLog('请上传 ZIP 格式文件', 'error'); return; }
+    vulFileObject = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+        vulFileContent = e.target.result;
+        document.getElementById('vulFileName').textContent = file.name;
+        document.getElementById('vulFileInfo').style.display = 'block';
+        document.getElementById('vulTemplateName').value = file.name.replace('.zip', '');
+        document.getElementById('createVulBtn').disabled = false;
+        document.getElementById('saveVulTemplateBtn').disabled = false;
+        addLog(`已加载漏洞库 ZIP 文件: ${file.name}`, 'success');
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+window.clearVulFile = function() {
+    vulFileContent = null; vulFileObject = null;
+    document.getElementById('vulFileInfo').style.display = 'none';
+    document.getElementById('vulFileInput').value = '';
+    document.getElementById('createVulBtn').disabled = true;
+    document.getElementById('saveVulTemplateBtn').disabled = true;
+    updateVulStatus();
+};
+
+function loadVulTemplate() {
+    const name = document.getElementById('savedVulTemplates').value;
+    if (!name) { addLog('请选择要加载的模板', 'warning'); return; }
+
+    fetch(`/api/knowledge/vul/templates/${encodeURIComponent(name)}/`).then(r => r.blob()).then(blob => {
+        vulFileObject = new File([blob], `${name}.zip`, { type: 'application/zip' });
+        const reader = new FileReader();
+        reader.onload = e => {
+            vulFileContent = e.target.result;
+            document.getElementById('vulFileName').textContent = name + '.zip';
+            document.getElementById('vulFileInfo').style.display = 'block';
+            document.getElementById('vulTemplateName').value = name;
+            document.getElementById('createVulBtn').disabled = false;
+            document.getElementById('saveVulTemplateBtn').disabled = false;
+            addLog(`已加载漏洞库模板: ${name}`, 'success');
+        };
+        reader.readAsArrayBuffer(blob);
+    });
+}
+
+function deleteVulTemplate() {
+    const name = document.getElementById('savedVulTemplates').value;
+    if (!name) { addLog('请选择要删除的模板', 'warning'); return; }
+    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
+
+    apiRequest('/api/knowledge/vul/templates/delete/', 'POST', { name }).then(data => {
+        if (data.success) { addLog(`已删除漏洞库模板: ${name}`, 'success'); loadVulTemplateList(); }
+        else { addLog(`删除失败: ${data.error}`, 'error'); }
+    });
+}
+
+function saveVulTemplate() {
+    if (!vulFileObject && !vulFileContent) { addLog('请先上传 ZIP 文件', 'error'); return; }
+    const name = document.getElementById('vulTemplateName').value.trim();
+    if (!name) { addLog('请输入模板名称', 'error'); return; }
+
+    const formData = new FormData();
+    if (vulFileObject) formData.append('file', vulFileObject);
+    else formData.append('file', new Blob([vulFileContent], { type: 'application/zip' }), 'template.zip');
+    formData.append('name', name);
+
+    fetch('/api/knowledge/vul/templates/save/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        if (data.success) { addLog(`漏洞库模板已保存: ${name}`, 'success'); loadVulTemplateList(); }
+        else { addLog(`保存失败: ${data.error}`, 'error'); }
+    });
+}
+
+function createVulPackage() {
+    if (!vulFileContent) { addLog('请先上传 ZIP 文件', 'error'); return; }
+    const buildTime = document.getElementById('vulBuildTime').value.trim();
+    const version = document.getElementById('vulVersion').value.trim();
+    if (!buildTime || !version) { addLog('请填写 build_time 和 version', 'error'); return; }
+
+    addLog(`开始生成漏洞库升级包 (build_time: ${buildTime}, version: ${version})`);
+
+    const formData = new FormData();
+    formData.append('file', new Blob([vulFileContent], { type: 'application/zip' }), 'vul.zip');
+    formData.append('build_time', buildTime);
+    formData.append('version', version);
+
+    fetch('/api/knowledge/vul/create/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            vulPackageContent = data.content;
+            vulPackageFilename = data.filename;
+            document.getElementById('downloadVulBtn').disabled = false;
+            updateVulStatus();
+            addLog(`漏洞库升级包生成成功: ${data.filename}`, 'success');
+        } else { addLog(`生成失败: ${data.error}`, 'error'); }
+    });
+}
+
+function downloadVulPackage() {
+    if (!vulPackageContent || !vulPackageFilename) { addLog('没有可下载的升级包', 'error'); return; }
+    try {
+        const binary = atob(vulPackageContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = vulPackageFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`漏洞库升级包已下载: ${vulPackageFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
+
+function updateVulStatus() {
+    const el = document.getElementById('vulPackageStatus');
+    const btn = document.getElementById('upgradeVulBtn');
+    const external = document.getElementById('vulExternalPackageFile').files[0];
+
+    if (external) {
+        el.innerHTML = `<span style="color: var(--secondary);">使用外部升级包: ${external.name}</span>`;
+        btn.disabled = false;
+    } else if (vulPackageContent) {
+        el.innerHTML = `<span style="color: var(--success);">升级包已生成: ${vulPackageFilename}</span>`;
+        btn.disabled = false;
+    } else {
+        el.innerHTML = '<span style="color: var(--text-secondary);">请先生成升级包或上传外部包</span>';
+        btn.disabled = true;
+    }
+}
+
+document.getElementById('vulExternalPackageFile').onchange = updateVulStatus;
+
+function upgradeVulToDevice() {
+    const ip = document.getElementById('vulDeviceIp').value.trim();
+    if (!ip) { addLog('请输入设备 IP 地址', 'error'); return; }
+
+    let file, filename;
+    const external = document.getElementById('vulExternalPackageFile').files[0];
+
+    if (external) {
+        file = external;
+        filename = external.name;
+    } else if (vulPackageContent) {
+        const binary = atob(vulPackageContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        file = new Blob([bytes], { type: 'application/octet-stream' });
+        filename = vulPackageFilename;
+    } else { addLog('请先生成升级包或上传外部包', 'error'); return; }
+
+    addLog(`开始升级漏洞库到设备: ${ip}`);
+
+    const formData = new FormData();
+    formData.append('file', file, filename);
+    formData.append('ip', ip);
+    formData.append('auto_get_cookie', 'true');
+
+    fetch('/api/knowledge/vul/upgrade/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        document.getElementById('vulUpgradeResult').style.display = 'block';
+        if (data.success) {
+            document.getElementById('vulUpgradeResponse').textContent = data.response;
+            addLog(`漏洞库升级成功: ${ip}`, 'success');
+        } else {
+            document.getElementById('vulUpgradeResponse').textContent = data.error;
+            addLog(`升级失败: ${data.error}`, 'error');
+        }
+    });
+}
+
+// ===== 病毒库 =====
+const dropZoneVirus = document.getElementById('dropZoneVirus');
+const virusFileInput = document.getElementById('virusFileInput');
+
+dropZoneVirus.onclick = () => virusFileInput.click();
+dropZoneVirus.ondragover = e => { e.preventDefault(); dropZoneVirus.style.borderColor = 'var(--primary)'; };
+dropZoneVirus.ondragleave = e => { e.preventDefault(); dropZoneVirus.style.borderColor = 'var(--border)'; };
+dropZoneVirus.ondrop = e => { e.preventDefault(); dropZoneVirus.style.borderColor = 'var(--border)'; if (e.dataTransfer.files[0]) handleVirusFile(e.dataTransfer.files[0]); };
+virusFileInput.onchange = e => { if (e.target.files[0]) handleVirusFile(e.target.files[0]); };
+
+function handleVirusFile(file) {
+    if (!file.name.endsWith('.zip')) { addLog('请上传 ZIP 格式文件', 'error'); return; }
+    virusFileObject = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+        virusFileContent = e.target.result;
+        document.getElementById('virusFileName').textContent = file.name;
+        document.getElementById('virusFileInfo').style.display = 'block';
+        document.getElementById('virusTemplateName').value = file.name.replace('.zip', '');
+        document.getElementById('createVirusBtn').disabled = false;
+        document.getElementById('saveVirusTemplateBtn').disabled = false;
+        addLog(`已加载病毒库 ZIP 文件: ${file.name}`, 'success');
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+window.clearVirusFile = function() {
+    virusFileContent = null; virusFileObject = null;
+    document.getElementById('virusFileInfo').style.display = 'none';
+    document.getElementById('virusFileInput').value = '';
+    document.getElementById('createVirusBtn').disabled = true;
+    document.getElementById('saveVirusTemplateBtn').disabled = true;
+    updateVirusStatus();
+};
+
+function loadVirusTemplate() {
+    const name = document.getElementById('savedVirusTemplates').value;
+    if (!name) { addLog('请选择要加载的模板', 'warning'); return; }
+
+    fetch(`/api/knowledge/virus/templates/${encodeURIComponent(name)}/`).then(r => r.blob()).then(blob => {
+        virusFileObject = new File([blob], `${name}.zip`, { type: 'application/zip' });
+        const reader = new FileReader();
+        reader.onload = e => {
+            virusFileContent = e.target.result;
+            document.getElementById('virusFileName').textContent = name + '.zip';
+            document.getElementById('virusFileInfo').style.display = 'block';
+            document.getElementById('virusTemplateName').value = name;
+            document.getElementById('createVirusBtn').disabled = false;
+            document.getElementById('saveVirusTemplateBtn').disabled = false;
+            addLog(`已加载病毒库模板: ${name}`, 'success');
+        };
+        reader.readAsArrayBuffer(blob);
+    });
+}
+
+function deleteVirusTemplate() {
+    const name = document.getElementById('savedVirusTemplates').value;
+    if (!name) { addLog('请选择要删除的模板', 'warning'); return; }
+    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
+
+    apiRequest('/api/knowledge/virus/templates/delete/', 'POST', { name }).then(data => {
+        if (data.success) { addLog(`已删除病毒库模板: ${name}`, 'success'); loadVirusTemplateList(); }
+        else { addLog(`删除失败: ${data.error}`, 'error'); }
+    });
+}
+
+function saveVirusTemplate() {
+    if (!virusFileObject && !virusFileContent) { addLog('请先上传 ZIP 文件', 'error'); return; }
+    const name = document.getElementById('virusTemplateName').value.trim();
+    if (!name) { addLog('请输入模板名称', 'error'); return; }
+
+    const formData = new FormData();
+    if (virusFileObject) formData.append('file', virusFileObject);
+    else formData.append('file', new Blob([virusFileContent], { type: 'application/zip' }), 'template.zip');
+    formData.append('name', name);
+
+    fetch('/api/knowledge/virus/templates/save/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        if (data.success) { addLog(`病毒库模板已保存: ${name}`, 'success'); loadVirusTemplateList(); }
+        else { addLog(`保存失败: ${data.error}`, 'error'); }
+    });
+}
+
+function createVirusPackage() {
+    if (!virusFileContent) { addLog('请先上传 ZIP 文件', 'error'); return; }
+    const vulTime = document.getElementById('virusVulTime').value.trim();
+    const version = document.getElementById('virusVersion').value.trim();
+    if (!vulTime || !version) { addLog('请填写 vul_time 和 version', 'error'); return; }
+
+    addLog(`开始生成病毒库升级包 (vul_time: ${vulTime}, version: ${version})`);
+
+    const formData = new FormData();
+    formData.append('file', new Blob([virusFileContent], { type: 'application/zip' }), 'virus.zip');
+    formData.append('vul_time', vulTime);
+    formData.append('version', version);
+
+    fetch('/api/knowledge/virus/create/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            virusPackageContent = data.content;
+            virusPackageFilename = data.filename;
+            document.getElementById('downloadVirusBtn').disabled = false;
+            updateVirusStatus();
+            addLog(`病毒库升级包生成成功: ${data.filename}`, 'success');
+        } else { addLog(`生成失败: ${data.error}`, 'error'); }
+    });
+}
+
+function downloadVirusPackage() {
+    if (!virusPackageContent || !virusPackageFilename) { addLog('没有可下载的升级包', 'error'); return; }
+    try {
+        const binary = atob(virusPackageContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = virusPackageFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`病毒库升级包已下载: ${virusPackageFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
+
+function updateVirusStatus() {
+    const el = document.getElementById('virusPackageStatus');
+    const btn = document.getElementById('upgradeVirusBtn');
+    const external = document.getElementById('virusExternalPackageFile').files[0];
+
+    if (external) {
+        el.innerHTML = `<span style="color: var(--secondary);">使用外部升级包: ${external.name}</span>`;
+        btn.disabled = false;
+    } else if (virusPackageContent) {
+        el.innerHTML = `<span style="color: var(--success);">升级包已生成: ${virusPackageFilename}</span>`;
+        btn.disabled = false;
+    } else {
+        el.innerHTML = '<span style="color: var(--text-secondary);">请先生成升级包或上传外部包</span>';
+        btn.disabled = true;
+    }
+}
+
+document.getElementById('virusExternalPackageFile').onchange = updateVirusStatus;
+
+function upgradeVirusToDevice() {
+    const ip = document.getElementById('virusDeviceIp').value.trim();
+    if (!ip) { addLog('请输入设备 IP 地址', 'error'); return; }
+
+    let file, filename;
+    const external = document.getElementById('virusExternalPackageFile').files[0];
+
+    if (external) {
+        file = external;
+        filename = external.name;
+    } else if (virusPackageContent) {
+        const binary = atob(virusPackageContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        file = new Blob([bytes], { type: 'application/octet-stream' });
+        filename = virusPackageFilename;
+    } else { addLog('请先生成升级包或上传外部包', 'error'); return; }
+
+    addLog(`开始升级病毒库到设备: ${ip}`);
+
+    const formData = new FormData();
+    formData.append('file', file, filename);
+    formData.append('ip', ip);
+    formData.append('auto_get_cookie', 'true');
+
+    fetch('/api/knowledge/virus/upgrade/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+        body: formData
+    }).then(r => r.json()).then(data => {
+        document.getElementById('virusUpgradeResult').style.display = 'block';
+        if (data.success) {
+            document.getElementById('virusUpgradeResponse').textContent = data.response;
+            addLog(`病毒库升级成功: ${ip}`, 'success');
+        } else {
+            document.getElementById('virusUpgradeResponse').textContent = data.error;
+            addLog(`升级失败: ${data.error}`, 'error');
+        }
+    });
+}
+</script>
+{% endblock %}

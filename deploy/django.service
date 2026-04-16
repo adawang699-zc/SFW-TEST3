@@ -1,0 +1,16 @@
+[Unit]
+Description=Django Web Service (Management Interface)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/sfw_deploy
+Environment="DJANGO_SECRET_KEY=your-secret-key-here"
+Environment="MANAGEMENT_INTERFACE=eth0"
+ExecStart=/opt/venv/bin/python manage.py runserver 0.0.0.0:8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}首页{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="font-size: 1.5rem;">Ubuntu 多 Agent 一体化部署平台</div>
+    <p style="color: var(--text-secondary); margin-bottom: 24px;">
+        专业的一体化防火墙自动化测试解决方案
+    </p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 2rem; color: var(--primary);">{{ agents.count }}</div>
+            <div style="color: var(--text-secondary);">运行中的 Agent</div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 2rem; color: var(--secondary);">{{ devices.count }}</div>
+            <div style="color: var(--text-secondary);">测试设备</div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 2rem; color: var(--success);">4</div>
+            <div style="color: var(--text-secondary);">网卡数量</div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 2rem; color: var(--accent);">8+</div>
+            <div style="color: var(--text-secondary);">工控协议</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">快速导航</div>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <a href="{% url 'main:agent_manage' %}" class="card" style="text-decoration: none; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">🔌</span>
+                <div>
+                    <div style="color: var(--text-primary);">网卡 & Agent</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">管理网卡绑定和 Agent</div>
+                </div>
+            </div>
+        </a>
+        <a href="{% url 'main:packet_send' %}" class="card" style="text-decoration: none; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">📡</span>
+                <div>
+                    <div style="color: var(--text-primary);">报文发送</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">构造并发送测试报文</div>
+                </div>
+            </div>
+        </a>
+        <a href="{% url 'main:industrial_protocol' %}" class="card" style="text-decoration: none; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">⚙️</span>
+                <div>
+                    <div style="color: var(--text-primary);">工控协议</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">Modbus/S7/GOOSE 等</div>
+                </div>
+            </div>
+        </a>
+        <a href="{% url 'main:port_scan' %}" class="card" style="text-decoration: none; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">🔍</span>
+                <div>
+                    <div style="color: var(--text-primary);">端口扫描</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">扫描目标端口开放状态</div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Agent 状态概览</div>
+    <div id="agent-status-list">
+        {% if agents %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Agent ID</th>
+                    <th>网卡</th>
+                    <th>IP 地址</th>
+                    <th>状态</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for agent in agents %}
+                <tr>
+                    <td style="color: var(--primary);">{{ agent.agent_id }}</td>
+                    <td>{{ agent.interface.name }}</td>
+                    <td>{{ agent.interface.ip_address }}</td>
+                    <td>
+                        <span class="status-badge {% if agent.status == 'running' %}status-running{% else %}status-stopped{% endif %}">
+                            {{ agent.get_status_display }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color: var(--text-secondary);">暂无 Agent，请先在"网卡 & Agent"页面创建</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

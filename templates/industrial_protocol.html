@@ -1,0 +1,180 @@
+{% extends 'base.html' %}
+{% block title %}工控协议测试{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">工控协议测试</div>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        支持 Modbus、S7、GOOSE、SV、DNP3、BACnet、Ethernet/IP 等工控协议
+    </p>
+</div>
+
+<div class="card">
+    <div class="card-header">选择发送 Agent</div>
+    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <p style="color: var(--text-secondary);">加载中...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">协议选择</div>
+
+    <div class="form-group">
+        <label class="form-label">工控协议</label>
+        <select id="protocol" class="form-input" onchange="updateProtocolFields()">
+            <option value="modbus-tcp">Modbus TCP (端口 502)</option>
+            <option value="s7">西门子 S7 (端口 102)</option>
+            <option value="goose">IEC61850 GOOSE</option>
+            <option value="sv">IEC61850 SV</option>
+            <option value="dnp3">DNP3 (端口 20000)</option>
+            <option value="bacnet">BACnet (端口 47808)</option>
+            <option value="enip">Ethernet/IP (端口 44818)</option>
+            <option value="mms">MMS (端口 102)</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">目标 IP</label>
+        <input type="text" id="dst-ip" class="form-input" placeholder="例如: 192.168.1.100">
+    </div>
+
+    <div class="form-group" id="port-group">
+        <label class="form-label">目标端口</label>
+        <input type="number" id="dst-port" class="form-input" value="502">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">协议参数 (JSON 格式)</label>
+        <textarea id="protocol-config" class="form-input" rows="4" placeholder='{"unit_id": 1, "function": 3, "address": 0, "count": 10}'></textarea>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+        <button class="btn btn-primary" onclick="sendProtocolPacket()">发送报文</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">协议说明</div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>协议</th>
+                <th>默认端口</th>
+                <th>说明</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Modbus TCP</td><td>502</td><td>工业自动化标准协议</td></tr>
+            <tr><td>Siemens S7</td><td>102</td><td>西门子 PLC 通信协议</td></tr>
+            <tr><td>GOOSE</td><td>-</td><td>IEC61850 快速报文传输</td></tr>
+            <tr><td>SV</td><td>-</td><td>IEC61850 采样值传输</td></tr>
+            <tr><td>DNP3</td><td>20000</td><td>电力行业分布式协议</td></tr>
+            <tr><td>BACnet</td><td>47808</td><td>楼宇自动化协议</td></tr>
+            <tr><td>Ethernet/IP</td><td>44818</td><td>工业以太网协议</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedAgentId = null;
+
+async function loadAgents() {
+    try {
+        const result = await apiRequest('/api/agents/list/');
+        const container = document.getElementById('agent-selector');
+
+        if (result.agents && result.agents.length > 0) {
+            let html = '';
+            result.agents.forEach(agent => {
+                if (agent.status === 'running') {
+                    html += `
+                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer;">
+                            <div class="agent-id">${agent.agent_id}</div>
+                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address}</div>
+                            <div class="status-badge status-running">运行中</div>
+                        </div>
+                    `;
+                }
+            });
+            container.innerHTML = html || '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
+        } else {
+            container.innerHTML = '<p style="color: var(--text-secondary);">请先启动 Agent</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p style="color: var(--danger);">加载失败</p>';
+    }
+}
+
+function selectAgent(agentId) {
+    selectedAgentId = agentId;
+    document.querySelectorAll('.agent-card').forEach(card => {
+        card.style.borderColor = card.querySelector('.agent-id').textContent === agentId
+            ? 'var(--primary)' : 'var(--border)';
+    });
+}
+
+function updateProtocolFields() {
+    const protocol = document.getElementById('protocol').value;
+    const portInput = document.getElementById('dst-port');
+
+    const defaultPorts = {
+        'modbus-tcp': 502,
+        's7': 102,
+        'dnp3': 20000,
+        'bacnet': 47808,
+        'enip': 44818,
+        'mms': 102
+    };
+
+    portInput.value = defaultPorts[protocol] || 502;
+
+    // 更新配置模板
+    const templates = {
+        'modbus-tcp': '{"unit_id": 1, "function": 3, "address": 0, "count": 10}',
+        's7': '{"db_number": 1, "start": 0, "size": 10}',
+        'goose': '{"go_id": "GOOSE1", "go_ref": "LD/GO$GOOSE1"}'
+    };
+    document.getElementById('protocol-config').value = templates[protocol] || '{}';
+}
+
+async function sendProtocolPacket() {
+    if (!selectedAgentId) {
+        showToast('请先选择 Agent', 'error');
+        return;
+    }
+
+    const protocol = document.getElementById('protocol').value;
+    const dstIp = document.getElementById('dst-ip').value;
+    const dstPort = parseInt(document.getElementById('dst-port').value);
+    const configStr = document.getElementById('protocol-config').value;
+
+    if (!dstIp) {
+        showToast('请输入目标 IP', 'error');
+        return;
+    }
+
+    try {
+        const payload = JSON.parse(configStr);
+        const result = await apiRequest('/api/send_protocol/', 'POST', {
+            agent_id: selectedAgentId,
+            protocol: protocol,
+            dst_ip: dstIp,
+            dst_port: dstPort,
+            payload: payload
+        });
+
+        if (result.status === 'sent') {
+            showToast('协议报文发送成功');
+        } else {
+            showToast('发送失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+window.onload = loadAgents;
+</script>
+{% endblock %}

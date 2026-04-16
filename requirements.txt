@@ -1,0 +1,24 @@
+# Python 依赖
+
+# Django 核心
+django>=5.1
+
+# Agent 依赖
+flask>=2.0
+flask-cors>=3.0
+scapy>=2.5
+psutil>=5.9
+
+# HTTP 请求
+requests>=2.28
+
+# 工控协议（可选）
+pymodbus>=3.0
+python-snap7>=0.9
+
+# SNMP（SNMP GET/WALK/TRAP）
+pysnmp>=7.1
+pysnmpcrypto>=1.0  # SNMPv3 加密支持
+
+# 其他
+python-dotenv>=1.0

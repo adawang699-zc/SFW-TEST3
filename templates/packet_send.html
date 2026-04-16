@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}报文发送{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">报文发送</div>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        选择本地 Agent（即网卡）发送测试报文
+    </p>
+</div>
+
+<div class="card">
+    <div class="card-header">选择发送 Agent</div>
+    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+        <p style="color: var(--text-secondary);">加载中...</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">报文配置</div>
+
+    <div class="form-group">
+        <label class="form-label">协议类型</label>
+        <select id="protocol" class="form-input" onchange="updateFields()">
+            <option value="tcp">TCP</option>
+            <option value="udp">UDP</option>
+            <option value="icmp">ICMP</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">目标 IP</label>
+        <input type="text" id="dst-ip" class="form-input" placeholder="例如: 192.168.1.100">
+    </div>
+
+    <div class="form-group" id="port-group">
+        <label class="form-label">目标端口</label>
+        <input type="number" id="dst-port" class="form-input" value="80" placeholder="端口">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Payload (可选)</label>
+        <textarea id="payload" class="form-input" rows="3" placeholder="报文内容"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">发送次数</label>
+        <input type="number" id="count" class="form-input" value="1">
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">发送间隔 (秒)</label>
+        <input type="number" id="interval" class="form-input" value="0" step="0.1">
+    </div>
+
+    <div class="form-group">
+        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);">
+            <input type="checkbox" id="continuous">
+            连续发送模式
+        </label>
+    </div>
+
+    <div style="display: flex; gap: 12px;">
+        <button class="btn btn-primary" onclick="sendPacket()">发送报文</button>
+        <button class="btn btn-danger" onclick="stopSend()" id="stop-btn" style="display: none;">停止发送</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">发送统计</div>
+    <div id="stats-display" style="color: var(--text-secondary);">
+        总发送: <span id="total-sent">0</span> 个报文
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedAgentId = null;
+let sendingInterval = null;
+
+async function loadAgents() {
+    try {
+        const result = await apiRequest('/api/agents/list/');
+        const container = document.getElementById('agent-selector');
+
+        if (result.agents && result.agents.length > 0) {
+            let html = '';
+            result.agents.forEach(agent => {
+                if (agent.status === 'running') {
+                    html += `
+                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer;">
+                            <div class="agent-id">${agent.agent_id}</div>
+                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address}:${agent.port}</div>
+                            <div class="status-badge status-running">运行中</div>
+                        </div>
+                    `;
+                }
+            });
+            container.innerHTML = html || '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
+        } else {
+            container.innerHTML = '<p style="color: var(--text-secondary);">没有运行中的 Agent，请先在"网卡 & Agent"页面启动 Agent</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p style="color: var(--danger);">加载失败: ' + e.message + '</p>';
+    }
+}
+
+function selectAgent(agentId) {
+    selectedAgentId = agentId;
+    document.querySelectorAll('.agent-card').forEach(card => {
+        card.style.borderColor = card.classList.contains('running') && card.querySelector('.agent-id').textContent === agentId
+            ? 'var(--primary)' : 'var(--border)';
+    });
+}
+
+function updateFields() {
+    const protocol = document.getElementById('protocol').value;
+    const portGroup = document.getElementById('port-group');
+    portGroup.style.display = protocol === 'icmp' ? 'none' : 'block';
+}
+
+async function sendPacket() {
+    if (!selectedAgentId) {
+        showToast('请先选择一个 Agent', 'error');
+        return;
+    }
+
+    const protocol = document.getElementById('protocol').value;
+    const dstIp = document.getElementById('dst-ip').value;
+    const dstPort = parseInt(document.getElementById('dst-port').value);
+    const payload = document.getElementById('payload').value;
+    const count = parseInt(document.getElementById('count').value);
+    const interval = parseFloat(document.getElementById('interval').value);
+    const continuous = document.getElementById('continuous').checked;
+
+    if (!dstIp) {
+        showToast('请输入目标 IP', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/send_packet/', 'POST', {
+            agent_id: selectedAgentId,
+            protocol: protocol,
+            dst_ip: dstIp,
+            dst_port: dstPort,
+            payload: payload,
+            count: count,
+            interval: interval,
+            continuous: continuous
+        });
+
+        if (result.status === 'sent' || result.status === 'continuous_sending') {
+            showToast('报文发送成功');
+            if (continuous) {
+                document.getElementById('stop-btn').style.display = 'inline-block';
+                sendingInterval = setInterval(updateStats, 1000);
+            }
+        } else {
+            showToast('发送失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function stopSend() {
+    try {
+        const result = await apiRequest('/api/stop_send/', 'POST', { agent_id: selectedAgentId });
+        if (result.status === 'stopped') {
+            showToast('已停止发送');
+            document.getElementById('stop-btn').style.display = 'none';
+            if (sendingInterval) clearInterval(sendingInterval);
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function updateStats() {
+    if (!selectedAgentId) return;
+    try {
+        const result = await apiRequest(`/api/agents/status/?agent_id=${selectedAgentId}`);
+        // 可以通过 Agent API 获取统计
+    } catch (e) {}
+}
+
+window.onload = loadAgents;
+</script>
+{% endblock %}

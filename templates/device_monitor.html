@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}测试设备管理{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">测试设备管理</div>
+    <div class="toolbar">
+        <button class="btn btn-primary" onclick="showAddModal()">+ 添加设备</button>
+        <button class="btn btn-secondary" onclick="loadDevices()">刷新列表</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">设备列表</div>
+    <div id="device-list">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>设备名称</th>
+                    <th>设备类型</th>
+                    <th>IP 地址</th>
+                    <th>管理端口</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="device-table-body">
+                <tr><td colspan="5" style="color: var(--text-secondary);">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 添加设备模态框 -->
+<div id="add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div style="background: var(--bg-card); max-width: 400px; margin: 100px auto; padding: 24px; border-radius: 16px;">
+        <h3 style="margin-bottom: 20px; color: var(--text-primary);">添加测试设备</h3>
+        <div class="form-group">
+            <label class="form-label">设备名称</label>
+            <input type="text" id="device-name" class="form-input" placeholder="例如: 防火墙-A">
+        </div>
+        <div class="form-group">
+            <label class="form-label">设备类型</label>
+            <select id="device-type" class="form-input">
+                <option value="ic_firewall">工控防火墙</option>
+                <option value="security_device">安全设备</option>
+                <option value="ic_audit">工控审计</option>
+                <option value="ids">IDS</option>
+                <option value="other">其他</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">IP 地址</label>
+            <input type="text" id="device-ip" class="form-input" placeholder="例如: 192.168.1.1">
+        </div>
+        <div class="form-group">
+            <label class="form-label">管理端口</label>
+            <input type="number" id="device-port" class="form-input" value="22">
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button class="btn btn-secondary" onclick="hideAddModal()">取消</button>
+            <button class="btn btn-primary" onclick="addDevice()">添加</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadDevices() {
+    try {
+        const result = await apiRequest('/api/devices/list/');
+        const tbody = document.getElementById('device-table-body');
+
+        if (result.devices && result.devices.length > 0) {
+            let html = '';
+            result.devices.forEach(device => {
+                html += `
+                    <tr>
+                        <td>${device.name}</td>
+                        <td>${device.type}</td>
+                        <td>${device.ip}</td>
+                        <td>${device.port}</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" onclick="deleteDevice(${device.id})">删除</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="color: var(--text-secondary);">暂无设备</td></tr>';
+        }
+    } catch (e) {
+        console.error('加载设备失败:', e);
+    }
+}
+
+function showAddModal() {
+    document.getElementById('add-modal').style.display = 'block';
+}
+
+function hideAddModal() {
+    document.getElementById('add-modal').style.display = 'none';
+}
+
+async function addDevice() {
+    const name = document.getElementById('device-name').value;
+    const type = document.getElementById('device-type').value;
+    const ip = document.getElementById('device-ip').value;
+    const port = document.getElementById('device-port').value;
+
+    if (!name || !ip) {
+        alert('请填写设备名称和IP地址');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/devices/add/', 'POST', {
+            name: name,
+            type: type,
+            ip: ip,
+            port: parseInt(port)
+        });
+
+        if (result.success) {
+            hideAddModal();
+            loadDevices();
+            showToast('设备添加成功');
+        } else {
+            showToast('添加失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function deleteDevice(deviceId) {
+    if (!confirm('确定删除此设备?')) return;
+
+    try {
+        const result = await apiRequest('/api/devices/delete/', 'POST', { id: deviceId });
+        if (result.success) {
+            loadDevices();
+            showToast('设备已删除');
+        } else {
+            showToast('删除失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+window.onload = loadDevices;
+</script>
+{% endblock %}
