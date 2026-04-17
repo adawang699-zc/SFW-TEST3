@@ -387,9 +387,12 @@ async function startupInterface(interfaceName) {
     }
 }
 
-// 页面加载时自动扫描
+// 页面加载时自动扫描并加载完整数据
 window.onload = async function() {
+    // 先扫描网卡（更新数据库）
     await scanInterfaces();
+    // 然后从数据库获取完整数据（包含 Agent 绑定信息）
+    await loadInterfaces();
     await loadAgents();
 };
 </script>
