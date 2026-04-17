@@ -924,9 +924,14 @@ def api_device_list(request):
         'user': d.user,
         'password': d.password,
         'backend_password': d.backend_password,
+        'has_backend_password': bool(d.backend_password),  # 是否有自定义后台密码
+        'default_backend_password': True if not d.backend_password else False,  # 是否使用默认密码
         'is_long_running': d.is_long_running,
         'description': d.description,
         'created_at': d.created_at.isoformat(),
+        'cpu_model': d.cpu_model,
+        'cpu_cores': d.cpu_cores,
+        'hardware_model': d.hardware_model,
     } for d in devices]
 
     return JsonResponse({'devices': data, 'success': True})

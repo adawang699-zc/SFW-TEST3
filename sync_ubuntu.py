@@ -28,6 +28,15 @@ try:
     print('SSH 连接成功!')
 
     # Git stash + pull
+    print('执行 git fetch...')
+    cmd = f'cd {REMOTE_PATH} && git fetch --prune origin'
+    exit_status, out, err = execute_ssh_command(ssh, cmd)
+    print('=== Git Fetch 输出 ===')
+    print(out)
+    if err:
+        print('=== Fetch 错误 ===')
+        print(err)
+
     print('执行 git stash...')
     cmd = f'cd {REMOTE_PATH} && git stash'
     exit_status, out, err = execute_ssh_command(ssh, cmd)

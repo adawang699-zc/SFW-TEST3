@@ -95,7 +95,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">设备类型 *</label>
-                <select id="edit-device-type" class="form-input">
+                <select id="edit-device-type" class="form-input" onchange="updateBackendPasswordPlaceholder()">
                     <option value="security_device">安全设备</option>
                     <option value="ic_firewall">工控防火墙</option>
                     <option value="ic_audit">工控审计</option>
@@ -279,6 +279,15 @@ const typeColors = {
     'ic_audit': 'var(--warning)',
     'ids': 'var(--primary)',
     'other': 'var(--text-muted)'
+};
+
+// 设备类型默认后台密码（前端仅用于显示提示，实际密码由后端填充）
+const defaultBackendPasswords = {
+    'ic_firewall': '********',  // 工控防火墙有默认密码
+    'ic_audit': '********',     // 工控审计有默认密码
+    'ids': '********',          // IDS 有默认密码
+    'security_device': '********', // 安全设备有默认密码
+    'other': '********'         // 其他设备有默认密码
 };
 
 function formatBytes(bytes) {
@@ -637,7 +646,12 @@ function showEditModal(deviceId) {
     sshPwdInput.placeholder = device.password ? '********' : '留空保持原密码';
     const backendPwdInput = document.getElementById('edit-device-backend-password');
     backendPwdInput.value = '';
-    backendPwdInput.placeholder = device.backend_password ? '********' : '留空保持原密码';
+    // 后台密码：如果已有自定义密码显示星号；否则提示使用默认密码（根据设备类型自动填充）
+    if (device.has_backend_password) {
+        backendPwdInput.placeholder = '********';
+    } else {
+        backendPwdInput.placeholder = '******** (使用默认密码)';
+    }
     document.getElementById('edit-device-long-running').checked = device.is_long_running || false;
     document.getElementById('edit-device-description').value = device.description || '';
     document.getElementById('edit-modal').style.display = 'block';
@@ -646,6 +660,20 @@ function showEditModal(deviceId) {
 function hideEditModal() {
     document.getElementById('edit-modal').style.display = 'none';
     currentDeviceId = null;
+}
+
+function updateBackendPasswordPlaceholder() {
+    // 设备类型改变时，更新后台密码 placeholder
+    const device = devices.find(d => d.id === currentDeviceId);
+    const newType = document.getElementById('edit-device-type').value;
+    const backendPwdInput = document.getElementById('edit-device-backend-password');
+
+    // 如果已有自定义密码，显示星号；否则提示使用默认密码
+    if (device && device.has_backend_password) {
+        backendPwdInput.placeholder = '********';
+    } else {
+        backendPwdInput.placeholder = '******** (使用默认密码)';
+    }
 }
 
 async function updateDevice() {
