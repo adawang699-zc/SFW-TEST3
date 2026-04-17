@@ -18,6 +18,29 @@
     </p>
 </div>
 
+<!-- 配置 IP 模态框 -->
+<div id="config-ip-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); padding: 24px; border-radius: 16px; width: 400px;">
+        <div class="card-header" style="margin-bottom: 20px;">配置网卡 IP</div>
+        <div class="form-group">
+            <label class="form-label">网卡名称</label>
+            <input type="text" id="config-interface-name" class="form-input" readonly>
+        </div>
+        <div class="form-group">
+            <label class="form-label">IP 地址</label>
+            <input type="text" id="config-ip-address" class="form-input" placeholder="例如: 192.168.1.100">
+        </div>
+        <div class="form-group">
+            <label class="form-label">子网掩码 (CIDR)</label>
+            <input type="text" id="config-netmask" class="form-input" value="24" placeholder="例如: 24">
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+            <button class="btn btn-primary" onclick="confirmConfigIP()">确认配置</button>
+            <button class="btn btn-secondary" onclick="closeConfigModal()">取消</button>
+        </div>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">网卡列表</div>
     <div id="interface-list">
@@ -90,17 +113,28 @@ function renderInterfaces(interfaces) {
     interfaces.forEach(iface => {
         const isManagement = iface.is_management;
         const hasAgent = iface.has_agent;
+        const isUp = iface.is_up;
+        const hasIP = iface.ip_address && iface.ip_address !== '';
 
         let cardClass = 'interface-card';
         if (isManagement) cardClass += ' management';
         if (hasAgent) cardClass += ' bound';
+        if (!isUp) cardClass += ' stopped';
 
         html += `
             <div class="${cardClass}">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <div class="interface-name">${iface.name}</div>
-                        <div class="interface-ip">${iface.ip_address} ${iface.speed ? '(' + iface.speed + ' Mbps)' : ''}</div>
+                        <div class="interface-name">
+                            ${iface.name}
+                            <span class="status-badge ${isUp ? 'status-running' : 'status-stopped'}" style="margin-left: 8px;">
+                                ${iface.status || (isUp ? 'UP' : 'DOWN')}
+                            </span>
+                        </div>
+                        <div class="interface-ip">
+                            ${hasIP ? iface.ip_address : '未配置 IP'}
+                            ${iface.speed ? '(' + iface.speed + ' Mbps)' : ''}
+                        </div>
                     </div>
                     <div>
                         ${isManagement ?
@@ -108,7 +142,11 @@ function renderInterfaces(interfaces) {
                             (hasAgent ?
                                 `<span class="status-badge status-running">已绑定 Agent</span>
                                  <button class="btn btn-sm btn-danger" onclick="deleteAgent('${iface.agent_id}')">删除 Agent</button>` :
-                                `<button class="btn btn-sm btn-primary" onclick="createAgent('${iface.name}')">创建 Agent</button>`
+                                (hasIP ?
+                                    `<button class="btn btn-sm btn-primary" onclick="createAgent('${iface.name}')">创建 Agent</button>` :
+                                    `<button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${iface.name}')">配置 IP</button>
+                                     ${isUp ? '' : `<button class="btn btn-sm btn-secondary" onclick="startupInterface('${iface.name}')">启动网卡</button>`}`
+                                )
                             )
                         }
                     </div>
@@ -280,6 +318,73 @@ function showToast(message, type = 'success') {
     document.body.appendChild(toast);
 
     setTimeout(() => toast.remove(), 3000);
+}
+
+// ========== 网卡配置功能 ==========
+
+let configInterfaceName = null;
+
+// 显示配置 IP 模态框
+function showConfigIPModal(interfaceName) {
+    configInterfaceName = interfaceName;
+    document.getElementById('config-interface-name').value = interfaceName;
+    document.getElementById('config-ip-address').value = '';
+    document.getElementById('config-netmask').value = '24';
+    document.getElementById('config-ip-modal').style.display = 'block';
+}
+
+// 关闭配置 IP 模态框
+function closeConfigModal() {
+    document.getElementById('config-ip-modal').style.display = 'none';
+    configInterfaceName = null;
+}
+
+// 确认配置 IP
+async function confirmConfigIP() {
+    const interfaceName = document.getElementById('config-interface-name').value;
+    const ipAddress = document.getElementById('config-ip-address').value;
+    const netmask = document.getElementById('config-netmask').value;
+
+    if (!ipAddress) {
+        showToast('请输入 IP 地址', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/interfaces/config-ip/', 'POST', {
+            interface_name: interfaceName,
+            ip_address: ipAddress,
+            netmask: netmask
+        });
+
+        if (result.success) {
+            showToast(result.message);
+            closeConfigModal();
+            await refreshStatus();
+        } else {
+            showToast('配置失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 启动网卡
+async function startupInterface(interfaceName) {
+    try {
+        const result = await apiRequest('/api/interfaces/startup/', 'POST', {
+            interface_name: interfaceName
+        });
+
+        if (result.success) {
+            showToast(result.message);
+            await refreshStatus();
+        } else {
+            showToast('启动失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
 }
 
 // 页面加载时自动扫描

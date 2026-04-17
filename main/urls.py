@@ -20,6 +20,8 @@ urlpatterns = [
     # ========== 网卡管理 API ==========
     path('api/interfaces/scan/', views.api_scan_interfaces, name='api_scan_interfaces'),
     path('api/interfaces/list/', views.api_interface_list, name='api_interface_list'),
+    path('api/interfaces/config-ip/', views.api_interface_config_ip, name='api_interface_config_ip'),
+    path('api/interfaces/startup/', views.api_interface_startup, name='api_interface_startup'),
 
     # ========== Agent 管理 API ==========
     path('api/agents/list/', views.api_agent_list, name='api_agent_list'),

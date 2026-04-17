@@ -105,9 +105,10 @@ def packet_replay(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_scan_interfaces(request):
-    """扫描系统网卡"""
+    """扫描系统网卡（包括 DOWN 状态）"""
     try:
         import psutil
+        import socket
 
         interfaces = []
         net_if_addrs = psutil.net_if_addrs()
@@ -118,7 +119,7 @@ def api_scan_interfaces(request):
             if name.startswith('lo') or name.lower() == 'loopback':
                 continue
 
-            # 获取 IPv4 地址
+            # 获取 IPv4 地址（可能为空）
             ipv4 = None
             mac = None
             for addr in addrs:
@@ -126,12 +127,12 @@ def api_scan_interfaces(request):
                     ipv4 = addr.address
                 elif hasattr(psutil, 'PF_LINK') and addr.family == psutil.PF_LINK:
                     mac = addr.address
+                elif addr.family == socket.AF_PACKET:
+                    mac = addr.address
 
-            if not ipv4:
-                continue
-
-            # 获取网卡速率
+            # 获取网卡状态
             stats = net_if_stats.get(name)
+            is_up = stats.isup if stats else False
             speed = stats.speed if stats and stats.speed > 0 else None
 
             # 判断是否是管理网卡
@@ -139,11 +140,12 @@ def api_scan_interfaces(request):
 
             interfaces.append({
                 'name': name,
-                'ip_address': ipv4,
+                'ip_address': ipv4 or '',  # 允许为空
                 'mac_address': mac or '',
                 'speed': speed,
                 'is_management': is_management,
-                'is_up': stats.isup if stats else False
+                'is_up': is_up,
+                'status': 'UP' if is_up else 'DOWN'
             })
 
         # 保存到数据库
@@ -151,11 +153,13 @@ def api_scan_interfaces(request):
             NetworkInterface.objects.update_or_create(
                 name=iface['name'],
                 defaults={
-                    'ip_address': iface['ip_address'],
+                    'ip_address': iface['ip_address'] or None,
                     'mac_address': iface.get('mac_address', ''),
                     'speed': iface.get('speed'),
                     'is_management': iface['is_management'],
                     'is_available': iface['is_up'],
+                    'is_up': iface['is_up'],
+                    'status': iface['status'],
                 }
             )
 
@@ -184,11 +188,13 @@ def api_interface_list(request):
         data.append({
             'id': iface.id,
             'name': iface.name,
-            'ip_address': iface.ip_address,
+            'ip_address': iface.ip_address or '',
             'mac_address': iface.mac_address,
             'speed': iface.speed,
             'is_management': iface.is_management,
             'is_available': iface.is_available,
+            'is_up': iface.is_up,
+            'status': iface.status,
             'has_agent': agent is not None,
             'agent_id': agent.agent_id if agent else None,
             'agent_status': agent.status if agent else None,
@@ -260,6 +266,15 @@ def api_agent_create(request):
         # 检查网卡是否是管理网卡
         if interface.is_management:
             return JsonResponse({'success': False, 'error': '管理网卡不能绑定 Agent'})
+
+        # 检查网卡是否有 IP 地址
+        if not interface.ip_address:
+            return JsonResponse({
+                'success': False,
+                'error': '网卡未配置 IP 地址，请先配置 IP 才能绑定 Agent',
+                'need_config_ip': True,
+                'interface_name': interface_name
+            })
 
         # 检查网卡是否已绑定 Agent
         if LocalAgent.objects.filter(interface=interface).exists():
@@ -1589,4 +1604,106 @@ def api_license_device_generate(request):
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"生成设备授权失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 网卡配置 API ==========
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_interface_config_ip(request):
+    """配置网卡 IP 地址"""
+    try:
+        data = json.loads(request.body)
+        interface_name = data.get('interface_name')
+        ip_address = data.get('ip_address')
+        netmask = data.get('netmask', '24')
+
+        if not interface_name or not ip_address:
+            return JsonResponse({'success': False, 'error': '缺少网卡名或 IP 地址'})
+
+        # 先启动网卡
+        subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # 配置 IP 地址（CIDR 格式）
+        cidr = f"{ip_address}/{netmask}"
+        result = subprocess.run(
+            ['sudo', 'ip', 'addr', 'add', cidr, 'dev', interface_name],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0 or 'File exists' in result.stderr:
+            # 更新数据库
+            NetworkInterface.objects.update_or_create(
+                name=interface_name,
+                defaults={
+                    'ip_address': ip_address,
+                    'is_up': True,
+                    'status': 'UP',
+                    'is_available': True,
+                }
+            )
+
+            logger.info(f"网卡 {interface_name} 配置 IP: {cidr}")
+            return JsonResponse({
+                'success': True,
+                'message': f'网卡 {interface_name} 已配置 IP: {cidr}',
+                'ip_address': ip_address
+            })
+        else:
+            logger.error(f"配置 IP 失败: {result.stderr}")
+            return JsonResponse({'success': False, 'error': result.stderr})
+
+    except Exception as e:
+        logger.exception(f"配置网卡 IP 失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_interface_startup(request):
+    """启动网卡"""
+    try:
+        data = json.loads(request.body)
+        interface_name = data.get('interface_name')
+
+        if not interface_name:
+            return JsonResponse({'success': False, 'error': '缺少网卡名'})
+
+        result = subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            # 更新数据库
+            NetworkInterface.objects.update_or_create(
+                name=interface_name,
+                defaults={
+                    'is_up': True,
+                    'status': 'UP',
+                    'is_available': True,
+                }
+            )
+
+            logger.info(f"网卡 {interface_name} 已启动")
+            return JsonResponse({
+                'success': True,
+                'message': f'网卡 {interface_name} 已启动'
+            })
+        else:
+            logger.error(f"启动网卡失败: {result.stderr}")
+            return JsonResponse({'success': False, 'error': result.stderr})
+
+    except Exception as e:
+        logger.exception(f"启动网卡失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})

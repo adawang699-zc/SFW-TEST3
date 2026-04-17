@@ -13,11 +13,13 @@ class NetworkInterface(models.Model):
     系统启动时自动扫描，管理网卡（MANAGEMENT_INTERFACE）不参与 Agent 绑定
     """
     name = models.CharField(max_length=50, unique=True, verbose_name="网卡名称")
-    ip_address = models.GenericIPAddressField(verbose_name="IP地址")
+    ip_address = models.GenericIPAddressField(blank=True, null=True, verbose_name="IP地址")
     mac_address = models.CharField(max_length=17, blank=True, default='', verbose_name="MAC地址")
     speed = models.IntegerField(null=True, blank=True, verbose_name="速率(Mbps)")
     is_management = models.BooleanField(default=False, verbose_name="是否管理网卡")
     is_available = models.BooleanField(default=True, verbose_name="是否可用")
+    is_up = models.BooleanField(default=False, verbose_name="是否启动")
+    status = models.CharField(max_length=10, default='DOWN', verbose_name="状态")
     detected_at = models.DateTimeField(auto_now_add=True, verbose_name="检测时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
