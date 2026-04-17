@@ -1890,7 +1890,10 @@ def api_device_test_connection(request):
 def api_device_monitor_data(request):
     """获取设备 CPU/内存/网络监控数据"""
     try:
-        import paramiko
+        from .device_utils import (
+            get_cpu_info, get_memory_info, get_network_info, get_disk_info,
+            test_ssh_connection, execute_in_backend
+        )
         data = json.loads(request.body)
 
         ip = data.get('ip')
@@ -1903,49 +1906,35 @@ def api_device_monitor_data(request):
         if not ip:
             return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
 
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # 先测试 SSH 连接
+        conn_result = test_ssh_connection(ip, user, password, port)
+        if not conn_result['success']:
+            return JsonResponse({
+                'success': False,
+                'offline': True,
+                'error': conn_result['message']
+            })
 
-        try:
-            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
-        except Exception as e:
-            ssh.close()
-            return JsonResponse({'success': False, 'offline': True, 'error': f'连接失败: {str(e)}'})
+        # 使用后台命令获取 CPU 信息
+        cpu_usage = get_cpu_info(ip, user, password, device_type, backend_password, port)
 
-        # 获取 CPU 使用率
-        cpu_usage = 0
-        cpu_name = ''
-        try:
-            stdin, stdout, stderr = ssh.exec_command("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1", timeout=10)
-            output = stdout.read().decode().strip()
-            if output:
-                try:
-                    cpu_usage = float(output)
-                except:
-                    pass
+        # 获取 CPU 型号
+        cpu_name = 'ARM/x86 Processor'  # 默认值
+        cpu_cmd = "cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2"
+        cpu_name_result = execute_in_backend(cpu_cmd, ip, user, password, backend_password, device_type, port)
+        if cpu_name_result:
+            # 清理输出
+            for line in cpu_name_result.strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('#') and 'root' not in line:
+                    cpu_name = line
+                    break
 
-            stdin, stdout, stderr = ssh.exec_command("cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2", timeout=10)
-            cpu_name = stdout.read().decode().strip()
-        except:
-            pass
+        # 使用后台命令获取内存信息
+        mem_info = get_memory_info(ip, user, password, device_type, backend_password, port)
 
-        # 获取内存使用率
-        memory_usage = 0
-        memory_used = 0
-        memory_total = 0
-        try:
-            stdin, stdout, stderr = ssh.exec_command("free -m | grep Mem | awk '{print $2,$3,$7}'", timeout=10)
-            output = stdout.read().decode().strip()
-            if output:
-                parts = output.split()
-                if len(parts) >= 3:
-                    memory_total = int(parts[0])
-                    memory_used = int(parts[1])
-                    memory_usage = (memory_used / memory_total) * 100 if memory_total > 0 else 0
-        except:
-            pass
-
-        ssh.close()
+        # 使用后台命令获取网络信息
+        net_info = get_network_info(ip, user, password, device_type, backend_password, port)
 
         return JsonResponse({
             'success': True,
@@ -1954,13 +1943,13 @@ def api_device_monitor_data(request):
                 'name': cpu_name,
             },
             'memory': {
-                'usage': memory_usage,
-                'used': memory_used,
-                'total': memory_total,
+                'usage': mem_info.get('usage', 0),
+                'used': mem_info.get('used', 0),
+                'total': mem_info.get('total', 0),
             },
             'network': {
-                'rx_rate': 0,
-                'tx_rate': 0,
+                'rx_rate': net_info.get('rx_rate', 0),
+                'tx_rate': net_info.get('tx_rate', 0),
             }
         })
 
@@ -1974,50 +1963,37 @@ def api_device_monitor_data(request):
 def api_device_disk_data(request):
     """获取设备磁盘数据"""
     try:
-        import paramiko
+        from .device_utils import get_disk_info, test_ssh_connection
         data = json.loads(request.body)
 
         ip = data.get('ip')
         port = int(data.get('port', 22))
         user = data.get('user', 'admin')
         password = data.get('password', '')
+        device_type = data.get('device_type', 'ic_firewall')
+        backend_password = data.get('backend_password', '')
 
         if not ip:
             return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
 
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        # 先测试 SSH 连接
+        conn_result = test_ssh_connection(ip, user, password, port)
+        if not conn_result['success']:
+            return JsonResponse({
+                'success': False,
+                'offline': True,
+                'error': conn_result['message']
+            })
 
-        try:
-            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
-        except Exception as e:
-            ssh.close()
-            return JsonResponse({'success': False, 'offline': True, 'error': f'连接失败: {str(e)}'})
-
-        # 获取磁盘使用率
-        disk_total = 0
-        disk_used = 0
-        disk_usage = 0
-        try:
-            stdin, stdout, stderr = ssh.exec_command("df -h / | tail -1 | awk '{print $2,$3,$5}'", timeout=10)
-            output = stdout.read().decode().strip()
-            if output:
-                parts = output.split()
-                if len(parts) >= 3:
-                    disk_total = int(parts[0].replace('G', '').replace('T', ''))
-                    disk_used = int(parts[1].replace('G', '').replace('T', ''))
-                    disk_usage = float(parts[2].replace('%', ''))
-        except:
-            pass
-
-        ssh.close()
+        # 使用后台命令获取磁盘信息
+        disk_info = get_disk_info(ip, user, password, device_type, backend_password, port)
 
         return JsonResponse({
             'success': True,
             'disk': {
-                'total': disk_total,
-                'used': disk_used,
-                'usage': disk_usage,
+                'total': disk_info.get('total', 0),
+                'used': disk_info.get('used', 0),
+                'usage': disk_info.get('usage', 0),
             }
         })
 
@@ -2031,7 +2007,6 @@ def api_device_disk_data(request):
 def api_device_execute(request):
     """在设备上执行命令"""
     try:
-        import paramiko
         data = json.loads(request.body)
 
         ip = data.get('ip')
@@ -2039,32 +2014,34 @@ def api_device_execute(request):
         user = data.get('user', 'admin')
         password = data.get('password', '')
         command = data.get('command', '')
-        command_type = data.get('command_type', 'backend')
+        command_type = data.get('command_type', 'backend')  # 'vtysh' 或 'backend'
+        device_type = data.get('device_type', 'ic_firewall')
+        backend_password = data.get('backend_password', '')
 
         if not ip or not command:
             return JsonResponse({'success': False, 'error': '缺少 IP 或命令'})
 
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        try:
-            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
-        except Exception as e:
-            ssh.close()
-            return JsonResponse({'success': False, 'error': f'连接失败: {str(e)}'})
-
-        # 执行命令
-        stdin, stdout, stderr = ssh.exec_command(command, timeout=30)
-        output = stdout.read().decode()
-        error = stderr.read().decode()
-
-        ssh.close()
-
-        return JsonResponse({
-            'success': True,
-            'output': output,
-            'error': error if error else None
-        })
+        if command_type == 'vtysh':
+            # 使用 vtysh 执行命令
+            from .device_utils import execute_in_vtysh
+            result = execute_in_vtysh(
+                command, ip, user, password, port
+            )
+            if result:
+                return JsonResponse({'success': True, 'output': result})
+            else:
+                return JsonResponse({'success': False, 'error': 'vtysh 命令执行失败'})
+        else:
+            # 使用后台执行命令
+            from .device_utils import execute_in_backend
+            result = execute_in_backend(
+                command, ip, user, password,
+                backend_password, device_type, port
+            )
+            if result:
+                return JsonResponse({'success': True, 'output': result})
+            else:
+                return JsonResponse({'success': False, 'error': '后台命令执行失败，请检查后台密码是否正确'})
 
     except Exception as e:
         logger.exception(f"执行命令失败: {e}")

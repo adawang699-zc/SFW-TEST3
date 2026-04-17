@@ -11,7 +11,7 @@
             </div>
             <div style="display: flex; gap: 8px;">
                 <input type="text" id="device-search" class="form-input" placeholder="搜索设备名称或IP..." style="width: 200px;">
-                <button class="btn btn-warning" onclick="showAlertConfigModal()" title="告警配置"><i class="fas fa-bell"></i></button>
+                <button class="btn btn-warning" onclick="showAlertConfigModal()" title="告警配置" style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-bell"></i> 告警</button>
                 <button class="btn btn-secondary" onclick="loadDevices()">刷新</button>
                 <button class="btn btn-primary" onclick="showAddModal()">+ 添加设备</button>
             </div>
@@ -263,6 +263,7 @@ let diskIntervals = {};
 let currentDeviceId = null;
 let monitoringStatus = {};
 let alertStatus = {};
+let deviceOnlineStatus = {};  // 设备在线状态
 
 const typeNames = {
     'security_device': '安全设备',
@@ -384,6 +385,8 @@ async function fetchDiskData(deviceId) {
 }
 
 function updateDeviceDisplay(deviceId, data) {
+    deviceOnlineStatus[deviceId] = true;  // 设备在线
+
     const cpuBadge = document.getElementById(`cpu-badge-${deviceId}`);
     const cpuBar = document.getElementById(`cpu-bar-${deviceId}`);
     const cpuDetail = document.getElementById(`cpu-detail-${deviceId}`);
@@ -394,6 +397,17 @@ function updateDeviceDisplay(deviceId, data) {
 
     const netRx = document.getElementById(`net-rx-${deviceId}`);
     const netTx = document.getElementById(`net-tx-${deviceId}`);
+
+    const card = document.getElementById(`device-card-${deviceId}`);
+    if (card) {
+        // 更新卡片左边框颜色
+        const alert = alertStatus[deviceId];
+        if (alert) {
+            card.style.borderLeftColor = 'var(--warning)';  // 告警黄色
+        } else {
+            card.style.borderLeftColor = 'var(--success)';  // 在线绿色
+        }
+    }
 
     if (cpuBadge && data.cpu) {
         const cpuUsage = data.cpu.usage || 0;
@@ -438,18 +452,32 @@ function updateDiskDisplay(deviceId, disk) {
 }
 
 function updateDeviceOffline(deviceId, isOffline = true) {
+    deviceOnlineStatus[deviceId] = false;  // 设备离线
+
     const cpuBadge = document.getElementById(`cpu-badge-${deviceId}`);
     const memBadge = document.getElementById(`mem-badge-${deviceId}`);
     const diskBadge = document.getElementById(`disk-badge-${deviceId}`);
+    const netRx = document.getElementById(`net-rx-${deviceId}`);
+    const netTx = document.getElementById(`net-tx-${deviceId}`);
+
+    // 不显示"离线"，显示 "--"
     if (cpuBadge) {
-        cpuBadge.textContent = isOffline ? '离线' : '--';
-        cpuBadge.className = 'status-badge status-stopped';
+        cpuBadge.textContent = '--';
+        cpuBadge.className = 'status-badge';
     }
     if (memBadge) {
-        memBadge.textContent = isOffline ? '离线' : '--';
-        memBadge.className = 'status-badge status-stopped';
+        memBadge.textContent = '--';
+        memBadge.className = 'status-badge';
     }
     if (diskBadge) diskBadge.textContent = '--';
+    if (netRx) netRx.textContent = '--';
+    if (netTx) netTx.textContent = '--';
+
+    // 更新卡片左边框颜色为红色（离线）
+    const card = document.getElementById(`device-card-${deviceId}`);
+    if (card) {
+        card.style.borderLeftColor = 'var(--danger)';
+    }
 }
 
 function renderDevices() {
@@ -475,9 +503,20 @@ function renderDevices() {
         const typeName = typeNames[device.type] || '未知';
         const isMonitoring = monitoringStatus[device.id] || device.is_long_running;
         const alert = alertStatus[device.id];
+        const isOnline = deviceOnlineStatus[device.id];
+
+        // 左边框颜色：告警黄色 > 离线红色 > 在线绿色
+        let borderColor = 'var(--success)';  // 默认在线绿色
+        if (alert) {
+            borderColor = 'var(--warning)';  // 告警黄色
+        } else if (isOnline === false) {
+            borderColor = 'var(--danger)';   // 离线红色
+        } else if (isOnline === undefined) {
+            borderColor = typeColor;  // 初始状态用类型颜色
+        }
 
         html += `
-        <div class="card" style="margin-bottom: 16px; border-left: 4px solid ${typeColor};">
+        <div class="card" id="device-card-${device.id}" style="margin-bottom: 16px; border-left: 4px solid ${borderColor};">
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
                 <div>
                     <div style="display: flex; align-items: center; gap: 8px;">
