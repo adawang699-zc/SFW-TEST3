@@ -117,6 +117,10 @@ class TestDevice(models.Model):
     password = models.CharField(max_length=200, default='', blank=True, verbose_name="SSH密码", help_text="SSH登录密码")
     backend_password = models.CharField(max_length=200, default='', blank=True, verbose_name="后台密码", help_text="后台root密码，留空则使用设备类型默认密码")
     is_long_running = models.BooleanField(default=False, verbose_name="长跑环境", help_text="长跑环境默认启动监测")
+    # 硬件信息（只获取一次）
+    hardware_model = models.CharField(max_length=200, default='', blank=True, verbose_name="硬件型号", help_text="通过 show hwtype 获取")
+    cpu_model = models.CharField(max_length=200, default='', blank=True, verbose_name="CPU型号", help_text="通过 lscpu 获取 Model name")
+    cpu_cores = models.IntegerField(default=0, verbose_name="CPU核数", help_text="通过 lscpu 获取 CPU(s)")
     description = models.TextField(blank=True, null=True, verbose_name="描述信息")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 

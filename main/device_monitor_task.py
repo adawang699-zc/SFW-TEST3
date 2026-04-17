@@ -430,10 +430,10 @@ def collect_device_monitor_data(device: Any) -> None:
     Args:
         device: TestDevice 模型实例
     """
-    from main.models import DeviceMonitorData
+    from main.models import DeviceMonitorData, TestDevice
     from main.device_utils import (
         get_cpu_info, get_memory_info, get_network_info, get_disk_info,
-        test_ssh_connection, execute_in_backend
+        test_ssh_connection, execute_in_backend, execute_in_vtysh
     )
 
     device_id = device.id
@@ -460,19 +460,50 @@ def collect_device_monitor_data(device: Any) -> None:
         logger.warning(f"设备 {device_name} ({device_ip}) 离线: {conn_result['message']}")
         return
 
-    # 获取 CPU 信息
+    # 获取硬件信息（只获取一次，如果设备表中为空）
+    if not device.cpu_model or not device.hardware_model:
+        try:
+            # 使用 lscpu 获取 CPU 信息
+            lscpu_result = execute_in_backend('lscpu', device_ip, device.user, device.password, backend_password, device_type, device.port)
+            if lscpu_result:
+                cpu_model = ''
+                cpu_cores = 0
+                for line in lscpu_result.strip().split('\n'):
+                    line = line.strip()
+                    if 'Model name:' in line:
+                        cpu_model = line.split(':', 1)[-1].strip()
+                    elif 'CPU(s):' in line and 'On-line' not in line:
+                        try:
+                            cpu_cores = int(line.split(':', 1)[-1].strip())
+                        except:
+                            pass
+
+                # 使用 vtysh 获取硬件型号
+                hwtype_result = execute_in_vtysh('show hwtype', device_ip, device.user, device.password, device.port)
+                hardware_model = ''
+                if hwtype_result:
+                    for line in hwtype_result.strip().split('\n'):
+                        line = line.strip()
+                        if line and 'hwtype' not in line.lower() and 'show' not in line.lower():
+                            hardware_model = line
+                            break
+
+                # 更新设备表中的硬件信息
+                if cpu_model or hardware_model or cpu_cores > 0:
+                    TestDevice.objects.filter(id=device_id).update(
+                        cpu_model=cpu_model or device.cpu_model,
+                        cpu_cores=cpu_cores or device.cpu_cores,
+                        hardware_model=hardware_model or device.hardware_model
+                    )
+                    logger.info(f"设备 {device_name} 硬件信息已更新: CPU={cpu_model}, 核数={cpu_cores}, 硬件={hardware_model}")
+        except Exception as e:
+            logger.error(f"获取设备 {device_name} 硬件信息失败: {e}")
+
+    # 获取 CPU 使用率
     cpu_usage = get_cpu_info(device_ip, device.user, device.password, device_type, backend_password, device.port)
 
-    # 获取 CPU 型号
-    cpu_name = 'ARM/x86 Processor'
-    cpu_cmd = "cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2"
-    cpu_name_result = execute_in_backend(cpu_cmd, device_ip, device.user, device.password, backend_password, device_type, device.port)
-    if cpu_name_result:
-        for line in cpu_name_result.strip().split('\n'):
-            line = line.strip()
-            if line and not line.startswith('#') and 'root' not in line and 'model' not in line.lower():
-                cpu_name = line.strip()
-                break
+    # 使用设备表中的 CPU 型号
+    cpu_name = device.cpu_model or 'ARM/x86 Processor'
 
     # 获取内存信息
     mem_info = get_memory_info(device_ip, device.user, device.password, device_type, backend_password, device.port)

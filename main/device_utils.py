@@ -105,7 +105,8 @@ def execute_in_vtysh(
     host: str,
     user: str = DEFAULT_USER,
     password: str = DEFAULT_PASSWORD,
-    port: int = 22
+    port: int = 22,
+    timeout: int = 120
 ) -> Union[str, bool]:
     """
     在 vtysh 中执行命令（FRR/Quagga 路由命令）
@@ -116,6 +117,7 @@ def execute_in_vtysh(
         user: SSH 用户名
         password: SSH 密码
         port: SSH 端口
+        timeout: 总超时时间（秒）
 
     Returns:
         命令输出或 False（失败时）
@@ -131,11 +133,11 @@ def execute_in_vtysh(
         ssh.connect(host, port, user, password, timeout=30)
 
         chan = ssh.invoke_shell()
-        chan.settimeout(60)
+        chan.settimeout(timeout)
 
         # 进入 vtysh
         chan.send('vtysh\n')
-        time.sleep(0.5)
+        time.sleep(1)
 
         # 清空初始输出
         if chan.recv_ready():
@@ -143,23 +145,38 @@ def execute_in_vtysh(
 
         # 执行命令
         chan.send(cmd + '\n')
-        time.sleep(0.5)
+        time.sleep(1)
 
         output = ''
-        while chan.recv_ready():
-            data = chan.recv(4096).decode('utf-8', errors='ignore')
-            output += data
+        start_time = time.time()
 
-            # 处理分页提示
-            if '--More--' in output:
-                chan.send(' ')
+        while time.time() - start_time < timeout:
+            if chan.recv_ready():
+                data = chan.recv(8192).decode('utf-8', errors='ignore')
+                output += data
+
+                # 处理分页提示，发送空格继续
+                if '--More--' in output or '-- more --' in output:
+                    chan.send(' ')
+                    time.sleep(0.5)
+                    output = output.replace('--More--', '').replace('-- more --', '')
+            else:
+                # 检查是否已经完成（输出中有多个换行且没有 --More--）
+                if output.count('\n') > 5 and '--More--' not in output and '-- more --' not in output:
+                    time.sleep(0.5)
+                    if not chan.recv_ready():
+                        break
                 time.sleep(0.3)
 
         # 退出 vtysh
         chan.send('exit\n')
-        time.sleep(0.3)
+        time.sleep(0.5)
 
         ssh.close()
+
+        # 清理 ANSI 转义序列
+        import re
+        output = re.sub(r'\x1b\[[0-9;]*m', '', output)
 
         # 清理输出
         lines = output.split('\n')
@@ -634,7 +651,7 @@ def get_coredump_files(
     files = []
 
     try:
-        cmd = f"ls -lh {coredump_dir} 2>/dev/null | grep -E '\\.core|coredump'"
+        cmd = f"ls -la {coredump_dir} 2>/dev/null | grep -E '\\.core|coredump' | sed 's/\\x1b\\[[0-9;]*m//g'"
         result = execute_in_backend(cmd, host, user, password, backend_password, device_type, port)
 
         if result:

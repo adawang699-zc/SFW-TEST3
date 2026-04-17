@@ -416,7 +416,13 @@ function updateDeviceDisplay(deviceId, data) {
         cpuBadge.textContent = cpuUsage.toFixed(1) + '%';
         cpuBadge.className = cpuUsage > 80 ? 'status-badge status-stopped' : 'status-badge status-running';
         if (cpuBar) cpuBar.style.width = Math.min(cpuUsage, 100) + '%';
-        if (cpuDetail) cpuDetail.textContent = data.cpu.name || 'ARM/x86 Processor';
+        // CPU 详情：显示型号、核数和硬件型号
+        if (cpuDetail) {
+            let cpuInfo = data.cpu.name || device.cpu_model || 'ARM/x86 Processor';
+            if (device.cpu_cores) cpuInfo += ` (${device.cpu_cores}核)`;
+            if (device.hardware_model) cpuInfo += ` | ${device.hardware_model}`;
+            cpuDetail.textContent = cpuInfo;
+        }
     }
 
     if (memBadge && data.memory) {
@@ -625,8 +631,13 @@ function showEditModal(deviceId) {
     document.getElementById('edit-device-ip').value = device.ip || '';
     document.getElementById('edit-device-port').value = device.port || 22;
     document.getElementById('edit-device-user').value = device.user || 'admin';
-    document.getElementById('edit-device-password').value = '';
-    document.getElementById('edit-device-backend-password').value = '';
+    // 密码回显：如果已有密码显示 placeholder，否则为空
+    const sshPwdInput = document.getElementById('edit-device-password');
+    sshPwdInput.value = '';
+    sshPwdInput.placeholder = device.password ? '******** (已有密码，留空保持原密码)' : '留空保持原密码';
+    const backendPwdInput = document.getElementById('edit-device-backend-password');
+    backendPwdInput.value = '';
+    backendPwdInput.placeholder = device.backend_password ? '******** (已有密码，留空保持原密码)' : '留空保持原密码';
     document.getElementById('edit-device-long-running').checked = device.is_long_running || false;
     document.getElementById('edit-device-description').value = device.description || '';
     document.getElementById('edit-modal').style.display = 'block';
