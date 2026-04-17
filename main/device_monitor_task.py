@@ -1,6 +1,7 @@
 """
 设备监测后台任务模块
 用于后台监测设备 coredump 文件和资源使用情况，并发送告警邮件
+同时定时获取设备监控数据并存储到数据库
 """
 
 import threading
@@ -18,6 +19,10 @@ logger = logging.getLogger('main')
 # 全局监测状态
 monitor_tasks: Dict[str, Dict[str, Any]] = {}  # {device_id: {'enabled': bool, 'thread': Thread, 'last_files': set}}
 monitor_lock = threading.Lock()
+
+# 全局数据采集线程
+data_collector_thread = None
+data_collector_enabled = False
 
 # 告警配置（从文件读取）
 alert_config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'alert_config.json')
@@ -416,3 +421,159 @@ def get_monitoring_status() -> Dict[str, bool]:
 
 # 初始化时加载配置
 load_alert_config()
+
+
+def collect_device_monitor_data(device: Any) -> None:
+    """
+    采集单个设备的监控数据并存储到数据库
+
+    Args:
+        device: TestDevice 模型实例
+    """
+    from main.models import DeviceMonitorData
+    from main.device_utils import (
+        get_cpu_info, get_memory_info, get_network_info, get_disk_info,
+        test_ssh_connection, execute_in_backend
+    )
+
+    device_id = device.id
+    device_name = device.name
+    device_ip = device.ip
+    device_type = device.type
+    backend_password = device.backend_password or ''
+
+    logger.info(f"开始采集设备 {device_name} ({device_ip}) 监控数据")
+
+    # 测试 SSH 连接
+    conn_result = test_ssh_connection(device_ip, device.user, device.password, device.port)
+    if not conn_result['success']:
+        # 设备离线，更新数据库状态
+        DeviceMonitorData.objects.update_or_create(
+            device_id=device_id,
+            defaults={
+                'device_name': device_name,
+                'device_ip': device_ip,
+                'is_online': False,
+                'last_error': conn_result['message'],
+            }
+        )
+        logger.warning(f"设备 {device_name} ({device_ip}) 离线: {conn_result['message']}")
+        return
+
+    # 获取 CPU 信息
+    cpu_usage = get_cpu_info(device_ip, device.user, device.password, device_type, backend_password, device.port)
+
+    # 获取 CPU 型号
+    cpu_name = 'ARM/x86 Processor'
+    cpu_cmd = "cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2"
+    cpu_name_result = execute_in_backend(cpu_cmd, device_ip, device.user, device.password, backend_password, device_type, device.port)
+    if cpu_name_result:
+        for line in cpu_name_result.strip().split('\n'):
+            line = line.strip()
+            if line and not line.startswith('#') and 'root' not in line and 'model' not in line.lower():
+                cpu_name = line.strip()
+                break
+
+    # 获取内存信息
+    mem_info = get_memory_info(device_ip, device.user, device.password, device_type, backend_password, device.port)
+
+    # 获取网络信息
+    net_info = get_network_info(device_ip, device.user, device.password, device_type, backend_password, device.port)
+
+    # 获取磁盘信息
+    disk_info = get_disk_info(device_ip, device.user, device.password, device_type, backend_password, device.port)
+
+    # 存储到数据库
+    DeviceMonitorData.objects.update_or_create(
+        device_id=device_id,
+        defaults={
+            'device_name': device_name,
+            'device_ip': device_ip,
+            'cpu_usage': cpu_usage,
+            'cpu_name': cpu_name,
+            'memory_usage': mem_info.get('usage', 0),
+            'memory_used': mem_info.get('used', 0),
+            'memory_total': mem_info.get('total', 0),
+            'disk_usage': disk_info.get('usage', 0),
+            'disk_used': disk_info.get('used', 0),
+            'disk_total': disk_info.get('total', 0),
+            'rx_rate': net_info.get('rx_rate', 0),
+            'tx_rate': net_info.get('tx_rate', 0),
+            'is_online': True,
+            'last_error': None,
+        }
+    )
+
+    logger.info(f"设备 {device_name} 监控数据已更新: CPU={cpu_usage}%, MEM={mem_info.get('usage', 0)}%")
+
+
+def data_collector_worker() -> None:
+    """
+    数据采集工作线程
+    定时采集所有设备的监控数据并存储到数据库
+    """
+    from main.models import TestDevice
+
+    logger.info("数据采集线程启动")
+
+    while data_collector_enabled:
+        try:
+            # 获取所有设备
+            devices = TestDevice.objects.all()
+
+            for device in devices:
+                try:
+                    collect_device_monitor_data(device)
+                except Exception as e:
+                    logger.error(f"采集设备 {device.name} 数据失败: {e}")
+
+                # 每个设备采集间隔 5 秒，避免并发过高
+                time.sleep(5)
+
+        except Exception as e:
+            logger.error(f"数据采集循环出错: {e}")
+
+        # 等待下一次采集周期（60秒）
+        time.sleep(60)
+
+    logger.info("数据采集线程停止")
+
+
+def start_data_collector() -> None:
+    """
+    启动数据采集线程
+    """
+    global data_collector_thread, data_collector_enabled
+
+    if data_collector_thread and data_collector_thread.is_alive():
+        logger.warning("数据采集线程已运行")
+        return
+
+    data_collector_enabled = True
+    data_collector_thread = threading.Thread(
+        target=data_collector_worker,
+        daemon=True
+    )
+    data_collector_thread.start()
+    logger.info("数据采集线程已启动")
+
+
+def stop_data_collector() -> None:
+    """
+    停止数据采集线程
+    """
+    global data_collector_enabled
+
+    data_collector_enabled = False
+    logger.info("数据采集线程已停止")
+
+
+def is_data_collector_running() -> bool:
+    """
+    检查数据采集线程是否运行
+    """
+    return data_collector_enabled and (data_collector_thread and data_collector_thread.is_alive())
+
+
+# 自动启动数据采集线程
+start_data_collector()

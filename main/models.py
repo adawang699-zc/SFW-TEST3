@@ -217,3 +217,50 @@ class AgentStatistics(models.Model):
 
     def __str__(self):
         return f"{self.agent.agent_id} 统计"
+
+
+class DeviceMonitorData(models.Model):
+    """
+    设备监控数据 - 存储设备的 CPU、内存、磁盘、网络监控数据
+
+    后台定时任务获取数据并存储，前端调用时返回最新值
+    """
+    device_id = models.IntegerField(verbose_name="设备ID")
+    device_name = models.CharField(max_length=100, verbose_name="设备名称")
+    device_ip = models.GenericIPAddressField(verbose_name="设备IP")
+
+    # CPU 数据
+    cpu_usage = models.FloatField(default=0, verbose_name="CPU使用率(%)")
+    cpu_name = models.CharField(max_length=100, default='ARM/x86 Processor', verbose_name="CPU型号")
+
+    # 内存数据
+    memory_usage = models.FloatField(default=0, verbose_name="内存使用率(%)")
+    memory_used = models.IntegerField(default=0, verbose_name="已用内存(MB)")
+    memory_total = models.IntegerField(default=0, verbose_name="总内存(MB)")
+
+    # 磁盘数据
+    disk_usage = models.FloatField(default=0, verbose_name="磁盘使用率(%)")
+    disk_used = models.FloatField(default=0, verbose_name="已用磁盘(GB)")
+    disk_total = models.FloatField(default=0, verbose_name="总磁盘(GB)")
+
+    # 网络数据
+    rx_rate = models.IntegerField(default=0, verbose_name="接收速率(B/s)")
+    tx_rate = models.IntegerField(default=0, verbose_name="发送速率(B/s)")
+
+    # 状态
+    is_online = models.BooleanField(default=False, verbose_name="是否在线")
+    last_error = models.TextField(blank=True, null=True, verbose_name="最后错误信息")
+
+    # 时间
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "设备监控数据"
+        verbose_name_plural = "设备监控数据"
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['device_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.device_name} 监控数据"

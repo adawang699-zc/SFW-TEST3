@@ -304,10 +304,10 @@ async function loadDevices() {
         renderDevices();
         devices.forEach(d => {
             if (monitorIntervals[d.id]) clearInterval(monitorIntervals[d.id]);
-            monitorIntervals[d.id] = setInterval(() => fetchMonitorData(d.id), 60000);
+            monitorIntervals[d.id] = setInterval(() => fetchMonitorData(d.id), 10000);  // 10秒刷新一次（数据由后台采集）
             fetchMonitorData(d.id);
             if (diskIntervals[d.id]) clearInterval(diskIntervals[d.id]);
-            diskIntervals[d.id] = setInterval(() => fetchDiskData(d.id), 300000);
+            diskIntervals[d.id] = setInterval(() => fetchDiskData(d.id), 30000);  // 30秒刷新磁盘数据
             fetchDiskData(d.id);
         });
     } catch (e) {
@@ -344,6 +344,7 @@ async function fetchMonitorData(deviceId) {
 
     try {
         const result = await apiRequest('/api/device/monitor_data/', 'POST', {
+            device_id: deviceId,
             ip: device.ip,
             port: device.port || 22,
             user: device.user || 'admin',
@@ -355,7 +356,7 @@ async function fetchMonitorData(deviceId) {
         if (result.success) {
             updateDeviceDisplay(deviceId, result);
         } else {
-            updateDeviceOffline(deviceId, result.offline);
+            updateDeviceOffline(deviceId);
         }
     } catch (e) {
         updateDeviceOffline(deviceId);
@@ -368,6 +369,7 @@ async function fetchDiskData(deviceId) {
 
     try {
         const result = await apiRequest('/api/device/disk_data/', 'POST', {
+            device_id: deviceId,
             ip: device.ip,
             port: device.port || 22,
             user: device.user || 'admin',
@@ -927,12 +929,8 @@ function toggleCommandHelp() {
 
 function insertCommand(cmd) {
     const input = document.getElementById('command-input');
-    const currentValue = input.value.trim();
-    if (currentValue) {
-        input.value = currentValue + '\n' + cmd;
-    } else {
-        input.value = cmd;
-    }
+    // 清空之前的输入，直接替换为新命令
+    input.value = cmd;
     input.focus();
 }
 

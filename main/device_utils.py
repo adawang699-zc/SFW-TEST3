@@ -18,9 +18,9 @@ DEFAULT_USER = 'admin'
 DEFAULT_PASSWORD = ''
 
 # 默认后台密码（根据设备类型）
-DEFAULT_BACKEND_PASSWORD_FIREWALL = 'tdhx@2017'
-DEFAULT_BACKEND_PASSWORD_AUDIT = 'tdhx@2017'
-DEFAULT_BACKEND_PASSWORD_OTHER = 'tdhx@2017'
+DEFAULT_BACKEND_PASSWORD_FIREWALL = '#HiNA_!ns@USHDLk'  # 工控防火墙
+DEFAULT_BACKEND_PASSWORD_AUDIT = 'DFS#@!#_dsdfMDCK'     # 工控审计/IDS
+DEFAULT_BACKEND_PASSWORD_OTHER = '#HiNA_!ns@USHDLk'     # 其他设备默认
 
 
 def get_backend_password(device_type: Optional[str] = None, custom_password: Optional[str] = None) -> Optional[str]:

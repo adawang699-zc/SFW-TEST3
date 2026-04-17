@@ -1888,69 +1888,65 @@ def api_device_test_connection(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_device_monitor_data(request):
-    """获取设备 CPU/内存/网络监控数据"""
+    """获取设备 CPU/内存/网络监控数据（从数据库返回最新值）"""
     try:
-        from .device_utils import (
-            get_cpu_info, get_memory_info, get_network_info, get_disk_info,
-            test_ssh_connection, execute_in_backend
-        )
+        from .models import DeviceMonitorData
         data = json.loads(request.body)
 
+        device_id = data.get('device_id')
         ip = data.get('ip')
-        port = int(data.get('port', 22))
-        user = data.get('user', 'admin')
-        password = data.get('password', '')
-        device_type = data.get('device_type', 'ic_firewall')
-        backend_password = data.get('backend_password', '')
 
-        if not ip:
-            return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
+        if not device_id and not ip:
+            return JsonResponse({'success': False, 'error': '缺少设备 ID 或 IP'})
 
-        # 先测试 SSH 连接
-        conn_result = test_ssh_connection(ip, user, password, port)
-        if not conn_result['success']:
+        # 尝试从数据库获取最新数据
+        monitor_data = None
+        if device_id:
+            try:
+                monitor_data = DeviceMonitorData.objects.filter(device_id=device_id).first()
+            except:
+                pass
+
+        if monitor_data:
+            # 返回数据库中的最新数据
             return JsonResponse({
-                'success': False,
-                'offline': True,
-                'error': conn_result['message']
+                'success': True,
+                'from_cache': True,
+                'cpu': {
+                    'usage': monitor_data.cpu_usage,
+                    'name': monitor_data.cpu_name,
+                },
+                'memory': {
+                    'usage': monitor_data.memory_usage,
+                    'used': monitor_data.memory_used,
+                    'total': monitor_data.memory_total,
+                },
+                'network': {
+                    'rx_rate': monitor_data.rx_rate,
+                    'tx_rate': monitor_data.tx_rate,
+                },
+                'is_online': monitor_data.is_online,
+                'updated_at': monitor_data.updated_at.isoformat() if monitor_data.updated_at else None,
             })
 
-        # 使用后台命令获取 CPU 信息
-        cpu_usage = get_cpu_info(ip, user, password, device_type, backend_password, port)
-
-        # 获取 CPU 型号
-        cpu_name = 'ARM/x86 Processor'  # 默认值
-        cpu_cmd = "cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2"
-        cpu_name_result = execute_in_backend(cpu_cmd, ip, user, password, backend_password, device_type, port)
-        if cpu_name_result:
-            # 清理输出
-            for line in cpu_name_result.strip().split('\n'):
-                line = line.strip()
-                if line and not line.startswith('#') and 'root' not in line:
-                    cpu_name = line
-                    break
-
-        # 使用后台命令获取内存信息
-        mem_info = get_memory_info(ip, user, password, device_type, backend_password, port)
-
-        # 使用后台命令获取网络信息
-        net_info = get_network_info(ip, user, password, device_type, backend_password, port)
-
+        # 如果数据库没有数据，返回默认值
         return JsonResponse({
             'success': True,
+            'from_cache': False,
             'cpu': {
-                'usage': cpu_usage,
-                'name': cpu_name,
+                'usage': 0,
+                'name': 'ARM/x86 Processor',
             },
             'memory': {
-                'usage': mem_info.get('usage', 0),
-                'used': mem_info.get('used', 0),
-                'total': mem_info.get('total', 0),
+                'usage': 0,
+                'used': 0,
+                'total': 0,
             },
             'network': {
-                'rx_rate': net_info.get('rx_rate', 0),
-                'tx_rate': net_info.get('tx_rate', 0),
-            }
+                'rx_rate': 0,
+                'tx_rate': 0,
+            },
+            'is_online': False,
         })
 
     except Exception as e:
@@ -1961,39 +1957,41 @@ def api_device_monitor_data(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_device_disk_data(request):
-    """获取设备磁盘数据"""
+    """获取设备磁盘数据（从数据库返回最新值）"""
     try:
-        from .device_utils import get_disk_info, test_ssh_connection
+        from .models import DeviceMonitorData
         data = json.loads(request.body)
 
-        ip = data.get('ip')
-        port = int(data.get('port', 22))
-        user = data.get('user', 'admin')
-        password = data.get('password', '')
-        device_type = data.get('device_type', 'ic_firewall')
-        backend_password = data.get('backend_password', '')
+        device_id = data.get('device_id')
 
-        if not ip:
-            return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少设备 ID'})
 
-        # 先测试 SSH 连接
-        conn_result = test_ssh_connection(ip, user, password, port)
-        if not conn_result['success']:
+        # 从数据库获取最新数据
+        monitor_data = None
+        try:
+            monitor_data = DeviceMonitorData.objects.filter(device_id=device_id).first()
+        except:
+            pass
+
+        if monitor_data:
             return JsonResponse({
-                'success': False,
-                'offline': True,
-                'error': conn_result['message']
+                'success': True,
+                'from_cache': True,
+                'disk': {
+                    'total': monitor_data.disk_total,
+                    'used': monitor_data.disk_used,
+                    'usage': monitor_data.disk_usage,
+                }
             })
-
-        # 使用后台命令获取磁盘信息
-        disk_info = get_disk_info(ip, user, password, device_type, backend_password, port)
 
         return JsonResponse({
             'success': True,
+            'from_cache': False,
             'disk': {
-                'total': disk_info.get('total', 0),
-                'used': disk_info.get('used', 0),
-                'usage': disk_info.get('usage', 0),
+                'total': 0,
+                'used': 0,
+                'usage': 0,
             }
         })
 
