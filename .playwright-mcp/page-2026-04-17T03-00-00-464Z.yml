@@ -1,0 +1,73 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - link "Ubuntu 多 Agent 部署平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 11:00:00"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 网卡 & Agent" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: 网卡 & Agent
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "⚙️ 工控协议" [ref=e19] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e20]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e22] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e23]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e25] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e26]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e28] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e29]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e31] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e32]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e34] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e35]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e37] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e38]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e40] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e41]: 🔑
+      - text: 授权管理
+  - generic [ref=e42]:
+    - generic [ref=e43]:
+      - generic [ref=e44]: 网卡扫描
+      - generic [ref=e45]:
+        - button "🔍 扫描网卡" [ref=e46] [cursor=pointer]
+        - button "🔄 刷新状态" [ref=e47] [cursor=pointer]
+      - paragraph [ref=e48]:
+        - text: "管理网卡:"
+        - strong [ref=e49]: eth0
+        - text: （此网卡用于 Django Web 服务，不参与 Agent 绑定）
+    - generic [ref=e50]:
+      - generic [ref=e51]: 网卡列表
+      - paragraph [ref=e53]: 点击"扫描网卡"获取系统网卡信息...
+    - generic [ref=e54]:
+      - generic [ref=e55]: 已绑定 Agent
+      - paragraph [ref=e57]: 暂无 Agent...
+    - generic [ref=e58]:
+      - generic [ref=e59]: Agent 日志
+      - generic [ref=e60]: 选择 Agent 查看日志...

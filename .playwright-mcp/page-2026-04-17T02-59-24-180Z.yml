@@ -1,0 +1,136 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - link "Ubuntu 多 Agent 部署平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 10:59:24"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 网卡 & Agent" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: 网卡 & Agent
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "⚙️ 工控协议" [ref=e19] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e20]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e22] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e23]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e25] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e26]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e28] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e29]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e31] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e32]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e34] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e35]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e37] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e38]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e40] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e41]: 🔑
+      - text: 授权管理
+  - generic [ref=e42]:
+    - generic [ref=e43]:
+      - generic [ref=e44]: Ubuntu 多 Agent 一体化部署平台
+      - paragraph [ref=e45]: 专业的一体化防火墙自动化测试解决方案
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]: "1"
+          - generic [ref=e49]: 运行中的 Agent
+        - generic [ref=e50]:
+          - generic [ref=e51]: "1"
+          - generic [ref=e52]: 测试设备
+        - generic [ref=e53]:
+          - generic [ref=e54]: "16"
+          - generic [ref=e55]: 网卡数量
+        - generic [ref=e56]:
+          - generic [ref=e57]: 8+
+          - generic [ref=e58]: 工控协议
+    - generic [ref=e59]:
+      - generic [ref=e60]: 系统状态
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - generic [ref=e64]: CPU 使用率
+            - generic [ref=e65]: "--"
+          - generic [ref=e67]: "--"
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - generic [ref=e70]: 内存使用率
+            - generic [ref=e71]: "--"
+          - generic [ref=e73]: "--"
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e76]: 磁盘使用率
+            - generic [ref=e77]: "--"
+          - generic [ref=e79]: "--"
+    - generic [ref=e80]:
+      - generic [ref=e81]: 快速导航
+      - generic [ref=e82]:
+        - link "🔌 网卡 & Agent 管理网卡绑定和 Agent" [ref=e83] [cursor=pointer]:
+          - /url: /agent-manage/
+          - generic [ref=e84]:
+            - generic [ref=e85]: 🔌
+            - generic [ref=e86]:
+              - generic [ref=e87]: 网卡 & Agent
+              - generic [ref=e88]: 管理网卡绑定和 Agent
+        - link "🖥️ 测试设备 监控测试设备状态" [ref=e89] [cursor=pointer]:
+          - /url: /device-monitor/
+          - generic [ref=e90]:
+            - generic [ref=e91]: 🖥️
+            - generic [ref=e92]:
+              - generic [ref=e93]: 测试设备
+              - generic [ref=e94]: 监控测试设备状态
+        - link "📡 报文发送 构造并发送测试报文" [ref=e95] [cursor=pointer]:
+          - /url: /packet-send/
+          - generic [ref=e96]:
+            - generic [ref=e97]: 📡
+            - generic [ref=e98]:
+              - generic [ref=e99]: 报文发送
+              - generic [ref=e100]: 构造并发送测试报文
+        - link "⚙️ 工控协议 Modbus/S7/GOOSE 等" [ref=e101] [cursor=pointer]:
+          - /url: /industrial-protocol/
+          - generic [ref=e102]:
+            - generic [ref=e103]: ⚙️
+            - generic [ref=e104]:
+              - generic [ref=e105]: 工控协议
+              - generic [ref=e106]: Modbus/S7/GOOSE 等
+    - generic [ref=e107]:
+      - generic [ref=e108]: Agent 状态概览
+      - table [ref=e110]:
+        - rowgroup [ref=e111]:
+          - row "Agent ID 网卡 IP 地址 状态" [ref=e112]:
+            - columnheader "Agent ID" [ref=e113]
+            - columnheader "网卡" [ref=e114]
+            - columnheader "IP 地址" [ref=e115]
+            - columnheader "状态" [ref=e116]
+        - rowgroup [ref=e117]:
+          - row "agent_eth1 eth1 11.11.11.11 已停止" [ref=e118]:
+            - cell "agent_eth1" [ref=e119]
+            - cell "eth1" [ref=e120]
+            - cell "11.11.11.11" [ref=e121]
+            - cell "已停止" [ref=e122]:
+              - generic [ref=e123]: 已停止

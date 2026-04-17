@@ -634,10 +634,10 @@ function showEditModal(deviceId) {
     // 密码回显：如果已有密码显示 placeholder，否则为空
     const sshPwdInput = document.getElementById('edit-device-password');
     sshPwdInput.value = '';
-    sshPwdInput.placeholder = device.password ? '******** (已有密码，留空保持原密码)' : '留空保持原密码';
+    sshPwdInput.placeholder = device.password ? '********' : '留空保持原密码';
     const backendPwdInput = document.getElementById('edit-device-backend-password');
     backendPwdInput.value = '';
-    backendPwdInput.placeholder = device.backend_password ? '******** (已有密码，留空保持原密码)' : '留空保持原密码';
+    backendPwdInput.placeholder = device.backend_password ? '********' : '留空保持原密码';
     document.getElementById('edit-device-long-running').checked = device.is_long_running || false;
     document.getElementById('edit-device-description').value = device.description || '';
     document.getElementById('edit-modal').style.display = 'block';

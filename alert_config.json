@@ -1,0 +1,11 @@
+{
+  "smtp_server": "smtp.example.com",
+  "smtp_port": 587,
+  "sender_email": "",
+  "sender_password": "",
+  "use_tls": true,
+  "recipients": [],
+  "check_interval": 300,
+  "cpu_threshold": 80,
+  "memory_threshold": 80
+}
