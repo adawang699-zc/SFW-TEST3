@@ -28,48 +28,49 @@
 
 <!-- 添加设备模态框 -->
 <div id="add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
-    <div style="background: var(--bg-card); max-width: 500px; margin: 50px auto; padding: 24px; border-radius: 16px; max-height: 90vh; overflow-y: auto;">
+    <div style="background: var(--bg-card); max-width: 650px; margin: 30px auto; padding: 24px; border-radius: 16px; max-height: 85vh; overflow-y: auto;">
         <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-plus-circle"></i> 添加测试设备</h3>
-        <div class="form-group">
-            <label class="form-label">设备名称 *</label>
-            <input type="text" id="device-name" class="form-input" placeholder="例如: 工控防火墙-01">
-        </div>
-        <div class="form-group">
-            <label class="form-label">设备类型 *</label>
-            <select id="device-type" class="form-input">
-                <option value="security_device">安全设备</option>
-                <option value="ic_firewall">工控防火墙</option>
-                <option value="ic_audit">工控审计</option>
-                <option value="ids">IDS</option>
-                <option value="other">其他</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label class="form-label">IP 地址 *</label>
-            <input type="text" id="device-ip" class="form-input" placeholder="例如: 192.168.1.100">
-        </div>
-        <div class="form-group">
-            <label class="form-label">SSH 端口</label>
-            <input type="number" id="device-port" class="form-input" value="22">
-        </div>
-        <div class="form-group">
-            <label class="form-label">SSH 用户名</label>
-            <input type="text" id="device-user" class="form-input" value="admin">
-        </div>
-        <div class="form-group">
-            <label class="form-label">SSH 密码</label>
-            <input type="password" id="device-password" class="form-input" placeholder="SSH 登录密码">
-        </div>
-        <div class="form-group">
-            <label class="form-label">后台密码 <small style="color: var(--text-muted);">(可选，留空使用设备类型默认密码)</small></label>
-            <input type="password" id="device-backend-password" class="form-input" placeholder="后台 root 密码">
-        </div>
-        <div class="form-group">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="device-long-running" style="width: 18px; height: 18px;">
-                <span><i class="fas fa-running" style="color: var(--warning);"></i> 长跑环境</span>
-            </label>
-            <small style="color: var(--text-muted); margin-left: 26px;">长跑环境将自动启动监测并持续运行</small>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+                <label class="form-label">设备名称 *</label>
+                <input type="text" id="device-name" class="form-input" placeholder="例如: 工控防火墙-01">
+            </div>
+            <div class="form-group">
+                <label class="form-label">设备类型 *</label>
+                <select id="device-type" class="form-input">
+                    <option value="security_device">安全设备</option>
+                    <option value="ic_firewall">工控防火墙</option>
+                    <option value="ic_audit">工控审计</option>
+                    <option value="ids">IDS</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">IP 地址 *</label>
+                <input type="text" id="device-ip" class="form-input" placeholder="例如: 192.168.1.100">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH 端口</label>
+                <input type="number" id="device-port" class="form-input" value="22">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH 用户名</label>
+                <input type="text" id="device-user" class="form-input" value="admin">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH 密码</label>
+                <input type="password" id="device-password" class="form-input" placeholder="SSH 登录密码">
+            </div>
+            <div class="form-group">
+                <label class="form-label">后台密码 <small style="color: var(--text-muted);">(可选)</small></label>
+                <input type="password" id="device-backend-password" class="form-input" placeholder="后台 root 密码">
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; justify-content: center;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="device-long-running" style="width: 18px; height: 18px;">
+                    <span><i class="fas fa-running" style="color: var(--warning);"></i> 长跑环境</span>
+                </label>
+            </div>
         </div>
         <div class="form-group">
             <label class="form-label">设备描述</label>
@@ -83,35 +84,101 @@
     </div>
 </div>
 
+<!-- 编辑设备模态框 -->
+<div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
+    <div style="background: var(--bg-card); max-width: 650px; margin: 30px auto; padding: 24px; border-radius: 16px; max-height: 85vh; overflow-y: auto;">
+        <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-edit"></i> 编辑测试设备</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+                <label class="form-label">设备名称 *</label>
+                <input type="text" id="edit-device-name" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">设备类型 *</label>
+                <select id="edit-device-type" class="form-input">
+                    <option value="security_device">安全设备</option>
+                    <option value="ic_firewall">工控防火墙</option>
+                    <option value="ic_audit">工控审计</option>
+                    <option value="ids">IDS</option>
+                    <option value="other">其他</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">IP 地址 *</label>
+                <input type="text" id="edit-device-ip" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH 端口</label>
+                <input type="number" id="edit-device-port" class="form-input" value="22">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH 用户名</label>
+                <input type="text" id="edit-device-user" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SSH 密码</label>
+                <input type="password" id="edit-device-password" class="form-input" placeholder="留空保持原密码">
+            </div>
+            <div class="form-group">
+                <label class="form-label">后台密码 <small style="color: var(--text-muted);">(可选)</small></label>
+                <input type="password" id="edit-device-backend-password" class="form-input" placeholder="留空保持原密码">
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; justify-content: center;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="edit-device-long-running" style="width: 18px; height: 18px;">
+                    <span><i class="fas fa-running" style="color: var(--warning);"></i> 长跑环境</span>
+                </label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">设备描述</label>
+            <textarea id="edit-device-description" class="form-input" rows="2"></textarea>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="hideEditModal()">取消</button>
+            <button class="btn btn-primary" onclick="updateDevice()">保存</button>
+        </div>
+    </div>
+</div>
+
 <!-- 告警配置模态框 -->
 <div id="alert-config-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
-    <div style="background: var(--bg-card); max-width: 600px; margin: 50px auto; padding: 24px; border-radius: 16px; max-height: 90vh; overflow-y: auto;">
+    <div style="background: var(--bg-card); max-width: 700px; margin: 30px auto; padding: 24px; border-radius: 16px; max-height: 85vh; overflow-y: auto;">
         <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-bell"></i> 告警配置</h3>
-        <div class="form-group">
-            <label class="form-label">SMTP 服务器 *</label>
-            <input type="text" id="smtp-server" class="form-input" placeholder="例如: smtp.qq.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">SMTP 端口 *</label>
-            <input type="number" id="smtp-port" class="form-input" value="587">
-        </div>
-        <div class="form-group">
-            <label class="form-label">发件人邮箱 *</label>
-            <input type="email" id="sender-email" class="form-input" placeholder="例如: sender@example.com">
-        </div>
-        <div class="form-group">
-            <label class="form-label">发件人密码 *</label>
-            <input type="password" id="sender-password" class="form-input" placeholder="邮箱密码或授权码">
-            <small style="color: var(--text-muted);">部分邮箱需要使用授权码而非登录密码</small>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+                <label class="form-label">SMTP 服务器 *</label>
+                <input type="text" id="smtp-server" class="form-input" placeholder="例如: smtp.qq.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">SMTP 端口 *</label>
+                <input type="number" id="smtp-port" class="form-input" value="587">
+            </div>
+            <div class="form-group">
+                <label class="form-label">发件人邮箱 *</label>
+                <input type="email" id="sender-email" class="form-input" placeholder="例如: sender@example.com">
+            </div>
+            <div class="form-group">
+                <label class="form-label">发件人密码 *</label>
+                <input type="password" id="sender-password" class="form-input" placeholder="邮箱密码或授权码">
+            </div>
+            <div class="form-group">
+                <label class="form-label">CPU 告警阈值（%）</label>
+                <input type="number" id="cpu-threshold" class="form-input" value="80" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label class="form-label">内存告警阈值（%）</label>
+                <input type="number" id="memory-threshold" class="form-input" value="80" min="1" max="100">
+            </div>
         </div>
         <div class="form-group">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="checkbox" id="use-tls" checked>
-                <span>使用 TLS 加密（端口 587 通常使用 TLS）</span>
+                <span>使用 TLS 加密（端口 587）</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
                 <input type="checkbox" id="use-ssl">
-                <span>使用 SSL 加密（端口 465 通常使用 SSL）</span>
+                <span>使用 SSL 加密（端口 465）</span>
             </label>
         </div>
         <div class="form-group">
@@ -122,17 +189,6 @@
         <div class="form-group">
             <label class="form-label">监测频率（秒）</label>
             <input type="number" id="check-interval" class="form-input" value="300" min="60">
-            <small style="color: var(--text-muted);">建议设置 60 秒以上</small>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            <div class="form-group">
-                <label class="form-label">CPU 告警阈值（%）</label>
-                <input type="number" id="cpu-threshold" class="form-input" value="80" min="1" max="100">
-            </div>
-            <div class="form-group">
-                <label class="form-label">内存告警阈值（%）</label>
-                <input type="number" id="memory-threshold" class="form-input" value="80" min="1" max="100">
-            </div>
         </div>
         <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
             <button class="btn btn-secondary" onclick="hideAlertConfigModal()">取消</button>
@@ -144,19 +200,46 @@
 
 <!-- 命令执行模态框 -->
 <div id="command-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
-    <div style="background: var(--bg-card); max-width: 600px; margin: 50px auto; padding: 24px; border-radius: 16px;">
+    <div style="background: var(--bg-card); max-width: 750px; margin: 30px auto; padding: 24px; border-radius: 16px;">
         <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-terminal"></i> 执行命令</h3>
-        <div class="form-group">
-            <label class="form-label">命令类型</label>
-            <select id="command-type" class="form-input">
-                <option value="vtysh">Vtysh 命令</option>
-                <option value="backend" selected>后台命令（需要 root 权限）</option>
-            </select>
-        </div>
-        <div class="form-group">
-            <label class="form-label">命令</label>
-            <textarea id="command-input" class="form-input" rows="5" placeholder="例如: show version" style="font-family: monospace;"></textarea>
-            <small style="color: var(--text-muted);">支持多行命令</small>
+        <div style="display: grid; grid-template-columns: 1fr 200px; gap: 16px;">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">命令类型</label>
+                    <select id="command-type" class="form-input" onchange="toggleCommandHelp()">
+                        <option value="vtysh">Vtysh 命令</option>
+                        <option value="backend" selected>后台命令（需要 root 权限）</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">命令</label>
+                    <textarea id="command-input" class="form-input" rows="5" placeholder="例如: show version" style="font-family: monospace;"></textarea>
+                    <small style="color: var(--text-muted);">支持多行命令</small>
+                </div>
+            </div>
+            <div id="command-help-panel" style="background: var(--bg-dark); border-radius: 10px; padding: 12px; display: none;">
+                <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;"><i class="fas fa-lightbulb"></i> 常见命令</div>
+                <div id="vtysh-commands" style="display: none;">
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show version')">show version</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show ip route')">show ip route</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show ip interface')">show ip interface</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show running-config')">show running-config</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show log')">show log</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show cpu')">show cpu</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show memory')">show memory</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('show interface')">show interface</button>
+                </div>
+                <div id="backend-commands">
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('top -n1')">top -n1</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('free -m')">free -m</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('df -h')">df -h</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('ps aux')">ps aux</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('netstat -an')">netstat -an</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('ip addr')">ip addr</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('cat /proc/cpuinfo')">cpuinfo</button>
+                    <button class="btn btn-sm btn-secondary" style="margin: 2px; font-size: 0.75rem;" onclick="insertCommand('ls -la /data/coredump')">coredump</button>
+                </div>
+            </div>
         </div>
         <div class="form-group">
             <label class="form-label">执行结果</label>
@@ -215,21 +298,13 @@ async function loadDevices() {
     try {
         const result = await apiRequest('/api/devices/list/');
         devices = result.devices || [];
-
-        // 加载监测状态
         await loadMonitoringStatus();
-        // 加载告警状态
         await loadAlertStatus();
-
         renderDevices();
-
-        // 启动监控（1分钟间隔）
         devices.forEach(d => {
             if (monitorIntervals[d.id]) clearInterval(monitorIntervals[d.id]);
             monitorIntervals[d.id] = setInterval(() => fetchMonitorData(d.id), 60000);
             fetchMonitorData(d.id);
-
-            // 磁盘监控（5分钟间隔）
             if (diskIntervals[d.id]) clearInterval(diskIntervals[d.id]);
             diskIntervals[d.id] = setInterval(() => fetchDiskData(d.id), 300000);
             fetchDiskData(d.id);
@@ -325,7 +400,7 @@ function updateDeviceDisplay(deviceId, data) {
         cpuBadge.textContent = cpuUsage.toFixed(1) + '%';
         cpuBadge.className = cpuUsage > 80 ? 'status-badge status-stopped' : 'status-badge status-running';
         if (cpuBar) cpuBar.style.width = Math.min(cpuUsage, 100) + '%';
-        if (cpuDetail) cpuDetail.textContent = data.cpu.name || '--';
+        if (cpuDetail) cpuDetail.textContent = data.cpu.name || 'ARM/x86 Processor';
     }
 
     if (memBadge && data.memory) {
@@ -418,7 +493,6 @@ function renderDevices() {
                     ${device.description ? `<div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">${escapeHtml(device.description)}</div>` : ''}
                 </div>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <!-- 监测开关 -->
                     <div style="display: flex; align-items: center; gap: 4px;">
                         <span style="color: var(--text-secondary); font-size: 0.8rem;">监测</span>
                         <label style="position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer;">
@@ -430,11 +504,10 @@ function renderDevices() {
                     ${alert ? `<button class="btn btn-sm btn-secondary" onclick="ignoreAlert(${device.id})" title="忽略告警一周"><i class="fas fa-bell-slash"></i></button>` : ''}
                     <button class="btn btn-sm btn-secondary" onclick="showCommandModal(${device.id})">执行命令</button>
                     <button class="btn btn-sm btn-secondary" onclick="showEditModal(${device.id})">编辑</button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteDevice(${device.id})">删除</button>
+                    <button class="btn btn-sm btn-danger" onclick="confirmDeleteDevice(${device.id})">删除</button>
                 </div>
             </div>
 
-            <!-- 监控数据 -->
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
                 <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
@@ -501,6 +574,66 @@ function hideAddModal() {
     document.getElementById('add-modal').style.display = 'none';
 }
 
+function showEditModal(deviceId) {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    currentDeviceId = deviceId;
+    document.getElementById('edit-device-name').value = device.name || '';
+    document.getElementById('edit-device-type').value = device.type || 'ic_firewall';
+    document.getElementById('edit-device-ip').value = device.ip || '';
+    document.getElementById('edit-device-port').value = device.port || 22;
+    document.getElementById('edit-device-user').value = device.user || 'admin';
+    document.getElementById('edit-device-password').value = '';
+    document.getElementById('edit-device-backend-password').value = '';
+    document.getElementById('edit-device-long-running').checked = device.is_long_running || false;
+    document.getElementById('edit-device-description').value = device.description || '';
+    document.getElementById('edit-modal').style.display = 'block';
+}
+
+function hideEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+    currentDeviceId = null;
+}
+
+async function updateDevice() {
+    const device = devices.find(d => d.id === currentDeviceId);
+    if (!device) return;
+
+    const name = document.getElementById('edit-device-name').value;
+    const type = document.getElementById('edit-device-type').value;
+    const ip = document.getElementById('edit-device-ip').value;
+    const port = document.getElementById('edit-device-port').value || 22;
+    const user = document.getElementById('edit-device-user').value || 'admin';
+    const password = document.getElementById('edit-device-password').value;
+    const backend_password = document.getElementById('edit-device-backend-password').value;
+    const is_long_running = document.getElementById('edit-device-long-running').checked;
+    const description = document.getElementById('edit-device-description').value;
+
+    if (!name || !ip) {
+        showToast('请填写设备名称和IP地址', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/devices/update/', 'POST', {
+            id: currentDeviceId,
+            name, type, ip, port: parseInt(port), user, password,
+            backend_password, is_long_running, description
+        });
+
+        if (result.success) {
+            hideEditModal();
+            loadDevices();
+            showToast('设备更新成功');
+        } else {
+            showToast('更新失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
 function showAlertConfigModal() {
     document.getElementById('alert-config-modal').style.display = 'block';
     loadAlertConfig();
@@ -518,7 +651,6 @@ async function loadAlertConfig() {
             document.getElementById('smtp-server').value = config.smtp_server || '';
             document.getElementById('smtp-port').value = config.smtp_port || 587;
             document.getElementById('sender-email').value = config.sender_email || '';
-            // 密码显示为星号，如果已配置
             document.getElementById('sender-password').value = config.sender_password ? '***' : '';
             document.getElementById('sender-password').dataset.hasPassword = config.sender_password ? 'true' : 'false';
             document.getElementById('use-tls').checked = config.use_tls !== false;
@@ -547,7 +679,6 @@ async function saveAlertConfig() {
         memory_threshold: parseInt(document.getElementById('memory-threshold').value) || 80
     };
 
-    // 如果密码是星号且已有密码，不发送密码（保留原密码）
     if (config.sender_password === '***') {
         config.sender_password = '';
     }
@@ -627,23 +758,20 @@ async function toggleMonitoring(deviceId, enabled) {
 }
 
 async function ignoreAlert(deviceId) {
-    if (!confirm('确定忽略此设备的告警一周？')) return;
-
-    try {
-        const result = await apiRequest('/api/device/alert_ignore/', 'POST', {
-            device_id: deviceId
-        });
-
-        if (result.success) {
-            showToast(result.message || '告警已忽略');
-            delete alertStatus[deviceId];
-            renderDevices();
-        } else {
-            showToast('操作失败: ' + result.error, 'error');
+    showConfirmModal('忽略告警', '确定忽略此设备的告警一周？', async () => {
+        try {
+            const result = await apiRequest('/api/device/alert_ignore/', 'POST', { device_id: deviceId });
+            if (result.success) {
+                showToast(result.message || '告警已忽略');
+                delete alertStatus[deviceId];
+                renderDevices();
+            } else {
+                showToast('操作失败: ' + result.error, 'error');
+            }
+        } catch (e) {
+            showToast('请求失败: ' + e.message, 'error');
         }
-    } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
-    }
+    }, '🔔');
 }
 
 async function testConnection() {
@@ -708,22 +836,25 @@ async function addDevice() {
     }
 }
 
-async function deleteDevice(deviceId) {
-    if (!confirm('确定删除此设备？')) return;
+function confirmDeleteDevice(deviceId) {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
 
-    try {
-        const result = await apiRequest('/api/devices/delete/', 'POST', { id: deviceId });
-        if (result.success) {
-            if (monitorIntervals[deviceId]) clearInterval(monitorIntervals[deviceId]);
-            if (diskIntervals[deviceId]) clearInterval(diskIntervals[deviceId]);
-            loadDevices();
-            showToast('设备已删除');
-        } else {
-            showToast('删除失败: ' + result.error, 'error');
+    showConfirmModal('删除设备', `确定删除设备 "${device.name}" (${device.ip})？此操作不可撤销。`, async () => {
+        try {
+            const result = await apiRequest('/api/devices/delete/', 'POST', { id: deviceId });
+            if (result.success) {
+                if (monitorIntervals[deviceId]) clearInterval(monitorIntervals[deviceId]);
+                if (diskIntervals[deviceId]) clearInterval(diskIntervals[deviceId]);
+                loadDevices();
+                showToast('设备已删除');
+            } else {
+                showToast('删除失败: ' + result.error, 'error');
+            }
+        } catch (e) {
+            showToast('请求失败: ' + e.message, 'error');
         }
-    } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
-    }
+    }, '🗑️');
 }
 
 function showCommandModal(deviceId) {
@@ -731,11 +862,39 @@ function showCommandModal(deviceId) {
     document.getElementById('command-modal').style.display = 'block';
     document.getElementById('command-input').value = '';
     document.getElementById('command-output').innerHTML = '<span style="color: #6a9955;">等待执行命令...</span>';
+    toggleCommandHelp();
 }
 
 function hideCommandModal() {
     document.getElementById('command-modal').style.display = 'none';
     currentDeviceId = null;
+}
+
+function toggleCommandHelp() {
+    const type = document.getElementById('command-type').value;
+    const panel = document.getElementById('command-help-panel');
+    const vtyshDiv = document.getElementById('vtysh-commands');
+    const backendDiv = document.getElementById('backend-commands');
+
+    panel.style.display = 'block';
+    if (type === 'vtysh') {
+        vtyshDiv.style.display = 'block';
+        backendDiv.style.display = 'none';
+    } else {
+        vtyshDiv.style.display = 'none';
+        backendDiv.style.display = 'block';
+    }
+}
+
+function insertCommand(cmd) {
+    const input = document.getElementById('command-input');
+    const currentValue = input.value.trim();
+    if (currentValue) {
+        input.value = currentValue + '\n' + cmd;
+    } else {
+        input.value = cmd;
+    }
+    input.focus();
 }
 
 async function executeCommand() {
@@ -751,7 +910,7 @@ async function executeCommand() {
     }
 
     const outputDiv = document.getElementById('command-output');
-    outputDiv.innerHTML = '<span style="color: var(--primary);">执行中...</span>';
+    outputDiv.innerHTML = '<span style="color: #569cd6;">执行中...</span>';
 
     try {
         const result = await apiRequest('/api/device/execute/', 'POST', {
@@ -779,9 +938,7 @@ async function executeCommand() {
     }
 }
 
-// 搜索功能
 document.getElementById('device-search').addEventListener('input', renderDevices);
-
 window.onload = loadDevices;
 </script>
 {% endblock %}

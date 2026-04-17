@@ -192,9 +192,97 @@
             color: white;
         }
 
+        .btn-warning {
+            background: var(--warning);
+            color: #1a1a2e;
+        }
+
         .btn-sm {
             padding: 6px 12px;
             font-size: 0.85rem;
+        }
+
+        /* Toast 提示 */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            z-index: 10000;
+        }
+
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 20px;
+            margin-bottom: 8px;
+            box-shadow: var(--shadow);
+            animation: slideIn 0.3s ease;
+            max-width: 300px;
+        }
+
+        .toast.success {
+            border-color: var(--success);
+            color: var(--success);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .toast.warning {
+            border-color: var(--warning);
+            color: var(--warning);
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* 确认弹窗 */
+        .confirm-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 10001;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .confirm-content {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .confirm-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .confirm-title {
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .confirm-message {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .confirm-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
         }
 
         /* 表格 */
@@ -419,6 +507,22 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- 确认弹窗 -->
+    <div class="confirm-modal" id="confirm-modal">
+        <div class="confirm-content">
+            <div class="confirm-icon" id="confirm-icon">⚠️</div>
+            <div class="confirm-title" id="confirm-title">确认操作</div>
+            <div class="confirm-message" id="confirm-message">确定要执行此操作吗？</div>
+            <div class="confirm-buttons">
+                <button class="btn btn-secondary" onclick="hideConfirmModal()">取消</button>
+                <button class="btn btn-danger" id="confirm-btn">确认</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript -->
     <script>
         // 实时时钟
@@ -444,6 +548,44 @@
             const response = await fetch(url, options);
             return response.json();
         }
+
+        // Toast 提示函数
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // 确认弹窗函数
+        let confirmCallback = null;
+
+        function showConfirmModal(title, message, onConfirm, icon = '⚠️') {
+            document.getElementById('confirm-title').textContent = title;
+            document.getElementById('confirm-message').textContent = message;
+            document.getElementById('confirm-icon').textContent = icon;
+            confirmCallback = onConfirm;
+            document.getElementById('confirm-modal').style.display = 'flex';
+        }
+
+        function hideConfirmModal() {
+            document.getElementById('confirm-modal').style.display = 'none';
+            confirmCallback = null;
+        }
+
+        document.getElementById('confirm-btn').addEventListener('click', function() {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            hideConfirmModal();
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>
