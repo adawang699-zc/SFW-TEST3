@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Set
 
 from django.utils import timezone
+from django.db import transaction, connection
 
 logger = logging.getLogger('main')
 
@@ -447,16 +448,17 @@ def collect_device_monitor_data(device: Any) -> None:
     # 测试 SSH 连接
     conn_result = test_ssh_connection(device_ip, device.user, device.password, device.port)
     if not conn_result['success']:
-        # 设备离线，更新数据库状态
-        DeviceMonitorData.objects.update_or_create(
-            device_id=device_id,
-            defaults={
-                'device_name': device_name,
-                'device_ip': device_ip,
-                'is_online': False,
-                'last_error': conn_result['message'],
-            }
-        )
+        # 设备离线，更新数据库状态（使用事务确保提交）
+        with transaction.atomic():
+            DeviceMonitorData.objects.update_or_create(
+                device_id=device_id,
+                defaults={
+                    'device_name': device_name,
+                    'device_ip': device_ip,
+                    'is_online': False,
+                    'last_error': conn_result['message'],
+                }
+            )
         logger.warning(f"设备 {device_name} ({device_ip}) 离线: {conn_result['message']}")
         return
 
@@ -488,13 +490,14 @@ def collect_device_monitor_data(device: Any) -> None:
                             hardware_model = line
                             break
 
-                # 更新设备表中的硬件信息
+                # 更新设备表中的硬件信息（使用事务确保提交）
                 if cpu_model or hardware_model or cpu_cores > 0:
-                    TestDevice.objects.filter(id=device_id).update(
-                        cpu_model=cpu_model or device.cpu_model,
-                        cpu_cores=cpu_cores or device.cpu_cores,
-                        hardware_model=hardware_model or device.hardware_model
-                    )
+                    with transaction.atomic():
+                        TestDevice.objects.filter(id=device_id).update(
+                            cpu_model=cpu_model or device.cpu_model,
+                            cpu_cores=cpu_cores or device.cpu_cores,
+                            hardware_model=hardware_model or device.hardware_model
+                        )
                     logger.info(f"设备 {device_name} 硬件信息已更新: CPU={cpu_model}, 核数={cpu_cores}, 硬件={hardware_model}")
         except Exception as e:
             logger.error(f"获取设备 {device_name} 硬件信息失败: {e}")
@@ -514,26 +517,27 @@ def collect_device_monitor_data(device: Any) -> None:
     # 获取磁盘信息
     disk_info = get_disk_info(device_ip, device.user, device.password, device_type, backend_password, device.port)
 
-    # 存储到数据库
-    DeviceMonitorData.objects.update_or_create(
-        device_id=device_id,
-        defaults={
-            'device_name': device_name,
-            'device_ip': device_ip,
-            'cpu_usage': cpu_usage,
-            'cpu_name': cpu_name,
-            'memory_usage': mem_info.get('usage', 0),
-            'memory_used': mem_info.get('used', 0),
-            'memory_total': mem_info.get('total', 0),
-            'disk_usage': disk_info.get('usage', 0),
-            'disk_used': disk_info.get('used', 0),
-            'disk_total': disk_info.get('total', 0),
-            'rx_rate': net_info.get('rx_rate', 0),
-            'tx_rate': net_info.get('tx_rate', 0),
-            'is_online': True,
-            'last_error': None,
-        }
-    )
+    # 存储到数据库（使用事务确保提交）
+    with transaction.atomic():
+        DeviceMonitorData.objects.update_or_create(
+            device_id=device_id,
+            defaults={
+                'device_name': device_name,
+                'device_ip': device_ip,
+                'cpu_usage': cpu_usage,
+                'cpu_name': cpu_name,
+                'memory_usage': mem_info.get('usage', 0),
+                'memory_used': mem_info.get('used', 0),
+                'memory_total': mem_info.get('total', 0),
+                'disk_usage': disk_info.get('usage', 0),
+                'disk_used': disk_info.get('used', 0),
+                'disk_total': disk_info.get('total', 0),
+                'rx_rate': net_info.get('rx_rate', 0),
+                'tx_rate': net_info.get('tx_rate', 0),
+                'is_online': True,
+                'last_error': None,
+            }
+        )
 
     logger.info(f"设备 {device_name} 监控数据已更新: CPU={cpu_usage}%, MEM={mem_info.get('usage', 0)}%")
 
@@ -561,8 +565,16 @@ def data_collector_worker() -> None:
                 # 每个设备采集间隔 5 秒，避免并发过高
                 time.sleep(5)
 
+            # 关闭数据库连接，确保下次循环读取最新数据
+            connection.close()
+
         except Exception as e:
             logger.error(f"数据采集循环出错: {e}")
+            # 出错时也关闭连接
+            try:
+                connection.close()
+            except:
+                pass
 
         # 等待下一次采集周期（60秒）
         time.sleep(60)
