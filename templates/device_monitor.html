@@ -3,62 +3,87 @@
 
 {% block content %}
 <div class="card">
-    <div class="card-header">测试设备管理</div>
+    <div class="card-header">测试设备监控</div>
+    <p style="color: var(--text-secondary); margin-bottom: 16px;">
+        管理并监控测试设备（安全设备、工控防火墙、工控审计、IDS等）
+    </p>
     <div class="toolbar">
-        <button class="btn btn-primary" onclick="showAddModal()">+ 添加设备</button>
+        <input type="text" id="device-search" class="form-input" placeholder="搜索设备名称或IP..." style="width: 200px;">
         <button class="btn btn-secondary" onclick="loadDevices()">刷新列表</button>
+        <button class="btn btn-primary" onclick="showAddModal()">+ 添加设备</button>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">设备列表</div>
     <div id="device-list">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>设备名称</th>
-                    <th>设备类型</th>
-                    <th>IP 地址</th>
-                    <th>管理端口</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody id="device-table-body">
-                <tr><td colspan="5" style="color: var(--text-secondary);">加载中...</td></tr>
-            </tbody>
-        </table>
+        <p style="color: var(--text-secondary);">加载中...</p>
     </div>
 </div>
 
 <!-- 添加设备模态框 -->
-<div id="add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999;">
-    <div style="background: var(--bg-card); max-width: 400px; margin: 100px auto; padding: 24px; border-radius: 16px;">
+<div id="add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
+    <div style="background: var(--bg-card); max-width: 500px; margin: 50px auto; padding: 24px; border-radius: 16px; max-height: 90vh; overflow-y: auto;">
         <h3 style="margin-bottom: 20px; color: var(--text-primary);">添加测试设备</h3>
         <div class="form-group">
-            <label class="form-label">设备名称</label>
-            <input type="text" id="device-name" class="form-input" placeholder="例如: 防火墙-A">
+            <label class="form-label">设备名称 *</label>
+            <input type="text" id="device-name" class="form-input" placeholder="例如: 工控防火墙-01">
         </div>
         <div class="form-group">
-            <label class="form-label">设备类型</label>
+            <label class="form-label">设备类型 *</label>
             <select id="device-type" class="form-input">
-                <option value="ic_firewall">工控防火墙</option>
                 <option value="security_device">安全设备</option>
+                <option value="ic_firewall">工控防火墙</option>
                 <option value="ic_audit">工控审计</option>
                 <option value="ids">IDS</option>
                 <option value="other">其他</option>
             </select>
         </div>
         <div class="form-group">
-            <label class="form-label">IP 地址</label>
-            <input type="text" id="device-ip" class="form-input" placeholder="例如: 192.168.1.1">
+            <label class="form-label">IP 地址 *</label>
+            <input type="text" id="device-ip" class="form-input" placeholder="例如: 192.168.1.100">
         </div>
         <div class="form-group">
-            <label class="form-label">管理端口</label>
+            <label class="form-label">SSH 端口</label>
             <input type="number" id="device-port" class="form-input" value="22">
         </div>
-        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <div class="form-group">
+            <label class="form-label">SSH 用户名</label>
+            <input type="text" id="device-user" class="form-input" value="admin">
+        </div>
+        <div class="form-group">
+            <label class="form-label">SSH 密码</label>
+            <input type="password" id="device-password" class="form-input" placeholder="SSH 登录密码">
+        </div>
+        <div class="form-group">
+            <label class="form-label">设备描述</label>
+            <textarea id="device-description" class="form-input" rows="2" placeholder="可选"></textarea>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="testConnection()">测试连接</button>
             <button class="btn btn-secondary" onclick="hideAddModal()">取消</button>
             <button class="btn btn-primary" onclick="addDevice()">添加</button>
+        </div>
+    </div>
+</div>
+
+<!-- 执行命令模态框 -->
+<div id="command-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
+    <div style="background: var(--bg-card); max-width: 600px; margin: 50px auto; padding: 24px; border-radius: 16px;">
+        <h3 style="margin-bottom: 20px; color: var(--text-primary);">执行命令</h3>
+        <div class="form-group">
+            <label class="form-label">命令</label>
+            <textarea id="command-input" class="form-input" rows="3" placeholder="例如: show version"></textarea>
+        </div>
+        <div class="form-group">
+            <label class="form-label">执行结果</label>
+            <div id="command-output" style="background: var(--bg-dark); padding: 16px; border-radius: 8px; font-family: monospace; min-height: 200px; max-height: 400px; overflow-y: auto; color: var(--text-secondary);">
+                等待执行命令...
+            </div>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+            <button class="btn btn-secondary" onclick="hideCommandModal()">关闭</button>
+            <button class="btn btn-primary" onclick="executeCommand()">执行</button>
         </div>
     </div>
 </div>
@@ -66,60 +91,257 @@
 
 {% block extra_js %}
 <script>
+let devices = [];
+let monitorIntervals = {};
+let currentDeviceId = null;
+
+const typeNames = {
+    'security_device': '安全设备',
+    'ic_firewall': '工控防火墙',
+    'ic_audit': '工控审计',
+    'ids': 'IDS',
+    'other': '其他'
+};
+
+const typeColors = {
+    'security_device': 'var(--secondary)',
+    'ic_firewall': 'var(--danger)',
+    'ic_audit': 'var(--warning)',
+    'ids': 'var(--primary)',
+    'other': 'var(--text-muted)'
+};
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+}
+
 async function loadDevices() {
     try {
         const result = await apiRequest('/api/devices/list/');
-        const tbody = document.getElementById('device-table-body');
+        devices = result.devices || [];
+        renderDevices();
 
-        if (result.devices && result.devices.length > 0) {
-            let html = '';
-            result.devices.forEach(device => {
-                html += `
-                    <tr>
-                        <td>${device.name}</td>
-                        <td>${device.type}</td>
-                        <td>${device.ip}</td>
-                        <td>${device.port}</td>
-                        <td>
-                            <button class="btn btn-sm btn-danger" onclick="deleteDevice(${device.id})">删除</button>
-                        </td>
-                    </tr>
-                `;
-            });
-            tbody.innerHTML = html;
-        } else {
-            tbody.innerHTML = '<tr><td colspan="5" style="color: var(--text-secondary);">暂无设备</td></tr>';
-        }
+        // 启动监控
+        devices.forEach(d => {
+            if (monitorIntervals[d.id]) clearInterval(monitorIntervals[d.id]);
+            monitorIntervals[d.id] = setInterval(() => fetchMonitorData(d.id), 60000);
+            fetchMonitorData(d.id); // 立即获取一次
+        });
     } catch (e) {
         console.error('加载设备失败:', e);
     }
 }
 
+async function fetchMonitorData(deviceId) {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    try {
+        const result = await apiRequest('/api/device/monitor_data/', 'POST', {
+            ip: device.ip,
+            port: device.port || 22,
+            user: device.user || 'admin',
+            password: device.password || ''
+        });
+
+        if (result.success) {
+            updateDeviceDisplay(deviceId, result);
+        } else {
+            updateDeviceOffline(deviceId);
+        }
+    } catch (e) {
+        updateDeviceOffline(deviceId);
+    }
+}
+
+function updateDeviceDisplay(deviceId, data) {
+    const cpuBadge = document.getElementById(`cpu-badge-${deviceId}`);
+    const cpuBar = document.getElementById(`cpu-bar-${deviceId}`);
+    const cpuDetail = document.getElementById(`cpu-detail-${deviceId}`);
+
+    const memBadge = document.getElementById(`mem-badge-${deviceId}`);
+    const memBar = document.getElementById(`mem-bar-${deviceId}`);
+    const memDetail = document.getElementById(`mem-detail-${deviceId}`);
+
+    if (cpuBadge && data.cpu) {
+        const cpuUsage = data.cpu.usage || 0;
+        cpuBadge.textContent = cpuUsage.toFixed(1) + '%';
+        cpuBadge.className = cpuUsage > 80 ? 'status-badge status-stopped' : 'status-badge status-running';
+        if (cpuBar) cpuBar.style.width = cpuUsage + '%';
+        if (cpuDetail) cpuDetail.textContent = data.cpu.name || '--';
+    }
+
+    if (memBadge && data.memory) {
+        const memUsage = data.memory.usage || 0;
+        memBadge.textContent = memUsage.toFixed(1) + '%';
+        memBadge.className = memUsage > 80 ? 'status-badge status-stopped' : 'status-badge status-management';
+        if (memBar) memBar.style.width = memUsage + '%';
+        if (memDetail) memDetail.textContent = `${data.memory.used || 0} MB / ${data.memory.total || 0} MB`;
+    }
+}
+
+function updateDeviceOffline(deviceId) {
+    const cpuBadge = document.getElementById(`cpu-badge-${deviceId}`);
+    const memBadge = document.getElementById(`mem-badge-${deviceId}`);
+    if (cpuBadge) cpuBadge.textContent = '离线';
+    if (memBadge) memBadge.textContent = '离线';
+}
+
+function renderDevices() {
+    const container = document.getElementById('device-list');
+    const searchKeyword = document.getElementById('device-search').value.toLowerCase();
+
+    let filtered = devices;
+    if (searchKeyword) {
+        filtered = devices.filter(d =>
+            d.name.toLowerCase().includes(searchKeyword) ||
+            d.ip.toLowerCase().includes(searchKeyword)
+        );
+    }
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 40px;">暂无设备</p>';
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(device => {
+        const typeColor = typeColors[device.type] || 'var(--text-muted)';
+        const typeName = typeNames[device.type] || '未知';
+
+        html += `
+        <div class="card" style="margin-bottom: 16px; border-left: 4px solid ${typeColor};">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 1.1rem; color: var(--text-primary);">${device.name}</span>
+                        <span class="status-badge" style="background: ${typeColor}20; color: ${typeColor};">${typeName}</span>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;">
+                        <i class="fas fa-network-wired"></i> ${device.ip}:${device.port || 22}
+                        ${device.user ? `<span style="margin-left: 8px;"><i class="fas fa-user"></i> ${device.user}</span>` : ''}
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-secondary" onclick="showCommandModal(${device.id})">执行命令</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteDevice(${device.id})">删除</button>
+                </div>
+            </div>
+
+            <!-- 监控数据 -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+                <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;"><i class="fas fa-microchip"></i> CPU</span>
+                        <span class="status-badge status-running" id="cpu-badge-${device.id}">--</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px;">
+                        <div id="cpu-bar-${device.id}" style="background: var(--primary); height: 100%; width: 0%; transition: width 0.5s;"></div>
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px;" id="cpu-detail-${device.id}">--</div>
+                </div>
+                <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;"><i class="fas fa-memory"></i> 内存</span>
+                        <span class="status-badge status-management" id="mem-badge-${device.id}">--</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px;">
+                        <div id="mem-bar-${device.id}" style="background: var(--secondary); height: 100%; width: 0%; transition: width 0.5s;"></div>
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px;" id="mem-detail-${device.id}">--</div>
+                </div>
+                <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;"><i class="fas fa-hdd"></i> 磁盘</span>
+                        <span class="status-badge" style="background: var(--accent)20; color: var(--accent);" id="disk-badge-${device.id}">--</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px;">
+                        <div id="disk-bar-${device.id}" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.5s;"></div>
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px;" id="disk-detail-${device.id}">--</div>
+                </div>
+                <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;"><i class="fas fa-exchange-alt"></i> 网络</div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <div style="text-align: center;">
+                            <div style="color: var(--success); font-size: 0.75rem;">↓ 接收</div>
+                            <div id="net-rx-${device.id}" style="color: var(--text-primary);">--</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div style="color: var(--primary); font-size: 0.75rem;">↑ 发送</div>
+                            <div id="net-tx-${device.id}" style="color: var(--text-primary);">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
 function showAddModal() {
     document.getElementById('add-modal').style.display = 'block';
+    document.getElementById('device-name').value = '';
+    document.getElementById('device-ip').value = '';
+    document.getElementById('device-password').value = '';
+    document.getElementById('device-description').value = '';
 }
 
 function hideAddModal() {
     document.getElementById('add-modal').style.display = 'none';
 }
 
+async function testConnection() {
+    const ip = document.getElementById('device-ip').value;
+    const port = document.getElementById('device-port').value || 22;
+    const user = document.getElementById('device-user').value || 'admin';
+    const password = document.getElementById('device-password').value;
+
+    if (!ip) {
+        showToast('请输入 IP 地址', 'error');
+        return;
+    }
+
+    showToast('测试连接中...');
+
+    try {
+        const result = await apiRequest('/api/device/test_connection/', 'POST', {
+            ip, port: parseInt(port), user, password
+        });
+
+        if (result.success) {
+            showToast('连接成功: ' + ip);
+        } else {
+            showToast('连接失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
 async function addDevice() {
     const name = document.getElementById('device-name').value;
     const type = document.getElementById('device-type').value;
     const ip = document.getElementById('device-ip').value;
-    const port = document.getElementById('device-port').value;
+    const port = document.getElementById('device-port').value || 22;
+    const user = document.getElementById('device-user').value || 'admin';
+    const password = document.getElementById('device-password').value;
+    const description = document.getElementById('device-description').value;
 
     if (!name || !ip) {
-        alert('请填写设备名称和IP地址');
+        showToast('请填写设备名称和IP地址', 'error');
         return;
     }
 
     try {
         const result = await apiRequest('/api/devices/add/', 'POST', {
-            name: name,
-            type: type,
-            ip: ip,
-            port: parseInt(port)
+            name, type, ip, port: parseInt(port), user, password, description
         });
 
         if (result.success) {
@@ -140,6 +362,7 @@ async function deleteDevice(deviceId) {
     try {
         const result = await apiRequest('/api/devices/delete/', 'POST', { id: deviceId });
         if (result.success) {
+            if (monitorIntervals[deviceId]) clearInterval(monitorIntervals[deviceId]);
             loadDevices();
             showToast('设备已删除');
         } else {
@@ -149,6 +372,56 @@ async function deleteDevice(deviceId) {
         showToast('请求失败: ' + e.message, 'error');
     }
 }
+
+function showCommandModal(deviceId) {
+    currentDeviceId = deviceId;
+    document.getElementById('command-modal').style.display = 'block';
+    document.getElementById('command-input').value = '';
+    document.getElementById('command-output').innerHTML = '<span style="color: var(--text-muted);">等待执行命令...</span>';
+}
+
+function hideCommandModal() {
+    document.getElementById('command-modal').style.display = 'none';
+    currentDeviceId = null;
+}
+
+async function executeCommand() {
+    const device = devices.find(d => d.id === currentDeviceId);
+    if (!device) return;
+
+    const command = document.getElementById('command-input').value;
+    if (!command) {
+        showToast('请输入命令', 'error');
+        return;
+    }
+
+    const outputDiv = document.getElementById('command-output');
+    outputDiv.innerHTML = '<span style="color: var(--primary);">执行中...</span>';
+
+    try {
+        const result = await apiRequest('/api/device/execute/', 'POST', {
+            ip: device.ip,
+            port: device.port || 22,
+            user: device.user || 'admin',
+            password: device.password || '',
+            command: command
+        });
+
+        if (result.success) {
+            outputDiv.innerHTML = '<pre style="color: var(--success); white-space: pre-wrap;">' + (result.output || '(无输出)') + '</pre>';
+            if (result.error) {
+                outputDiv.innerHTML += '<pre style="color: var(--danger);">错误: ' + result.error + '</pre>';
+            }
+        } else {
+            outputDiv.innerHTML = '<span style="color: var(--danger);">执行失败: ' + result.error + '</span>';
+        }
+    } catch (e) {
+        outputDiv.innerHTML = '<span style="color: var(--danger);">请求失败: ' + e.message + '</span>';
+    }
+}
+
+// 搜索功能
+document.getElementById('device-search').addEventListener('input', renderDevices);
 
 window.onload = loadDevices;
 </script>

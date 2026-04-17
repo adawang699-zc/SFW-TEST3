@@ -48,6 +48,13 @@ urlpatterns = [
     path('api/devices/list/', views.api_device_list, name='api_device_list'),
     path('api/devices/add/', views.api_device_add, name='api_device_add'),
     path('api/devices/delete/', views.api_device_delete, name='api_device_delete'),
+    path('api/device/test_connection/', views.api_device_test_connection, name='api_device_test_connection'),
+    path('api/device/monitor_data/', views.api_device_monitor_data, name='api_device_monitor_data'),
+    path('api/device/disk_data/', views.api_device_disk_data, name='api_device_disk_data'),
+    path('api/device/execute/', views.api_device_execute, name='api_device_execute'),
+
+    # ========== 系统信息 API ==========
+    path('api/system/info/', views.api_system_info, name='api_system_info'),
 
     # ========== Syslog 接收 ==========
     path('syslog-receiver/', views.syslog_receiver, name='syslog_receiver'),

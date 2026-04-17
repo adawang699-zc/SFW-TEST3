@@ -36,6 +36,62 @@ from main.snmp_utils import (
 
 logger = logging.getLogger('main')
 
+# ========== 系统信息 API ==========
+
+@require_http_methods(["GET"])
+def api_system_info(request):
+    """获取当前服务器系统信息（CPU、内存、磁盘）"""
+    try:
+        import psutil
+
+        # CPU 信息
+        cpu_usage = psutil.cpu_percent(interval=1)
+        cpu_count = psutil.cpu_count()
+        cpu_freq = psutil.cpu_freq()
+
+        # 内存信息
+        memory = psutil.virtual_memory()
+        memory_usage = memory.percent
+        memory_used = memory.used // (1024 * 1024)  # MB
+        memory_total = memory.total // (1024 * 1024)  # MB
+
+        # 磁盘信息
+        disk = psutil.disk_usage('/')
+        disk_usage = disk.percent
+        disk_used = disk.used // (1024 * 1024 * 1024)  # GB
+        disk_total = disk.total // (1024 * 1024 * 1024)  # GB
+
+        # 网络信息
+        net_io = psutil.net_io_counters()
+        net_rx = net_io.bytes_recv
+        net_tx = net_io.bytes_sent
+
+        return JsonResponse({
+            'success': True,
+            'cpu': {
+                'usage': cpu_usage,
+                'count': cpu_count,
+                'freq': cpu_freq.current if cpu_freq else None,
+            },
+            'memory': {
+                'usage': memory_usage,
+                'used': memory_used,
+                'total': memory_total,
+            },
+            'disk': {
+                'usage': disk_usage,
+                'used': disk_used,
+                'total': disk_total,
+            },
+            'network': {
+                'rx_bytes': net_rx,
+                'tx_bytes': net_tx,
+            }
+        })
+    except Exception as e:
+        logger.exception(f"获取系统信息失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
 
 # ========== 页面视图 ==========
 
@@ -43,10 +99,13 @@ def home(request):
     """首页"""
     agents = LocalAgent.objects.all()
     devices = TestDevice.objects.all()
+    interfaces = NetworkInterface.objects.all()
 
     context = {
         'agents': agents,
         'devices': devices,
+        'interfaces': interfaces,
+        'interface_count': interfaces.count(),
         'management_interface': settings.MANAGEMENT_INTERFACE,
     }
     return render(request, 'home.html', context)
@@ -803,11 +862,13 @@ def api_device_list(request):
         'type': d.type,
         'ip': d.ip,
         'port': d.port,
+        'user': d.user,
+        'password': d.password,
         'description': d.description,
         'created_at': d.created_at.isoformat(),
     } for d in devices]
 
-    return JsonResponse({'devices': data})
+    return JsonResponse({'devices': data, 'success': True})
 
 
 @require_http_methods(["POST"])
@@ -1706,4 +1767,223 @@ def api_interface_startup(request):
 
     except Exception as e:
         logger.exception(f"启动网卡失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 设备监控 API ==========
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_test_connection(request):
+    """测试设备 SSH 连接"""
+    try:
+        import paramiko
+        data = json.loads(request.body)
+
+        ip = data.get('ip')
+        port = int(data.get('port', 22))
+        user = data.get('user', 'admin')
+        password = data.get('password', '')
+
+        if not ip:
+            return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        try:
+            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
+            ssh.close()
+            return JsonResponse({'success': True, 'message': f'连接 {ip} 成功'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    except Exception as e:
+        logger.exception(f"测试连接失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_monitor_data(request):
+    """获取设备 CPU/内存/网络监控数据"""
+    try:
+        import paramiko
+        data = json.loads(request.body)
+
+        ip = data.get('ip')
+        port = int(data.get('port', 22))
+        user = data.get('user', 'admin')
+        password = data.get('password', '')
+        device_type = data.get('device_type', 'ic_firewall')
+        backend_password = data.get('backend_password', '')
+
+        if not ip:
+            return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        try:
+            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
+        except Exception as e:
+            ssh.close()
+            return JsonResponse({'success': False, 'offline': True, 'error': f'连接失败: {str(e)}'})
+
+        # 获取 CPU 使用率
+        cpu_usage = 0
+        cpu_name = ''
+        try:
+            stdin, stdout, stderr = ssh.exec_command("top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1", timeout=10)
+            output = stdout.read().decode().strip()
+            if output:
+                try:
+                    cpu_usage = float(output)
+                except:
+                    pass
+
+            stdin, stdout, stderr = ssh.exec_command("cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2", timeout=10)
+            cpu_name = stdout.read().decode().strip()
+        except:
+            pass
+
+        # 获取内存使用率
+        memory_usage = 0
+        memory_used = 0
+        memory_total = 0
+        try:
+            stdin, stdout, stderr = ssh.exec_command("free -m | grep Mem | awk '{print $2,$3,$7}'", timeout=10)
+            output = stdout.read().decode().strip()
+            if output:
+                parts = output.split()
+                if len(parts) >= 3:
+                    memory_total = int(parts[0])
+                    memory_used = int(parts[1])
+                    memory_usage = (memory_used / memory_total) * 100 if memory_total > 0 else 0
+        except:
+            pass
+
+        ssh.close()
+
+        return JsonResponse({
+            'success': True,
+            'cpu': {
+                'usage': cpu_usage,
+                'name': cpu_name,
+            },
+            'memory': {
+                'usage': memory_usage,
+                'used': memory_used,
+                'total': memory_total,
+            },
+            'network': {
+                'rx_rate': 0,
+                'tx_rate': 0,
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"获取设备监控数据失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_disk_data(request):
+    """获取设备磁盘数据"""
+    try:
+        import paramiko
+        data = json.loads(request.body)
+
+        ip = data.get('ip')
+        port = int(data.get('port', 22))
+        user = data.get('user', 'admin')
+        password = data.get('password', '')
+
+        if not ip:
+            return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        try:
+            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
+        except Exception as e:
+            ssh.close()
+            return JsonResponse({'success': False, 'offline': True, 'error': f'连接失败: {str(e)}'})
+
+        # 获取磁盘使用率
+        disk_total = 0
+        disk_used = 0
+        disk_usage = 0
+        try:
+            stdin, stdout, stderr = ssh.exec_command("df -h / | tail -1 | awk '{print $2,$3,$5}'", timeout=10)
+            output = stdout.read().decode().strip()
+            if output:
+                parts = output.split()
+                if len(parts) >= 3:
+                    disk_total = int(parts[0].replace('G', '').replace('T', ''))
+                    disk_used = int(parts[1].replace('G', '').replace('T', ''))
+                    disk_usage = float(parts[2].replace('%', ''))
+        except:
+            pass
+
+        ssh.close()
+
+        return JsonResponse({
+            'success': True,
+            'disk': {
+                'total': disk_total,
+                'used': disk_used,
+                'usage': disk_usage,
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"获取设备磁盘数据失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_execute(request):
+    """在设备上执行命令"""
+    try:
+        import paramiko
+        data = json.loads(request.body)
+
+        ip = data.get('ip')
+        port = int(data.get('port', 22))
+        user = data.get('user', 'admin')
+        password = data.get('password', '')
+        command = data.get('command', '')
+        command_type = data.get('command_type', 'backend')
+
+        if not ip or not command:
+            return JsonResponse({'success': False, 'error': '缺少 IP 或命令'})
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        try:
+            ssh.connect(ip, port=port, username=user, password=password, timeout=10)
+        except Exception as e:
+            ssh.close()
+            return JsonResponse({'success': False, 'error': f'连接失败: {str(e)}'})
+
+        # 执行命令
+        stdin, stdout, stderr = ssh.exec_command(command, timeout=30)
+        output = stdout.read().decode()
+        error = stderr.read().decode()
+
+        ssh.close()
+
+        return JsonResponse({
+            'success': True,
+            'output': output,
+            'error': error if error else None
+        })
+
+    except Exception as e:
+        logger.exception(f"执行命令失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})

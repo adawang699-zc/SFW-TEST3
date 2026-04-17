@@ -18,12 +18,52 @@
             <div style="color: var(--text-secondary);">测试设备</div>
         </div>
         <div class="card" style="text-align: center;">
-            <div style="font-size: 2rem; color: var(--success);">4</div>
+            <div style="font-size: 2rem; color: var(--success);">{{ interface_count }}</div>
             <div style="color: var(--text-secondary);">网卡数量</div>
         </div>
         <div class="card" style="text-align: center;">
             <div style="font-size: 2rem; color: var(--accent);">8+</div>
             <div style="color: var(--text-secondary);">工控协议</div>
+        </div>
+    </div>
+</div>
+
+<!-- 系统信息卡片 -->
+<div class="card">
+    <div class="card-header">系统状态</div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+        <!-- CPU -->
+        <div style="background: var(--bg-dark); padding: 16px; border-radius: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="color: var(--text-secondary);">CPU 使用率</span>
+                <span class="status-badge status-running" id="cpu-badge">--</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div id="cpu-bar" style="background: var(--primary); height: 100%; width: 0%; transition: width 0.5s;"></div>
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;" id="cpu-detail">--</div>
+        </div>
+        <!-- 内存 -->
+        <div style="background: var(--bg-dark); padding: 16px; border-radius: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="color: var(--text-secondary);">内存使用率</span>
+                <span class="status-badge status-running" id="memory-badge">--</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div id="memory-bar" style="background: var(--secondary); height: 100%; width: 0%; transition: width 0.5s;"></div>
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;" id="memory-detail">--</div>
+        </div>
+        <!-- 磁盘 -->
+        <div style="background: var(--bg-dark); padding: 16px; border-radius: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="color: var(--text-secondary);">磁盘使用率</span>
+                <span class="status-badge status-management" id="disk-badge">--</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">
+                <div id="disk-bar" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.5s;"></div>
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;" id="disk-detail">--</div>
         </div>
     </div>
 </div>
@@ -37,6 +77,15 @@
                 <div>
                     <div style="color: var(--text-primary);">网卡 & Agent</div>
                     <div style="color: var(--text-secondary); font-size: 0.85rem;">管理网卡绑定和 Agent</div>
+                </div>
+            </div>
+        </a>
+        <a href="{% url 'main:device_monitor' %}" class="card" style="text-decoration: none; cursor: pointer;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">🖥️</span>
+                <div>
+                    <div style="color: var(--text-primary);">测试设备</div>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem;">监控测试设备状态</div>
                 </div>
             </div>
         </a>
@@ -55,15 +104,6 @@
                 <div>
                     <div style="color: var(--text-primary);">工控协议</div>
                     <div style="color: var(--text-secondary); font-size: 0.85rem;">Modbus/S7/GOOSE 等</div>
-                </div>
-            </div>
-        </a>
-        <a href="{% url 'main:port_scan' %}" class="card" style="text-decoration: none; cursor: pointer;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="font-size: 1.5rem;">🔍</span>
-                <div>
-                    <div style="color: var(--text-primary);">端口扫描</div>
-                    <div style="color: var(--text-secondary); font-size: 0.85rem;">扫描目标端口开放状态</div>
                 </div>
             </div>
         </a>
@@ -103,4 +143,60 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 加载系统信息
+async function loadSystemInfo() {
+    try {
+        const result = await apiRequest('/api/system/info/');
+        if (result.success) {
+            // CPU
+            const cpuUsage = result.cpu.usage;
+            document.getElementById('cpu-badge').textContent = cpuUsage.toFixed(1) + '%';
+            document.getElementById('cpu-bar').style.width = cpuUsage + '%';
+            document.getElementById('cpu-detail').textContent =
+                `${result.cpu.count} 核心 ${result.cpu.freq ? '| ' + result.cpu.freq.toFixed(0) + ' MHz' : ''}`;
+
+            // 内存
+            const memoryUsage = result.memory.usage;
+            document.getElementById('memory-badge').textContent = memoryUsage.toFixed(1) + '%';
+            document.getElementById('memory-bar').style.width = memoryUsage + '%';
+            document.getElementById('memory-detail').textContent =
+                `${result.memory.used} MB / ${result.memory.total} MB`;
+
+            // 磁盘
+            const diskUsage = result.disk.usage;
+            document.getElementById('disk-badge').textContent = diskUsage.toFixed(1) + '%';
+            document.getElementById('disk-bar').style.width = diskUsage + '%';
+            document.getElementById('disk-detail').textContent =
+                `${result.disk.used} GB / ${result.disk.total} GB`;
+
+            // 更新颜色
+            if (cpuUsage > 80) {
+                document.getElementById('cpu-badge').className = 'status-badge status-stopped';
+                document.getElementById('cpu-bar').style.background = 'var(--danger)';
+            }
+            if (memoryUsage > 80) {
+                document.getElementById('memory-badge').className = 'status-badge status-stopped';
+                document.getElementById('memory-bar').style.background = 'var(--danger)';
+            }
+            if (diskUsage > 80) {
+                document.getElementById('disk-badge').className = 'status-badge status-stopped';
+                document.getElementById('disk-bar').style.background = 'var(--danger)';
+            }
+        }
+    } catch (e) {
+        console.error('加载系统信息失败:', e);
+    }
+}
+
+// 页面加载时获取系统信息
+window.onload = function() {
+    loadSystemInfo();
+    // 每 30 秒更新一次
+    setInterval(loadSystemInfo, 30000);
+};
+</script>
 {% endblock %}
