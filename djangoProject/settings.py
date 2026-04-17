@@ -97,7 +97,10 @@ MANAGEMENT_INTERFACE = os.environ.get('MANAGEMENT_INTERFACE', 'eth0')
 AGENT_PORT_RANGE_START = int(os.environ.get('AGENT_PORT_START', '8888'))
 
 # Agent 工作目录
-AGENT_WORK_DIR = os.environ.get('AGENT_WORK_DIR', '/opt/sfw_deploy')
+AGENT_WORK_DIR = os.environ.get('AGENT_WORK_DIR', '/opt/SFW-TEST3')
+
+# Agent Python 虚拟环境路径
+AGENT_VENV_PYTHON = os.environ.get('AGENT_VENV_PYTHON', '/opt/SFW-TEST3/sfw/bin/python')
 
 # ========== 日志配置 ==========
 

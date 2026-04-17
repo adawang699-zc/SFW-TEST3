@@ -475,7 +475,7 @@ Environment="BIND_IP={agent.interface.ip_address}"
 Environment="BIND_INTERFACE={agent.interface.name}"
 Environment="AGENT_PORT={agent.port}"
 WorkingDirectory={settings.AGENT_WORK_DIR}
-ExecStart=/opt/venv/bin/python -m agents.packet_agent
+ExecStart={settings.AGENT_VENV_PYTHON} -m agents.packet_agent
 Restart=always
 RestartSec=5
 
