@@ -377,53 +377,50 @@ def get_memory_info(
         dict: {'total': 总内存(MB), 'used': 已用内存(MB), 'free': 空闲内存(MB), 'usage': 使用率(%)}
     """
     try:
-        cmd = "free -m"
+        # 使用更简单的命令获取内存信息
+        cmd = "free -m | grep Mem"
         result = execute_in_backend(cmd, host, user, password, backend_password, device_type, port)
 
         if result:
-            lines = result.strip().split('\n')
-            total = 0
-            used = 0
-            free = 0
-
-            for line in lines:
+            # 清理输出，提取数字
+            for line in result.strip().split('\n'):
+                line = line.strip()
                 if 'Mem:' in line:
+                    # 格式: Mem: total used free shared buffers cached
                     parts = line.split()
-                    for i, part in enumerate(parts):
-                        if part == 'Mem:':
-                            if i + 1 < len(parts):
-                                total = int(parts[i + 1])
-                            if i + 2 < len(parts):
-                                used = int(parts[i + 2])
-                            break
-                    if total > 0:
-                        break
+                    # 找到 Mem: 后面的数字
+                    try:
+                        # 跳过 "Mem:" 标识符
+                        mem_parts = []
+                        for p in parts:
+                            if p.isdigit() or (p.replace('.', '').isdigit()):
+                                mem_parts.append(int(float(p)))
 
-            # 解析 -/+ buffers/cache 行
-            buffers_cache_used = 0
-            buffers_cache_free = 0
-            for line in lines:
-                if 'buffers/cache' in line or '-/+ buffers' in line:
-                    parts = line.split()
-                    for i, part in enumerate(parts):
-                        if 'buffers' in part or '-/+':
-                            if i + 2 < len(parts):
-                                buffers_cache_used = int(parts[i + 1])
-                                buffers_cache_free = int(parts[i + 2])
-                            break
+                        if len(mem_parts) >= 3:
+                            total = mem_parts[0]
+                            used = mem_parts[1]
+                            free = mem_parts[2]
 
-            if total > 0:
-                real_used = used - buffers_cache_used if buffers_cache_used > 0 else used
-                real_free = buffers_cache_free if buffers_cache_free > 0 else free
-                usage = round((real_used / total) * 100, 2) if total > 0 else 0
+                            # 计算实际使用率（去掉 buffers/cache）
+                            if len(mem_parts) >= 6:
+                                buffers = mem_parts[4]
+                                cached = mem_parts[5]
+                                real_used = used - buffers - cached
+                            else:
+                                real_used = used
 
-                logger.info(f"内存: total={total}MB, used={real_used}MB, usage={usage}%")
-                return {
-                    'total': total,
-                    'used': real_used,
-                    'free': real_free,
-                    'usage': usage
-                }
+                            usage = round((real_used / total) * 100, 2) if total > 0 else 0
+
+                            logger.info(f"内存: total={total}MB, used={real_used}MB, usage={usage}%")
+                            return {
+                                'total': total,
+                                'used': real_used,
+                                'free': free,
+                                'usage': usage
+                            }
+                    except (ValueError, IndexError) as e:
+                        logger.error(f"解析内存信息失败: {e}, line: {line}")
+                        continue
 
     except Exception as e:
         logger.error(f"获取内存信息失败: {e}")
