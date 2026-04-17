@@ -1862,28 +1862,140 @@ def api_interface_startup(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_device_test_connection(request):
-    """测试设备 SSH 连接"""
+    """测试设备 SSH 连接（包含 SSH、vtysh、后台 root 三层测试）"""
     try:
         import paramiko
+        import time
         data = json.loads(request.body)
 
         ip = data.get('ip')
         port = int(data.get('port', 22))
         user = data.get('user', 'admin')
         password = data.get('password', '')
+        device_type = data.get('device_type', 'ic_firewall')
+        backend_password = data.get('backend_password', '')
 
         if not ip:
             return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
 
+        results = {
+            'ssh': {'success': False, 'message': ''},
+            'vtysh': {'success': False, 'message': ''},
+            'backend': {'success': False, 'message': ''},
+        }
+
+        # 1. 测试 SSH 基础连接
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
         try:
             ssh.connect(ip, port=port, username=user, password=password, timeout=10)
-            ssh.close()
-            return JsonResponse({'success': True, 'message': f'连接 {ip} 成功'})
+            results['ssh'] = {'success': True, 'message': 'SSH 连接成功'}
+            logger.info(f"测试连接 {ip}: SSH 连接成功")
+        except paramiko.AuthenticationException as e:
+            results['ssh'] = {'success': False, 'message': f'SSH 认证失败: {e}'}
+            logger.warning(f"测试连接 {ip}: SSH 认证失败")
+            return JsonResponse({'success': False, 'results': results, 'error': 'SSH 认证失败'})
         except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
+            results['ssh'] = {'success': False, 'message': f'SSH 连接失败: {e}'}
+            logger.warning(f"测试连接 {ip}: SSH 连接失败: {e}")
+            return JsonResponse({'success': False, 'results': results, 'error': str(e)})
+
+        # 2. 测试 vtysh 连接
+        try:
+            chan = ssh.invoke_shell()
+            chan.settimeout(15)
+
+            # 清空初始输出
+            time.sleep(0.5)
+            if chan.recv_ready():
+                chan.recv(4096)
+
+            # 进入 vtysh
+            chan.send('vtysh\n')
+            time.sleep(1)
+
+            if chan.recv_ready():
+                output = chan.recv(4096).decode('utf-8', errors='ignore')
+                # 检查是否进入 vtysh（输出中有 # 提示符）
+                if '#' in output or 'vtysh' in output.lower():
+                    # 测试执行命令
+                    chan.send('show version\n')
+                    time.sleep(1)
+                    if chan.recv_ready():
+                        output += chan.recv(4096).decode('utf-8', errors='ignore')
+                        results['vtysh'] = {'success': True, 'message': 'vtysh 连接成功'}
+                        logger.info(f"测试连接 {ip}: vtysh 连接成功")
+                    else:
+                        results['vtysh'] = {'success': False, 'message': 'vtysh 响应超时'}
+                else:
+                    results['vtysh'] = {'success': False, 'message': '无法进入 vtysh'}
+
+            # 退出 vtysh
+            chan.send('exit\n')
+            time.sleep(0.3)
+            chan.close()
+        except Exception as e:
+            results['vtysh'] = {'success': False, 'message': f'vtysh 测试失败: {e}'}
+            logger.warning(f"测试连接 {ip}: vtysh 测试失败: {e}")
+
+        # 3. 测试后台 root 连接
+        from main.device_utils import get_backend_password
+        actual_backend_pwd = get_backend_password(device_type, backend_password)
+
+        if actual_backend_pwd:
+            try:
+                chan = ssh.invoke_shell()
+                chan.settimeout(15)
+
+                # 清空初始输出
+                time.sleep(0.3)
+                if chan.recv_ready():
+                    chan.recv(4096)
+
+                # 输入 enter 进入后台
+                chan.send('enter\n')
+                time.sleep(0.5)
+                if chan.recv_ready():
+                    chan.recv(4096)
+
+                # 输入后台密码
+                chan.send(actual_backend_pwd + '\n')
+                time.sleep(0.5)
+                if chan.recv_ready():
+                    output = chan.recv(4096).decode('utf-8', errors='ignore')
+                    # 检查是否成功进入后台（出现 root@ 提示符）
+                    if 'root@' in output or '#' in output and 'Password:' not in output:
+                        # 测试执行命令
+                        chan.send('whoami\n')
+                        time.sleep(0.5)
+                        if chan.recv_ready():
+                            output += chan.recv(4096).decode('utf-8', errors='ignore')
+                            if 'root' in output:
+                                results['backend'] = {'success': True, 'message': '后台 root 连接成功'}
+                                logger.info(f"测试连接 {ip}: 后台 root 连接成功")
+                            else:
+                                results['backend'] = {'success': False, 'message': '后台权限验证失败'}
+                    else:
+                        results['backend'] = {'success': False, 'message': '后台密码错误或无法进入'}
+
+                chan.close()
+            except Exception as e:
+                results['backend'] = {'success': False, 'message': f'后台测试失败: {e}'}
+                logger.warning(f"测试连接 {ip}: 后台测试失败: {e}")
+        else:
+            results['backend'] = {'success': False, 'message': '未配置后台密码'}
+
+        ssh.close()
+
+        # 判断整体是否成功（SSH 必须成功，vtysh 和 backend 至少一个成功）
+        overall_success = results['ssh']['success'] and (results['vtysh']['success'] or results['backend']['success'])
+
+        return JsonResponse({
+            'success': overall_success,
+            'results': results,
+            'message': f'SSH: {results["ssh"]["message"]}, vtysh: {results["vtysh"]["message"]}, 后台: {results["backend"]["message"]}'
+        })
 
     except Exception as e:
         logger.exception(f"测试连接失败: {e}")

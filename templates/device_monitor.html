@@ -859,6 +859,8 @@ async function testConnection() {
     const port = document.getElementById('device-port').value || 22;
     const user = document.getElementById('device-user').value || 'admin';
     const password = document.getElementById('device-password').value;
+    const device_type = document.getElementById('device-type').value;
+    const backend_password = document.getElementById('device-backend-password').value;
 
     if (!ip) {
         showToast('请输入 IP 地址', 'error');
@@ -869,13 +871,39 @@ async function testConnection() {
 
     try {
         const result = await apiRequest('/api/device/test_connection/', 'POST', {
-            ip, port: parseInt(port), user, password
+            ip, port: parseInt(port), user, password, device_type, backend_password
         });
 
         if (result.success) {
-            showToast('连接成功: ' + ip);
+            // 显示详细测试结果
+            if (result.results) {
+                const sshResult = result.results.ssh;
+                const vtyshResult = result.results.vtysh;
+                const backendResult = result.results.backend;
+
+                let detailMsg = `SSH: ${sshResult.success ? '✓' : '✗'}\n`;
+                detailMsg += `vtysh: ${vtyshResult.success ? '✓' : '✗'}\n`;
+                detailMsg += `后台: ${backendResult.success ? '✓' : '✗'}`;
+
+                showToast(`连接测试成功\n${detailMsg}`, 'success', 5000);
+            } else {
+                showToast('连接成功: ' + ip);
+            }
         } else {
-            showToast('连接失败: ' + result.error, 'error');
+            // 显示失败详情
+            if (result.results) {
+                const sshResult = result.results.ssh;
+                const vtyshResult = result.results.vtysh;
+                const backendResult = result.results.backend;
+
+                let detailMsg = `SSH: ${sshResult.message}\n`;
+                if (vtyshResult.message) detailMsg += `vtysh: ${vtyshResult.message}\n`;
+                if (backendResult.message) detailMsg += `后台: ${backendResult.message}`;
+
+                showToast(`连接测试失败\n${detailMsg}`, 'error', 5000);
+            } else {
+                showToast('连接失败: ' + result.error, 'error');
+            }
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
