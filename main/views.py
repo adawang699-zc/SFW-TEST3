@@ -23,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 
-from main.models import NetworkInterface, LocalAgent, TestDevice, AgentStatistics
+from main.models import NetworkInterface, LocalAgent, TestDevice, AgentStatistics, DeviceAlertStatus
 from main.syslog_server import (
     start_syslog_server, stop_syslog_server, get_syslog_status,
     get_syslog_logs, clear_syslog_logs, set_syslog_filter_ip
@@ -33,6 +33,29 @@ from main.snmp_utils import (
     get_trap_receiver_status, get_trap_receiver_traps, clear_trap_receiver_traps,
     PYSNMP_AVAILABLE
 )
+
+# 尝试导入设备监控模块
+try:
+    from main.device_utils import (
+        get_cpu_info, get_memory_info, get_network_info, get_disk_info,
+        get_coredump_files, execute_in_vtysh, execute_in_backend, test_ssh_connection
+    )
+    from main.device_monitor_task import (
+        start_device_monitoring, stop_device_monitoring, is_device_monitoring,
+        get_monitoring_status, get_alert_config, update_alert_config
+    )
+    from main.email_utils import send_alert_email, format_alert_email_content
+    DEVICE_MONITORING_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"设备监控模块导入失败: {e}")
+    DEVICE_MONITORING_AVAILABLE = False
+    # 提供空函数作为后备
+    def start_device_monitoring(*args, **kwargs): pass
+    def stop_device_monitoring(*args, **kwargs): pass
+    def is_device_monitoring(*args, **kwargs): return False
+    def get_monitoring_status(*args, **kwargs): return {}
+    def get_alert_config(*args, **kwargs): return {}
+    def update_alert_config(*args, **kwargs): return False
 
 logger = logging.getLogger('main')
 
@@ -900,6 +923,8 @@ def api_device_list(request):
         'port': d.port,
         'user': d.user,
         'password': d.password,
+        'backend_password': d.backend_password,
+        'is_long_running': d.is_long_running,
         'description': d.description,
         'created_at': d.created_at.isoformat(),
     } for d in devices]
@@ -912,6 +937,8 @@ def api_device_list(request):
 def api_device_add(request):
     """添加测试设备"""
     try:
+        from main.device_monitor_task import start_device_monitoring
+
         data = json.loads(request.body)
 
         device = TestDevice.objects.create(
@@ -921,8 +948,27 @@ def api_device_add(request):
             port=data.get('port', 22),
             user=data.get('user', 'admin'),
             password=data.get('password', ''),
+            backend_password=data.get('backend_password', ''),
+            is_long_running=data.get('is_long_running', False),
             description=data.get('description', ''),
         )
+
+        # 如果是长跑环境，自动启动监测
+        if device.is_long_running:
+            try:
+                device_info = {
+                    'name': device.name,
+                    'ip': device.ip,
+                    'type': device.type,
+                    'user': device.user,
+                    'password': device.password,
+                    'backend_password': device.backend_password,
+                    'port': device.port
+                }
+                start_device_monitoring(str(device.id), device_info)
+                logger.info(f"长跑环境设备 {device.name}({device.ip}) 已自动启动监测")
+            except Exception as e:
+                logger.warning(f"自动启动监测失败: {e}")
 
         return JsonResponse({
             'success': True,
@@ -2022,4 +2068,261 @@ def api_device_execute(request):
 
     except Exception as e:
         logger.exception(f"执行命令失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 设备监测扩展 API ==========
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_update(request):
+    """更新设备信息"""
+    try:
+        data = json.loads(request.body)
+        device_id = data.get('id')
+
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少设备 ID'})
+
+        device = TestDevice.objects.get(id=device_id)
+        device.name = data.get('name', device.name)
+        device.type = data.get('type', device.type)
+        device.ip = data.get('ip', device.ip)
+        device.port = int(data.get('port', device.port))
+        device.user = data.get('user', device.user)
+
+        # 如果提供了新密码则更新
+        new_password = data.get('password')
+        if new_password is not None and new_password != '':
+            device.password = new_password
+
+        # 后台密码
+        new_backend_password = data.get('backend_password')
+        if new_backend_password is not None and new_backend_password != '':
+            device.backend_password = new_backend_password
+
+        # 长跑环境
+        device.is_long_running = data.get('is_long_running', device.is_long_running)
+        device.description = data.get('description', device.description)
+        device.save()
+
+        return JsonResponse({'success': True, 'message': '设备信息已更新'})
+
+    except TestDevice.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '设备不存在'})
+    except Exception as e:
+        logger.exception(f"更新设备失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_monitoring_toggle(request):
+    """开启/关闭设备监测"""
+    try:
+        data = json.loads(request.body)
+        device_id = data.get('device_id', '').strip()
+        enabled = data.get('enabled', False)
+        device_info = data.get('device_info', {})
+
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少设备 ID'})
+
+        if not device_info:
+            return JsonResponse({'success': False, 'error': '缺少设备信息'})
+
+        if enabled:
+            start_device_monitoring(device_id, device_info)
+        else:
+            stop_device_monitoring(device_id)
+
+        return JsonResponse({'success': True, 'message': '监测状态已更新'})
+
+    except Exception as e:
+        logger.exception(f"切换监测状态失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_device_monitoring_status(request):
+    """获取所有设备的监测状态"""
+    try:
+        status = get_monitoring_status()
+        return JsonResponse({'success': True, 'status': status})
+    except Exception as e:
+        logger.exception(f"获取监测状态失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_device_alert_config(request):
+    """获取或保存告警配置"""
+    if request.method == 'GET':
+        try:
+            config = get_alert_config()
+            return JsonResponse({'success': True, 'config': config})
+        except Exception as e:
+            logger.exception(f"获取告警配置失败: {e}")
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    elif request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            success = update_alert_config(data)
+            if success:
+                return JsonResponse({'success': True, 'message': '配置保存成功'})
+            else:
+                return JsonResponse({'success': False, 'error': '配置保存失败'})
+        except Exception as e:
+            logger.exception(f"保存告警配置失败: {e}")
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    return JsonResponse({'success': False, 'error': '不支持的请求方法'})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_alert_config_test(request):
+    """测试邮件发送"""
+    try:
+        data = json.loads(request.body)
+
+        # 创建测试邮件内容
+        test_content = format_alert_email_content(
+            {'name': '测试设备', 'ip': '192.168.1.100', 'type': 'ic_firewall'},
+            'resource',
+            {
+                'cpu_usage': 85.5,
+                'memory_usage': 82.3,
+                'memory_total': 8192,
+                'memory_used': 6734,
+                'memory_free': 1458,
+                'resource_info': {
+                    'cpu_usage': 85.5,
+                    'memory_usage': 82.3,
+                    'memory_total': 8192,
+                    'memory_used': 6734,
+                    'memory_free': 1458
+                }
+            }
+        )
+
+        try:
+            success = send_alert_email(
+                data,
+                '[测试邮件] 设备监控系统告警测试',
+                test_content,
+                data.get('recipients', [])
+            )
+
+            if success:
+                return JsonResponse({'success': True, 'message': '测试邮件发送成功'})
+            else:
+                return JsonResponse({'success': False, 'error': '测试邮件发送失败'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'邮件发送失败: {str(e)}'})
+
+    except Exception as e:
+        logger.exception(f"测试邮件发送失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_device_alert_status(request):
+    """获取所有设备的告警状态"""
+    try:
+        from django.utils import timezone
+
+        alerts = DeviceAlertStatus.objects.filter(
+            has_alert=True,
+            is_ignored=False
+        )
+
+        status_dict = {}
+        for alert in alerts:
+            if alert.is_ignore_active():
+                continue
+
+            device_id = str(alert.device_id)
+            if device_id not in status_dict:
+                status_dict[device_id] = {
+                    'has_alert': True,
+                    'alert_type': alert.alert_type,
+                    'alert_value': alert.alert_value,
+                    'alert_time': alert.alert_time.isoformat() if alert.alert_time else None
+                }
+
+        return JsonResponse({'success': True, 'status': status_dict})
+
+    except Exception as e:
+        logger.exception(f"获取告警状态失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_alert_ignore(request):
+    """忽略设备告警"""
+    try:
+        from django.utils import timezone
+        from datetime import timedelta
+
+        data = json.loads(request.body)
+        device_id = data.get('device_id')
+
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少设备 ID'})
+
+        # 设置忽略时间为一周后
+        ignore_until = timezone.now() + timedelta(days=7)
+
+        updated_count = DeviceAlertStatus.objects.filter(
+            device_id=device_id,
+            has_alert=True,
+            is_ignored=False
+        ).update(
+            is_ignored=True,
+            ignore_until=ignore_until
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'已忽略设备 {device_id} 的 {updated_count} 个告警',
+            'ignore_until': ignore_until.isoformat()
+        })
+
+    except Exception as e:
+        logger.exception(f"忽略告警失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_device_coredump_list(request):
+    """获取 coredump 文件列表"""
+    try:
+        data = json.loads(request.body)
+
+        ip = data.get('ip', '').strip()
+        port = int(data.get('port', 22))
+        user = data.get('user', 'admin')
+        password = data.get('password', '')
+        device_type = data.get('device_type', '')
+        backend_password = data.get('backend_password', '')
+        coredump_dir = data.get('coredump_dir', '/data/coredump')
+
+        if not ip:
+            return JsonResponse({'success': False, 'error': '缺少 IP 地址'})
+
+        files = get_coredump_files(
+            ip, user, password,
+            coredump_dir=coredump_dir,
+            device_type=device_type,
+            backend_password=backend_password
+        )
+
+        return JsonResponse({'success': True, 'files': files})
+
+    except Exception as e:
+        logger.exception(f"获取 coredump 文件列表失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})

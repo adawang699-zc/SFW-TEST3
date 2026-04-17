@@ -47,11 +47,19 @@ urlpatterns = [
     # ========== 测试设备 API ==========
     path('api/devices/list/', views.api_device_list, name='api_device_list'),
     path('api/devices/add/', views.api_device_add, name='api_device_add'),
+    path('api/devices/update/', views.api_device_update, name='api_device_update'),
     path('api/devices/delete/', views.api_device_delete, name='api_device_delete'),
     path('api/device/test_connection/', views.api_device_test_connection, name='api_device_test_connection'),
     path('api/device/monitor_data/', views.api_device_monitor_data, name='api_device_monitor_data'),
     path('api/device/disk_data/', views.api_device_disk_data, name='api_device_disk_data'),
     path('api/device/execute/', views.api_device_execute, name='api_device_execute'),
+    path('api/device/monitoring/toggle/', views.api_device_monitoring_toggle, name='api_device_monitoring_toggle'),
+    path('api/device/monitoring/status/', views.api_device_monitoring_status, name='api_device_monitoring_status'),
+    path('api/device/alert_config/', views.api_device_alert_config, name='api_device_alert_config'),
+    path('api/device/alert_config/test/', views.api_device_alert_config_test, name='api_device_alert_config_test'),
+    path('api/device/alert_status/', views.api_device_alert_status, name='api_device_alert_status'),
+    path('api/device/alert_ignore/', views.api_device_alert_ignore, name='api_device_alert_ignore'),
+    path('api/device/coredump_list/', views.api_device_coredump_list, name='api_device_coredump_list'),
 
     # ========== 系统信息 API ==========
     path('api/system/info/', views.api_system_info, name='api_system_info'),

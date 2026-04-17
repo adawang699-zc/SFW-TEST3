@@ -94,7 +94,7 @@ class TestDevice(models.Model):
     """
     测试设备模型 - 防火墙被测设备
 
-    与原有功能保持一致，无需改动
+    支持长跑环境自动监测、后台密码等功能
     """
     DEVICE_TYPES = [
         ('security_device', '安全设备'),
@@ -114,7 +114,9 @@ class TestDevice(models.Model):
     ip = models.GenericIPAddressField(verbose_name="IP地址")
     port = models.IntegerField(default=22, verbose_name="管理端口")
     user = models.CharField(max_length=100, default='admin', verbose_name="用户名")
-    password = models.CharField(max_length=200, default='', blank=True, verbose_name="密码")
+    password = models.CharField(max_length=200, default='', blank=True, verbose_name="SSH密码", help_text="SSH登录密码")
+    backend_password = models.CharField(max_length=200, default='', blank=True, verbose_name="后台密码", help_text="后台root密码，留空则使用设备类型默认密码")
+    is_long_running = models.BooleanField(default=False, verbose_name="长跑环境", help_text="长跑环境默认启动监测")
     description = models.TextField(blank=True, null=True, verbose_name="描述信息")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
 
@@ -125,6 +127,72 @@ class TestDevice(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.ip})"
+
+
+class DeviceAlertStatus(models.Model):
+    """设备告警状态模型 - 用于跟踪设备告警和忽略状态"""
+    ALERT_TYPES = [
+        ('cpu', 'CPU告警'),
+        ('memory', '内存告警'),
+        ('coredump', 'Coredump告警'),
+    ]
+
+    device_id = models.IntegerField(verbose_name="设备ID")
+    device_name = models.CharField(max_length=100, verbose_name="设备名称")
+    alert_type = models.CharField(max_length=20, choices=ALERT_TYPES, verbose_name="告警类型")
+    alert_value = models.FloatField(verbose_name="告警值", help_text="CPU/内存使用率或coredump文件数量")
+    has_alert = models.BooleanField(default=True, verbose_name="是否告警")
+    is_ignored = models.BooleanField(default=False, verbose_name="是否已忽略")
+    ignore_until = models.DateTimeField(null=True, blank=True, verbose_name="忽略截止时间", help_text="忽略后一周内不再提醒")
+    alert_time = models.DateTimeField(auto_now_add=True, verbose_name="告警时间")
+    last_email_time = models.DateTimeField(null=True, blank=True, verbose_name="最后发送邮件时间")
+    email_sent = models.BooleanField(default=False, verbose_name="已发送邮件")
+
+    class Meta:
+        verbose_name = "设备告警状态"
+        verbose_name_plural = verbose_name
+        ordering = ['-alert_time']
+        indexes = [
+            models.Index(fields=['device_id', 'alert_type']),
+            models.Index(fields=['has_alert', 'is_ignored']),
+        ]
+
+    def __str__(self):
+        return f"{self.device_name} - {self.get_alert_type_display()} ({self.alert_value})"
+
+    def is_ignore_active(self):
+        """检查忽略状态是否仍然有效"""
+        if not self.is_ignored or not self.ignore_until:
+            return False
+        from django.utils import timezone
+        return timezone.now() < self.ignore_until
+
+
+class AlertConfig(models.Model):
+    """告警配置模型 - 用于存储邮件告警配置"""
+    smtp_server = models.CharField(max_length=100, verbose_name="SMTP服务器")
+    smtp_port = models.IntegerField(default=587, verbose_name="SMTP端口")
+    sender_email = models.CharField(max_length=100, verbose_name="发件人邮箱")
+    sender_password = models.CharField(max_length=200, verbose_name="发件人密码")
+    use_tls = models.BooleanField(default=True, verbose_name="使用TLS")
+    use_ssl = models.BooleanField(default=False, verbose_name="使用SSL")
+    recipients = models.TextField(verbose_name="收件人邮箱", help_text="多个邮箱用换行分隔")
+    check_interval = models.IntegerField(default=300, verbose_name="监测频率（秒）")
+    cpu_threshold = models.IntegerField(default=80, verbose_name="CPU告警阈值（%）")
+    memory_threshold = models.IntegerField(default=80, verbose_name="内存告警阈值（%）")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="创建时间")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
+
+    class Meta:
+        verbose_name = "告警配置"
+        verbose_name_plural = verbose_name
+
+    def __str__(self):
+        return f"告警配置 - {self.smtp_server}"
+
+    def get_recipients_list(self):
+        """获取收件人列表"""
+        return [r.strip() for r in self.recipients.split('\n') if r.strip() and '@' in r]
 
 
 class AgentStatistics(models.Model):

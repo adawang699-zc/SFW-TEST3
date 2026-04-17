@@ -1,30 +1,35 @@
 {% extends 'base.html' %}
-{% block title %}测试设备管理{% endblock %}
+{% block title %}测试设备监控{% endblock %}
 
 {% block content %}
 <div class="card">
-    <div class="card-header">测试设备监控</div>
-    <p style="color: var(--text-secondary); margin-bottom: 16px;">
-        管理并监控测试设备（安全设备、工控防火墙、工控审计、IDS等）
-    </p>
-    <div class="toolbar">
-        <input type="text" id="device-search" class="form-input" placeholder="搜索设备名称或IP..." style="width: 200px;">
-        <button class="btn btn-secondary" onclick="loadDevices()">刷新列表</button>
-        <button class="btn btn-primary" onclick="showAddModal()">+ 添加设备</button>
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span style="font-size: 1.2rem;">测试设备监控</span>
+                <p style="color: var(--text-secondary); margin: 4px 0 0 0;">管理并监控测试设备（安全设备、工控防火墙、工控审计、IDS等）</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="device-search" class="form-input" placeholder="搜索设备名称或IP..." style="width: 200px;">
+                <button class="btn btn-warning" onclick="showAlertConfigModal()" title="告警配置"><i class="fas fa-bell"></i></button>
+                <button class="btn btn-secondary" onclick="loadDevices()">刷新</button>
+                <button class="btn btn-primary" onclick="showAddModal()">+ 添加设备</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">设备列表</div>
     <div id="device-list">
-        <p style="color: var(--text-secondary);">加载中...</p>
+        <p style="color: var(--text-secondary); text-align: center; padding: 40px;">加载中...</p>
     </div>
 </div>
 
 <!-- 添加设备模态框 -->
 <div id="add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
     <div style="background: var(--bg-card); max-width: 500px; margin: 50px auto; padding: 24px; border-radius: 16px; max-height: 90vh; overflow-y: auto;">
-        <h3 style="margin-bottom: 20px; color: var(--text-primary);">添加测试设备</h3>
+        <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-plus-circle"></i> 添加测试设备</h3>
         <div class="form-group">
             <label class="form-label">设备名称 *</label>
             <input type="text" id="device-name" class="form-input" placeholder="例如: 工控防火墙-01">
@@ -56,6 +61,17 @@
             <input type="password" id="device-password" class="form-input" placeholder="SSH 登录密码">
         </div>
         <div class="form-group">
+            <label class="form-label">后台密码 <small style="color: var(--text-muted);">(可选，留空使用设备类型默认密码)</small></label>
+            <input type="password" id="device-backend-password" class="form-input" placeholder="后台 root 密码">
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="device-long-running" style="width: 18px; height: 18px;">
+                <span><i class="fas fa-running" style="color: var(--warning);"></i> 长跑环境</span>
+            </label>
+            <small style="color: var(--text-muted); margin-left: 26px;">长跑环境将自动启动监测并持续运行</small>
+        </div>
+        <div class="form-group">
             <label class="form-label">设备描述</label>
             <textarea id="device-description" class="form-input" rows="2" placeholder="可选"></textarea>
         </div>
@@ -67,23 +83,90 @@
     </div>
 </div>
 
-<!-- 执行命令模态框 -->
+<!-- 告警配置模态框 -->
+<div id="alert-config-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
+    <div style="background: var(--bg-card); max-width: 600px; margin: 50px auto; padding: 24px; border-radius: 16px; max-height: 90vh; overflow-y: auto;">
+        <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-bell"></i> 告警配置</h3>
+        <div class="form-group">
+            <label class="form-label">SMTP 服务器 *</label>
+            <input type="text" id="smtp-server" class="form-input" placeholder="例如: smtp.qq.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">SMTP 端口 *</label>
+            <input type="number" id="smtp-port" class="form-input" value="587">
+        </div>
+        <div class="form-group">
+            <label class="form-label">发件人邮箱 *</label>
+            <input type="email" id="sender-email" class="form-input" placeholder="例如: sender@example.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">发件人密码 *</label>
+            <input type="password" id="sender-password" class="form-input" placeholder="邮箱密码或授权码">
+            <small style="color: var(--text-muted);">部分邮箱需要使用授权码而非登录密码</small>
+        </div>
+        <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="use-tls" checked>
+                <span>使用 TLS 加密（端口 587 通常使用 TLS）</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
+                <input type="checkbox" id="use-ssl">
+                <span>使用 SSL 加密（端口 465 通常使用 SSL）</span>
+            </label>
+        </div>
+        <div class="form-group">
+            <label class="form-label">收件人邮箱 *</label>
+            <textarea id="recipients" class="form-input" rows="3" placeholder="每行一个邮箱地址"></textarea>
+            <small style="color: var(--text-muted);">支持多个收件人，每行一个邮箱地址</small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">监测频率（秒）</label>
+            <input type="number" id="check-interval" class="form-input" value="300" min="60">
+            <small style="color: var(--text-muted);">建议设置 60 秒以上</small>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+                <label class="form-label">CPU 告警阈值（%）</label>
+                <input type="number" id="cpu-threshold" class="form-input" value="80" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label class="form-label">内存告警阈值（%）</label>
+                <input type="number" id="memory-threshold" class="form-input" value="80" min="1" max="100">
+            </div>
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn btn-secondary" onclick="hideAlertConfigModal()">取消</button>
+            <button class="btn btn-primary" onclick="testAlertEmail()">测试发送</button>
+            <button class="btn btn-success" onclick="saveAlertConfig()">保存配置</button>
+        </div>
+    </div>
+</div>
+
+<!-- 命令执行模态框 -->
 <div id="command-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9999;">
     <div style="background: var(--bg-card); max-width: 600px; margin: 50px auto; padding: 24px; border-radius: 16px;">
-        <h3 style="margin-bottom: 20px; color: var(--text-primary);">执行命令</h3>
+        <h3 style="margin-bottom: 20px; color: var(--text-primary);"><i class="fas fa-terminal"></i> 执行命令</h3>
+        <div class="form-group">
+            <label class="form-label">命令类型</label>
+            <select id="command-type" class="form-input">
+                <option value="vtysh">Vtysh 命令</option>
+                <option value="backend" selected>后台命令（需要 root 权限）</option>
+            </select>
+        </div>
         <div class="form-group">
             <label class="form-label">命令</label>
-            <textarea id="command-input" class="form-input" rows="3" placeholder="例如: show version"></textarea>
+            <textarea id="command-input" class="form-input" rows="5" placeholder="例如: show version" style="font-family: monospace;"></textarea>
+            <small style="color: var(--text-muted);">支持多行命令</small>
         </div>
         <div class="form-group">
             <label class="form-label">执行结果</label>
-            <div id="command-output" style="background: var(--bg-dark); padding: 16px; border-radius: 8px; font-family: monospace; min-height: 200px; max-height: 400px; overflow-y: auto; color: var(--text-secondary);">
-                等待执行命令...
+            <div id="command-output" style="background: #1e1e1e; padding: 16px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 0.85rem; min-height: 200px; max-height: 400px; overflow-y: auto; color: #d4d4d4;">
+                <span style="color: #6a9955;">等待执行命令...</span>
             </div>
         </div>
         <div style="display: flex; gap: 12px; justify-content: flex-end;">
             <button class="btn btn-secondary" onclick="hideCommandModal()">关闭</button>
-            <button class="btn btn-primary" onclick="executeCommand()">执行</button>
+            <button class="btn btn-primary" onclick="executeCommand()">执行命令</button>
         </div>
     </div>
 </div>
@@ -93,7 +176,10 @@
 <script>
 let devices = [];
 let monitorIntervals = {};
+let diskIntervals = {};
 let currentDeviceId = null;
+let monitoringStatus = {};
+let alertStatus = {};
 
 const typeNames = {
     'security_device': '安全设备',
@@ -119,20 +205,60 @@ function formatBytes(bytes) {
     return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 async function loadDevices() {
     try {
         const result = await apiRequest('/api/devices/list/');
         devices = result.devices || [];
+
+        // 加载监测状态
+        await loadMonitoringStatus();
+        // 加载告警状态
+        await loadAlertStatus();
+
         renderDevices();
 
-        // 启动监控
+        // 启动监控（1分钟间隔）
         devices.forEach(d => {
             if (monitorIntervals[d.id]) clearInterval(monitorIntervals[d.id]);
             monitorIntervals[d.id] = setInterval(() => fetchMonitorData(d.id), 60000);
-            fetchMonitorData(d.id); // 立即获取一次
+            fetchMonitorData(d.id);
+
+            // 磁盘监控（5分钟间隔）
+            if (diskIntervals[d.id]) clearInterval(diskIntervals[d.id]);
+            diskIntervals[d.id] = setInterval(() => fetchDiskData(d.id), 300000);
+            fetchDiskData(d.id);
         });
     } catch (e) {
         console.error('加载设备失败:', e);
+        showToast('加载设备失败: ' + e.message, 'error');
+    }
+}
+
+async function loadMonitoringStatus() {
+    try {
+        const result = await apiRequest('/api/device/monitoring/status/');
+        if (result.success) {
+            monitoringStatus = result.status || {};
+        }
+    } catch (e) {
+        console.error('加载监测状态失败:', e);
+    }
+}
+
+async function loadAlertStatus() {
+    try {
+        const result = await apiRequest('/api/device/alert_status/');
+        if (result.success) {
+            alertStatus = result.status || {};
+        }
+    } catch (e) {
+        console.error('加载告警状态失败:', e);
     }
 }
 
@@ -145,16 +271,40 @@ async function fetchMonitorData(deviceId) {
             ip: device.ip,
             port: device.port || 22,
             user: device.user || 'admin',
-            password: device.password || ''
+            password: device.password || '',
+            device_type: device.type,
+            backend_password: device.backend_password || ''
         });
 
         if (result.success) {
             updateDeviceDisplay(deviceId, result);
         } else {
-            updateDeviceOffline(deviceId);
+            updateDeviceOffline(deviceId, result.offline);
         }
     } catch (e) {
         updateDeviceOffline(deviceId);
+    }
+}
+
+async function fetchDiskData(deviceId) {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    try {
+        const result = await apiRequest('/api/device/disk_data/', 'POST', {
+            ip: device.ip,
+            port: device.port || 22,
+            user: device.user || 'admin',
+            password: device.password || '',
+            device_type: device.type,
+            backend_password: device.backend_password || ''
+        });
+
+        if (result.success && result.disk) {
+            updateDiskDisplay(deviceId, result.disk);
+        }
+    } catch (e) {
+        console.error('获取磁盘数据失败:', e);
     }
 }
 
@@ -167,11 +317,14 @@ function updateDeviceDisplay(deviceId, data) {
     const memBar = document.getElementById(`mem-bar-${deviceId}`);
     const memDetail = document.getElementById(`mem-detail-${deviceId}`);
 
+    const netRx = document.getElementById(`net-rx-${deviceId}`);
+    const netTx = document.getElementById(`net-tx-${deviceId}`);
+
     if (cpuBadge && data.cpu) {
         const cpuUsage = data.cpu.usage || 0;
         cpuBadge.textContent = cpuUsage.toFixed(1) + '%';
         cpuBadge.className = cpuUsage > 80 ? 'status-badge status-stopped' : 'status-badge status-running';
-        if (cpuBar) cpuBar.style.width = cpuUsage + '%';
+        if (cpuBar) cpuBar.style.width = Math.min(cpuUsage, 100) + '%';
         if (cpuDetail) cpuDetail.textContent = data.cpu.name || '--';
     }
 
@@ -179,16 +332,49 @@ function updateDeviceDisplay(deviceId, data) {
         const memUsage = data.memory.usage || 0;
         memBadge.textContent = memUsage.toFixed(1) + '%';
         memBadge.className = memUsage > 80 ? 'status-badge status-stopped' : 'status-badge status-management';
-        if (memBar) memBar.style.width = memUsage + '%';
+        if (memBar) memBar.style.width = Math.min(memUsage, 100) + '%';
         if (memDetail) memDetail.textContent = `${data.memory.used || 0} MB / ${data.memory.total || 0} MB`;
+    }
+
+    if (netRx && netTx && data.network) {
+        netRx.textContent = formatBytes(data.network.rx_rate || 0) + '/s';
+        netTx.textContent = formatBytes(data.network.tx_rate || 0) + '/s';
     }
 }
 
-function updateDeviceOffline(deviceId) {
+function updateDiskDisplay(deviceId, disk) {
+    const diskBadge = document.getElementById(`disk-badge-${deviceId}`);
+    const diskBar = document.getElementById(`disk-bar-${deviceId}`);
+    const diskDetail = document.getElementById(`disk-detail-${deviceId}`);
+
+    if (diskBadge) {
+        const usage = disk.usage || 0;
+        diskBadge.textContent = usage.toFixed(1) + '%';
+        diskBadge.className = usage > 80 ? 'status-badge status-stopped' : 'status-badge';
+    }
+    if (diskBar) diskBar.style.width = Math.min(disk.usage || 0, 100) + '%';
+    if (diskDetail) {
+        let detail = `${disk.used || 0} GB / ${disk.total || 0} GB`;
+        if (disk.data_used) {
+            detail += ` | /data: ${disk.data_used} GB (${disk.data_usage || 0}%)`;
+        }
+        diskDetail.textContent = detail;
+    }
+}
+
+function updateDeviceOffline(deviceId, isOffline = true) {
     const cpuBadge = document.getElementById(`cpu-badge-${deviceId}`);
     const memBadge = document.getElementById(`mem-badge-${deviceId}`);
-    if (cpuBadge) cpuBadge.textContent = '离线';
-    if (memBadge) memBadge.textContent = '离线';
+    const diskBadge = document.getElementById(`disk-badge-${deviceId}`);
+    if (cpuBadge) {
+        cpuBadge.textContent = isOffline ? '离线' : '--';
+        cpuBadge.className = 'status-badge status-stopped';
+    }
+    if (memBadge) {
+        memBadge.textContent = isOffline ? '离线' : '--';
+        memBadge.className = 'status-badge status-stopped';
+    }
+    if (diskBadge) diskBadge.textContent = '--';
 }
 
 function renderDevices() {
@@ -212,22 +398,38 @@ function renderDevices() {
     filtered.forEach(device => {
         const typeColor = typeColors[device.type] || 'var(--text-muted)';
         const typeName = typeNames[device.type] || '未知';
+        const isMonitoring = monitoringStatus[device.id] || device.is_long_running;
+        const alert = alertStatus[device.id];
 
         html += `
         <div class="card" style="margin-bottom: 16px; border-left: 4px solid ${typeColor};">
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
                 <div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 1.1rem; color: var(--text-primary);">${device.name}</span>
+                        <span style="font-size: 1.1rem; color: var(--text-primary);">${escapeHtml(device.name)}</span>
                         <span class="status-badge" style="background: ${typeColor}20; color: ${typeColor};">${typeName}</span>
+                        ${device.is_long_running ? '<span class="status-badge" style="background: var(--warning)20; color: var(--warning);"><i class="fas fa-running"></i> 长跑</span>' : ''}
+                        ${alert ? `<span class="status-badge status-stopped" title="告警类型: ${alert.alert_type}"><i class="fas fa-exclamation-triangle"></i> 告警</span>` : ''}
                     </div>
                     <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px;">
                         <i class="fas fa-network-wired"></i> ${device.ip}:${device.port || 22}
-                        ${device.user ? `<span style="margin-left: 8px;"><i class="fas fa-user"></i> ${device.user}</span>` : ''}
+                        ${device.user ? `<span style="margin-left: 8px;"><i class="fas fa-user"></i> ${escapeHtml(device.user)}</span>` : ''}
                     </div>
+                    ${device.description ? `<div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">${escapeHtml(device.description)}</div>` : ''}
                 </div>
-                <div style="display: flex; gap: 8px;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <!-- 监测开关 -->
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="color: var(--text-secondary); font-size: 0.8rem;">监测</span>
+                        <label style="position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer;">
+                            <input type="checkbox" ${isMonitoring ? 'checked' : ''} onchange="toggleMonitoring(${device.id}, this.checked)" style="opacity: 0; width: 0; height: 0;">
+                            <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: ${isMonitoring ? 'var(--success)' : 'var(--text-muted)'}; border-radius: 10px; transition: 0.3s;"></span>
+                            <span style="position: absolute; content: ''; height: 16px; width: 16px; left: ${isMonitoring ? '18px' : '2px'}; bottom: 2px; background: white; border-radius: 50%; transition: 0.3s;"></span>
+                        </label>
+                    </div>
+                    ${alert ? `<button class="btn btn-sm btn-secondary" onclick="ignoreAlert(${device.id})" title="忽略告警一周"><i class="fas fa-bell-slash"></i></button>` : ''}
                     <button class="btn btn-sm btn-secondary" onclick="showCommandModal(${device.id})">执行命令</button>
+                    <button class="btn btn-sm btn-secondary" onclick="showEditModal(${device.id})">编辑</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteDevice(${device.id})">删除</button>
                 </div>
             </div>
@@ -257,7 +459,7 @@ function renderDevices() {
                 <div style="background: var(--bg-dark); padding: 12px; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                         <span style="color: var(--text-secondary); font-size: 0.85rem;"><i class="fas fa-hdd"></i> 磁盘</span>
-                        <span class="status-badge" style="background: var(--accent)20; color: var(--accent);" id="disk-badge-${device.id}">--</span>
+                        <span class="status-badge" id="disk-badge-${device.id}">--</span>
                     </div>
                     <div style="background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px;">
                         <div id="disk-bar-${device.id}" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.5s;"></div>
@@ -290,11 +492,158 @@ function showAddModal() {
     document.getElementById('device-name').value = '';
     document.getElementById('device-ip').value = '';
     document.getElementById('device-password').value = '';
+    document.getElementById('device-backend-password').value = '';
+    document.getElementById('device-long-running').checked = false;
     document.getElementById('device-description').value = '';
 }
 
 function hideAddModal() {
     document.getElementById('add-modal').style.display = 'none';
+}
+
+function showAlertConfigModal() {
+    document.getElementById('alert-config-modal').style.display = 'block';
+    loadAlertConfig();
+}
+
+function hideAlertConfigModal() {
+    document.getElementById('alert-config-modal').style.display = 'none';
+}
+
+async function loadAlertConfig() {
+    try {
+        const result = await apiRequest('/api/device/alert_config/');
+        if (result.success && result.config) {
+            const config = result.config;
+            document.getElementById('smtp-server').value = config.smtp_server || '';
+            document.getElementById('smtp-port').value = config.smtp_port || 587;
+            document.getElementById('sender-email').value = config.sender_email || '';
+            // 密码显示为星号，如果已配置
+            document.getElementById('sender-password').value = config.sender_password ? '***' : '';
+            document.getElementById('sender-password').dataset.hasPassword = config.sender_password ? 'true' : 'false';
+            document.getElementById('use-tls').checked = config.use_tls !== false;
+            document.getElementById('use-ssl').checked = config.use_ssl === true;
+            document.getElementById('recipients').value = (config.recipients || []).join('\n');
+            document.getElementById('check-interval').value = config.check_interval || 300;
+            document.getElementById('cpu-threshold').value = config.cpu_threshold || 80;
+            document.getElementById('memory-threshold').value = config.memory_threshold || 80;
+        }
+    } catch (e) {
+        console.error('加载告警配置失败:', e);
+    }
+}
+
+async function saveAlertConfig() {
+    const config = {
+        smtp_server: document.getElementById('smtp-server').value,
+        smtp_port: parseInt(document.getElementById('smtp-port').value) || 587,
+        sender_email: document.getElementById('sender-email').value,
+        sender_password: document.getElementById('sender-password').value,
+        use_tls: document.getElementById('use-tls').checked,
+        use_ssl: document.getElementById('use-ssl').checked,
+        recipients: document.getElementById('recipients').value.split('\n').filter(r => r.trim()),
+        check_interval: parseInt(document.getElementById('check-interval').value) || 300,
+        cpu_threshold: parseInt(document.getElementById('cpu-threshold').value) || 80,
+        memory_threshold: parseInt(document.getElementById('memory-threshold').value) || 80
+    };
+
+    // 如果密码是星号且已有密码，不发送密码（保留原密码）
+    if (config.sender_password === '***') {
+        config.sender_password = '';
+    }
+
+    try {
+        const result = await apiRequest('/api/device/alert_config/', 'POST', config);
+        if (result.success) {
+            showToast('告警配置保存成功');
+            hideAlertConfigModal();
+        } else {
+            showToast('保存失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function testAlertEmail() {
+    const config = {
+        smtp_server: document.getElementById('smtp-server').value,
+        smtp_port: parseInt(document.getElementById('smtp-port').value) || 587,
+        sender_email: document.getElementById('sender-email').value,
+        sender_password: document.getElementById('sender-password').value === '***' ? '' : document.getElementById('sender-password').value,
+        use_tls: document.getElementById('use-tls').checked,
+        use_ssl: document.getElementById('use-ssl').checked,
+        recipients: document.getElementById('recipients').value.split('\n').filter(r => r.trim())
+    };
+
+    showToast('发送测试邮件中...');
+
+    try {
+        const result = await apiRequest('/api/device/alert_config/test/', 'POST', config);
+        if (result.success) {
+            showToast('测试邮件发送成功');
+        } else {
+            showToast('发送失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function toggleMonitoring(deviceId, enabled) {
+    const device = devices.find(d => d.id === deviceId);
+    if (!device) return;
+
+    monitoringStatus[deviceId] = enabled;
+    renderDevices();
+
+    try {
+        const result = await apiRequest('/api/device/monitoring/toggle/', 'POST', {
+            device_id: String(deviceId),
+            enabled: enabled,
+            device_info: {
+                name: device.name,
+                ip: device.ip,
+                type: device.type,
+                user: device.user,
+                password: device.password,
+                backend_password: device.backend_password,
+                port: device.port
+            }
+        });
+
+        if (result.success) {
+            showToast(enabled ? '监测已启动' : '监测已停止');
+        } else {
+            showToast('操作失败: ' + result.error, 'error');
+            monitoringStatus[deviceId] = !enabled;
+            renderDevices();
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+        monitoringStatus[deviceId] = !enabled;
+        renderDevices();
+    }
+}
+
+async function ignoreAlert(deviceId) {
+    if (!confirm('确定忽略此设备的告警一周？')) return;
+
+    try {
+        const result = await apiRequest('/api/device/alert_ignore/', 'POST', {
+            device_id: deviceId
+        });
+
+        if (result.success) {
+            showToast(result.message || '告警已忽略');
+            delete alertStatus[deviceId];
+            renderDevices();
+        } else {
+            showToast('操作失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
 }
 
 async function testConnection() {
@@ -332,6 +681,8 @@ async function addDevice() {
     const port = document.getElementById('device-port').value || 22;
     const user = document.getElementById('device-user').value || 'admin';
     const password = document.getElementById('device-password').value;
+    const backend_password = document.getElementById('device-backend-password').value;
+    const is_long_running = document.getElementById('device-long-running').checked;
     const description = document.getElementById('device-description').value;
 
     if (!name || !ip) {
@@ -341,7 +692,8 @@ async function addDevice() {
 
     try {
         const result = await apiRequest('/api/devices/add/', 'POST', {
-            name, type, ip, port: parseInt(port), user, password, description
+            name, type, ip, port: parseInt(port), user, password,
+            backend_password, is_long_running, description
         });
 
         if (result.success) {
@@ -357,12 +709,13 @@ async function addDevice() {
 }
 
 async function deleteDevice(deviceId) {
-    if (!confirm('确定删除此设备?')) return;
+    if (!confirm('确定删除此设备？')) return;
 
     try {
         const result = await apiRequest('/api/devices/delete/', 'POST', { id: deviceId });
         if (result.success) {
             if (monitorIntervals[deviceId]) clearInterval(monitorIntervals[deviceId]);
+            if (diskIntervals[deviceId]) clearInterval(diskIntervals[deviceId]);
             loadDevices();
             showToast('设备已删除');
         } else {
@@ -377,7 +730,7 @@ function showCommandModal(deviceId) {
     currentDeviceId = deviceId;
     document.getElementById('command-modal').style.display = 'block';
     document.getElementById('command-input').value = '';
-    document.getElementById('command-output').innerHTML = '<span style="color: var(--text-muted);">等待执行命令...</span>';
+    document.getElementById('command-output').innerHTML = '<span style="color: #6a9955;">等待执行命令...</span>';
 }
 
 function hideCommandModal() {
@@ -390,6 +743,8 @@ async function executeCommand() {
     if (!device) return;
 
     const command = document.getElementById('command-input').value;
+    const commandType = document.getElementById('command-type').value;
+
     if (!command) {
         showToast('请输入命令', 'error');
         return;
@@ -404,19 +759,23 @@ async function executeCommand() {
             port: device.port || 22,
             user: device.user || 'admin',
             password: device.password || '',
-            command: command
+            backend_password: device.backend_password || '',
+            device_type: device.type,
+            command: command,
+            command_type: commandType
         });
 
         if (result.success) {
-            outputDiv.innerHTML = '<pre style="color: var(--success); white-space: pre-wrap;">' + (result.output || '(无输出)') + '</pre>';
+            const output = result.output || '(无输出)';
+            outputDiv.innerHTML = '<pre style="color: #d4d4d4; white-space: pre-wrap;">' + escapeHtml(output) + '</pre>';
             if (result.error) {
-                outputDiv.innerHTML += '<pre style="color: var(--danger);">错误: ' + result.error + '</pre>';
+                outputDiv.innerHTML += '<pre style="color: #f44747;">错误: ' + escapeHtml(result.error) + '</pre>';
             }
         } else {
-            outputDiv.innerHTML = '<span style="color: var(--danger);">执行失败: ' + result.error + '</span>';
+            outputDiv.innerHTML = '<span style="color: #f44747;">执行失败: ' + escapeHtml(result.error) + '</span>';
         }
     } catch (e) {
-        outputDiv.innerHTML = '<span style="color: var(--danger);">请求失败: ' + e.message + '</span>';
+        outputDiv.innerHTML = '<span style="color: #f44747;">请求失败: ' + escapeHtml(e.message) + '</span>';
     }
 }
 
