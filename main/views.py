@@ -222,6 +222,24 @@ def api_scan_interfaces(request):
                 }
             )
 
+        # 按 eth0, eth1, eth2... 顺序排序
+        def interface_sort_key(iface):
+            name = iface['name']
+            # 管理网卡 (eth0) 排在最前面
+            if iface['is_management']:
+                return (0, 0)
+            # 其他网卡按数字排序
+            if name.startswith('eth') and len(name) > 3:
+                try:
+                    num = int(name[3:])
+                    return (1, num)
+                except:
+                    return (1, 999)
+            # 非 eth 开头的网卡排最后
+            return (2, name)
+
+        interfaces.sort(key=interface_sort_key)
+
         logger.info(f"扫描到 {len(interfaces)} 个网卡")
 
         return JsonResponse({
@@ -258,6 +276,24 @@ def api_interface_list(request):
             'agent_id': agent.agent_id if agent else None,
             'agent_status': agent.status if agent else None,
         })
+
+    # 按 eth0, eth1, eth2... 顺序排序
+    def interface_sort_key(iface):
+        name = iface['name']
+        # 管理网卡 (eth0) 排在最前面
+        if iface['is_management']:
+            return (0, 0)
+        # 其他网卡按数字排序
+        if name.startswith('eth') and len(name) > 3:
+            try:
+                num = int(name[3:])
+                return (1, num)
+            except:
+                return (1, 999)
+        # 非 eth 开头的网卡排最后
+        return (2, name)
+
+    data.sort(key=interface_sort_key)
 
     return JsonResponse({
         'interfaces': data,
