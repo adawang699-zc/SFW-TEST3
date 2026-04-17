@@ -28,11 +28,12 @@ data_collector_enabled = False
 # 告警配置（从文件读取）
 alert_config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'alert_config.json')
 alert_config: Dict[str, Any] = {
-    'smtp_server': 'smtp.example.com',
-    'smtp_port': 587,
-    'sender_email': '',
+    'smtp_server': 'smtp.exmail.qq.com',
+    'smtp_port': 465,
+    'sender_email': 'autotest@tdhx.com',
     'sender_password': '',
-    'use_tls': True,
+    'use_tls': False,
+    'use_ssl': True,
     'recipients': [],
     'check_interval': 300,  # 默认 5 分钟检查一次
     'cpu_threshold': 80,  # CPU 告警阈值（%）

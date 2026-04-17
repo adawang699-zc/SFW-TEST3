@@ -148,15 +148,15 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
             <div class="form-group">
                 <label class="form-label">SMTP 服务器 *</label>
-                <input type="text" id="smtp-server" class="form-input" placeholder="例如: smtp.qq.com">
+                <input type="text" id="smtp-server" class="form-input" placeholder="例如: smtp.exmail.qq.com" value="smtp.exmail.qq.com">
             </div>
             <div class="form-group">
                 <label class="form-label">SMTP 端口 *</label>
-                <input type="number" id="smtp-port" class="form-input" value="587">
+                <input type="number" id="smtp-port" class="form-input" value="465">
             </div>
             <div class="form-group">
                 <label class="form-label">发件人邮箱 *</label>
-                <input type="email" id="sender-email" class="form-input" placeholder="例如: sender@example.com">
+                <input type="email" id="sender-email" class="form-input" placeholder="例如: autotest@tdhx.com" value="autotest@tdhx.com">
             </div>
             <div class="form-group">
                 <label class="form-label">发件人密码 *</label>
@@ -173,11 +173,11 @@
         </div>
         <div class="form-group">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                <input type="checkbox" id="use-tls" checked>
+                <input type="checkbox" id="use-tls">
                 <span>使用 TLS 加密（端口 587）</span>
             </label>
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px;">
-                <input type="checkbox" id="use-ssl">
+                <input type="checkbox" id="use-ssl" checked>
                 <span>使用 SSL 加密（端口 465）</span>
             </label>
         </div>
@@ -728,13 +728,13 @@ async function loadAlertConfig() {
         const result = await apiRequest('/api/device/alert_config/');
         if (result.success && result.config) {
             const config = result.config;
-            document.getElementById('smtp-server').value = config.smtp_server || '';
-            document.getElementById('smtp-port').value = config.smtp_port || 587;
-            document.getElementById('sender-email').value = config.sender_email || '';
+            document.getElementById('smtp-server').value = config.smtp_server || 'smtp.exmail.qq.com';
+            document.getElementById('smtp-port').value = config.smtp_port || 465;
+            document.getElementById('sender-email').value = config.sender_email || 'autotest@tdhx.com';
             document.getElementById('sender-password').value = config.sender_password ? '***' : '';
             document.getElementById('sender-password').dataset.hasPassword = config.sender_password ? 'true' : 'false';
-            document.getElementById('use-tls').checked = config.use_tls !== false;
-            document.getElementById('use-ssl').checked = config.use_ssl === true;
+            document.getElementById('use-tls').checked = config.use_tls === true;
+            document.getElementById('use-ssl').checked = config.use_ssl !== false;
             document.getElementById('recipients').value = (config.recipients || []).join('\n');
             document.getElementById('check-interval').value = config.check_interval || 300;
             document.getElementById('cpu-threshold').value = config.cpu_threshold || 80;
@@ -747,9 +747,9 @@ async function loadAlertConfig() {
 
 async function saveAlertConfig() {
     const config = {
-        smtp_server: document.getElementById('smtp-server').value,
-        smtp_port: parseInt(document.getElementById('smtp-port').value) || 587,
-        sender_email: document.getElementById('sender-email').value,
+        smtp_server: document.getElementById('smtp-server').value || 'smtp.exmail.qq.com',
+        smtp_port: parseInt(document.getElementById('smtp-port').value) || 465,
+        sender_email: document.getElementById('sender-email').value || 'autotest@tdhx.com',
         sender_password: document.getElementById('sender-password').value,
         use_tls: document.getElementById('use-tls').checked,
         use_ssl: document.getElementById('use-ssl').checked,
@@ -778,9 +778,9 @@ async function saveAlertConfig() {
 
 async function testAlertEmail() {
     const config = {
-        smtp_server: document.getElementById('smtp-server').value,
-        smtp_port: parseInt(document.getElementById('smtp-port').value) || 587,
-        sender_email: document.getElementById('sender-email').value,
+        smtp_server: document.getElementById('smtp-server').value || 'smtp.exmail.qq.com',
+        smtp_port: parseInt(document.getElementById('smtp-port').value) || 465,
+        sender_email: document.getElementById('sender-email').value || 'autotest@tdhx.com',
         sender_password: document.getElementById('sender-password').value === '***' ? '' : document.getElementById('sender-password').value,
         use_tls: document.getElementById('use-tls').checked,
         use_ssl: document.getElementById('use-ssl').checked,
