@@ -435,14 +435,15 @@ def collect_device_monitor_data(device: Any) -> None:
     from main.models import DeviceMonitorData, TestDevice
     from main.device_utils import (
         get_cpu_info, get_memory_info, get_network_info, get_disk_info,
-        test_ssh_connection, execute_in_backend, execute_in_vtysh
+        test_ssh_connection, execute_in_backend, execute_in_vtysh, get_backend_password
     )
 
     device_id = device.id
     device_name = device.name
     device_ip = device.ip
     device_type = device.type
-    backend_password = device.backend_password or ''
+    # 后台密码：优先使用设备自定义密码，否则根据设备类型使用默认密码
+    backend_password = get_backend_password(device_type, device.backend_password)
 
     logger.info(f"开始采集设备 {device_name} ({device_ip}) 监控数据")
 
