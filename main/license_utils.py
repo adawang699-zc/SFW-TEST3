@@ -17,20 +17,34 @@ logger = logging.getLogger(__name__)
 
 def find_knowledge_license_tool():
     """查找知识库授权工具"""
+    import platform
+
     # 获取项目根目录
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     license_dir = os.path.join(project_root, 'license')
 
-    # 可能的工具路径
-    possible_paths = [
-        os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender'),
-        'hx_knowledge_license_gender.exe',
-        'hx_knowledge_license_gender'
-    ]
+    # 根据操作系统选择优先查找的文件
+    is_windows = platform.system() == 'Windows'
+
+    if is_windows:
+        # Windows: 优先查找 .exe 文件
+        possible_paths = [
+            os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender'),
+            'hx_knowledge_license_gender.exe',
+            'hx_knowledge_license_gender'
+        ]
+    else:
+        # Linux/Unix: 优先查找 .py 文件
+        possible_paths = [
+            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender'),
+            'hx_knowledge_license_gender.py',
+            'hx_knowledge_license_gender'
+        ]
 
     for path in possible_paths:
         if os.path.exists(path):
