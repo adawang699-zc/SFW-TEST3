@@ -398,6 +398,8 @@ async function fetchDiskData(deviceId) {
 function updateDeviceDisplay(deviceId, data) {
     deviceOnlineStatus[deviceId] = true;  // 设备在线
 
+    const device = devices.find(d => d.id === deviceId);
+
     const cpuBadge = document.getElementById(`cpu-badge-${deviceId}`);
     const cpuBar = document.getElementById(`cpu-bar-${deviceId}`);
     const cpuDetail = document.getElementById(`cpu-detail-${deviceId}`);
@@ -427,9 +429,9 @@ function updateDeviceDisplay(deviceId, data) {
         if (cpuBar) cpuBar.style.width = Math.min(cpuUsage, 100) + '%';
         // CPU 详情：显示型号、核数和硬件型号
         if (cpuDetail) {
-            let cpuInfo = data.cpu.name || device.cpu_model || 'ARM/x86 Processor';
-            if (device.cpu_cores) cpuInfo += ` (${device.cpu_cores}核)`;
-            if (device.hardware_model) cpuInfo += ` | ${device.hardware_model}`;
+            let cpuInfo = data.cpu.name || (device ? device.cpu_model : '') || 'ARM/x86 Processor';
+            if (device && device.cpu_cores) cpuInfo += ` (${device.cpu_cores}核)`;
+            if (device && device.hardware_model) cpuInfo += ` | ${device.hardware_model}`;
             cpuDetail.textContent = cpuInfo;
         }
     }
