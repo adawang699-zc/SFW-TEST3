@@ -807,8 +807,20 @@ async function toggleMonitoring(deviceId, enabled) {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
 
+    // 只更新开关状态，不重新渲染整个设备列表
     monitoringStatus[deviceId] = enabled;
-    renderDevices();
+
+    // 更新开关样式
+    const switchContainer = document.querySelector(`#device-card-${deviceId} label`);
+    if (switchContainer) {
+        const checkbox = switchContainer.querySelector('input[type="checkbox"]');
+        const slider = switchContainer.querySelector('span:nth-child(2)');
+        const dot = switchContainer.querySelector('span:nth-child(3)');
+
+        if (checkbox) checkbox.checked = enabled;
+        if (slider) slider.style.background = enabled ? 'var(--success)' : 'var(--text-muted)';
+        if (dot) dot.style.left = enabled ? '18px' : '2px';
+    }
 
     try {
         const result = await apiRequest('/api/device/monitoring/toggle/', 'POST', {
@@ -829,13 +841,31 @@ async function toggleMonitoring(deviceId, enabled) {
             showToast(enabled ? '监测已启动' : '监测已停止');
         } else {
             showToast('操作失败: ' + result.error, 'error');
+            // 恢复开关状态
             monitoringStatus[deviceId] = !enabled;
-            renderDevices();
+            if (switchContainer) {
+                const checkbox = switchContainer.querySelector('input[type="checkbox"]');
+                const slider = switchContainer.querySelector('span:nth-child(2)');
+                const dot = switchContainer.querySelector('span:nth-child(3)');
+
+                if (checkbox) checkbox.checked = !enabled;
+                if (slider) slider.style.background = !enabled ? 'var(--success)' : 'var(--text-muted)';
+                if (dot) dot.style.left = !enabled ? '18px' : '2px';
+            }
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
+        // 恢复开关状态
         monitoringStatus[deviceId] = !enabled;
-        renderDevices();
+        if (switchContainer) {
+            const checkbox = switchContainer.querySelector('input[type="checkbox"]');
+            const slider = switchContainer.querySelector('span:nth-child(2)');
+            const dot = switchContainer.querySelector('span:nth-child(3)');
+
+            if (checkbox) checkbox.checked = !enabled;
+            if (slider) slider.style.background = !enabled ? 'var(--success)' : 'var(--text-muted)';
+            if (dot) dot.style.left = !enabled ? '18px' : '2px';
+        }
     }
 }
 
