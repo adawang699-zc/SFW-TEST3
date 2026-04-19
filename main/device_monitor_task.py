@@ -341,12 +341,12 @@ def monitor_device_worker(device_id: str, device_info: Dict[str, Any]) -> None:
                     content = format_alert_email_content(device_info, 'coredump', alert_details)
                     subject = f'[设备告警] {device_info.get("name", "未知设备")} - 检测到新的Coredump文件'
 
-                        try:
-                            if send_alert_email(alert_config, subject, content, alert_config.get('recipients', [])):
-                                mark_email_sent(device_id, alert_type)
-                                logger.info(f"设备 {device_id} coredump 告警邮件已发送")
-                        except Exception as e:
-                            logger.error(f"设备 {device_id} coredump 告警邮件发送失败: {e}")
+                    try:
+                        if send_alert_email(alert_config, subject, content, alert_config.get('recipients', [])):
+                            mark_email_sent(device_id, alert_type)
+                            logger.info(f"设备 {device_id} coredump 告警邮件已发送")
+                    except Exception as e:
+                        logger.error(f"设备 {device_id} coredump 告警邮件发送失败: {e}")
 
             last_files = current_files
 
