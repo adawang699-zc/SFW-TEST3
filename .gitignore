@@ -57,6 +57,9 @@ license/
 *.bin
 *.lib
 
+# Alert config (contains sensitive data like email password)
+alert_config.json
+
 # Temporary files
 *.tmp
 *.temp
