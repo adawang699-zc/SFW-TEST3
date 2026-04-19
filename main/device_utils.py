@@ -651,7 +651,8 @@ def get_coredump_files(
     files = []
 
     try:
-        cmd = f"ls -la {coredump_dir} 2>/dev/null | grep -E '\\.core|coredump' | sed 's/\\x1b\\[[0-9;]*m//g'"
+        # 获取目录中所有文件（排除目录本身）
+        cmd = f"ls -la {coredump_dir} 2>/dev/null | grep -v '^d' | grep -v '^total' | sed 's/\\x1b\\[[0-9;]*m//g'"
         result = execute_in_backend(cmd, host, user, password, backend_password, device_type, port)
 
         if result:
