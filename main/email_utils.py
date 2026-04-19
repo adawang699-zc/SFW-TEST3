@@ -48,8 +48,10 @@ def send_alert_email(
 
         # 创建邮件对象
         msg = MIMEMultipart('alternative')
-        msg['From'] = Header(email_config['sender_email'], 'utf-8')
-        msg['To'] = Header(','.join(recipients), 'utf-8')
+        # 腾讯企业邮箱要求 From 格式为 "发件人名称 <邮箱>" 或直接邮箱地址
+        sender_email = email_config['sender_email']
+        msg['From'] = sender_email  # 使用简单格式避免语法错误
+        msg['To'] = ','.join(recipients)  # 使用逗号分隔的收件人列表
         msg['Subject'] = Header(subject, 'utf-8')
 
         # 添加 HTML 内容
