@@ -138,15 +138,19 @@ def format_alert_email_content(
 
     if alert_type == 'coredump':
         title = 'Coredump 文件告警'
-        description = f'检测到设备 {device_info.get("name", "未知")} 的 /data/coredump 目录下存在新的 coredump 文件。'
+        new_count = alert_details.get('new_file_count', 0)
+        total_count = alert_details.get('file_count', 0)
+        new_files = alert_details.get('new_files', [])
+        description = f'检测到设备 {device_info.get("name", "未知")} 的 /data/coredump 目录下新增 {new_count} 个 coredump 文件，当前共有 {total_count} 个文件。新增文件: {", ".join(new_files)}'
         details_html = f"""
         <h3>告警详情</h3>
         <ul>
             <li><strong>设备名称:</strong> {device_info.get('name', '未知')}</li>
             <li><strong>设备IP:</strong> {device_info.get('ip', '未知')}</li>
             <li><strong>设备类型:</strong> {device_type}</li>
-            <li><strong>文件数量:</strong> {alert_details.get('file_count', 0)}</li>
-            <li><strong>文件列表:</strong></li>
+            <li><strong>新增文件数量:</strong> {new_count}</li>
+            <li><strong>当前文件总数:</strong> {total_count}</li>
+            <li><strong>所有文件列表:</strong></li>
         </ul>
         <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
             <tr style="background-color: #f0f0f0;">

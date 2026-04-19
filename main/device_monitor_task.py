@@ -326,16 +326,18 @@ def monitor_device_worker(device_id: str, device_info: Dict[str, Any]) -> None:
             if new_files:
                 alert_type = 'coredump'
                 # coredump 不检查忽略状态，每次检测到新文件都发邮件
-                new_file_list = [f for f in coredump_files if f['name'] in new_files]
-                alert_value = len(new_files)
+                # 邮件显示所有文件列表，而不仅仅是新增文件
+                alert_value = len(current_files)
 
                 should_notify = create_or_update_alert(
                     device_id, device_info.get('name', '未知'), alert_type, alert_value
                 )
                 if should_notify:
                     alert_details = {
-                        'file_count': len(new_files),
-                        'files': new_file_list,
+                        'new_file_count': len(new_files),  # 新增文件数量
+                        'file_count': len(current_files),  # 所有文件数量
+                        'files': coredump_files,  # 所有文件列表
+                        'new_files': list(new_files),  # 新增文件名列表
                         'resource_info': resource_info
                     }
                     content = format_alert_email_content(device_info, 'coredump', alert_details)
