@@ -73,11 +73,15 @@ def create_or_update_alert(device_id: str, device_name: str, alert_type: str, al
     Args:
         device_id: 设备 ID
         device_name: 设备名称
-        alert_type: 告警类型
+        alert_type: 告警类型 ('cpu', 'memory', 'coredump')
         alert_value: 告警值
 
     Returns:
         bool: True 表示是新告警或需要发送邮件
+
+    Note:
+        - coredump 告警不使用冷却期，每次检测到新文件都发邮件
+        - cpu/memory 告警使用 7 天冷却期
     """
     try:
         from main.models import DeviceAlertStatus
@@ -94,6 +98,11 @@ def create_or_update_alert(device_id: str, device_name: str, alert_type: str, al
             existing_alert.alert_time = timezone.now()
             existing_alert.save()
 
+            # coredump 告警不使用冷却期，每次都发邮件
+            if alert_type == 'coredump':
+                return True
+
+            # cpu/memory 告警使用 7 天冷却期
             if existing_alert.last_email_time:
                 cooldown_end = existing_alert.last_email_time + timedelta(days=7)
                 if timezone.now() < cooldown_end:
@@ -303,7 +312,7 @@ def monitor_device_worker(device_id: str, device_info: Dict[str, Any]) -> None:
             else:
                 clear_alert(device_id, 'memory')
 
-            # 检查 coredump 文件
+            # 检查 coredump 文件（coredump 不使用忽略功能，每次新文件都发邮件）
             coredump_files = get_coredump_files(
                 device_info['ip'],
                 device_user,
@@ -316,23 +325,21 @@ def monitor_device_worker(device_id: str, device_info: Dict[str, Any]) -> None:
             new_files = current_files - last_files
             if new_files:
                 alert_type = 'coredump'
-                if check_alert_ignored(device_id, alert_type):
-                    logger.info(f"设备 {device_id} Coredump 告警已被忽略")
-                else:
-                    new_file_list = [f for f in coredump_files if f['name'] in new_files]
-                    alert_value = len(new_files)
+                # coredump 不检查忽略状态，每次检测到新文件都发邮件
+                new_file_list = [f for f in coredump_files if f['name'] in new_files]
+                alert_value = len(new_files)
 
-                    should_notify = create_or_update_alert(
-                        device_id, device_info.get('name', '未知'), alert_type, alert_value
-                    )
-                    if should_notify:
-                        alert_details = {
-                            'file_count': len(new_files),
-                            'files': new_file_list,
-                            'resource_info': resource_info
-                        }
-                        content = format_alert_email_content(device_info, 'coredump', alert_details)
-                        subject = f'[设备告警] {device_info.get("name", "未知设备")} - 检测到新的Coredump文件'
+                should_notify = create_or_update_alert(
+                    device_id, device_info.get('name', '未知'), alert_type, alert_value
+                )
+                if should_notify:
+                    alert_details = {
+                        'file_count': len(new_files),
+                        'files': new_file_list,
+                        'resource_info': resource_info
+                    }
+                    content = format_alert_email_content(device_info, 'coredump', alert_details)
+                    subject = f'[设备告警] {device_info.get("name", "未知设备")} - 检测到新的Coredump文件'
 
                         try:
                             if send_alert_email(alert_config, subject, content, alert_config.get('recipients', [])):
