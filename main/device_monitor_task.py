@@ -208,7 +208,9 @@ def monitor_device_worker(device_id: str, device_info: Dict[str, Any]) -> None:
             device_type = device_info.get('type', '')
             device_user = device_info.get('user', 'admin')
             device_password = device_info.get('password', '')
-            backend_password = device_info.get('backend_password', '')
+            # 使用 get_backend_password 函数处理空密码情况
+            from main.device_utils import get_backend_password
+            backend_password = get_backend_password(device_type, device_info.get('backend_password', ''))
 
             # 获取当前系统资源信息
             cpu_info = get_cpu_info(
