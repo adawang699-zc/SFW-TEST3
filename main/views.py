@@ -609,12 +609,26 @@ def api_agent_status(request):
                 status_data = resp.json()
                 agent.status = 'running'
                 agent.save()
+
+                # 获取统计信息
+                statistics = {}
+                try:
+                    stats_resp = requests.get(
+                        f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
+                        timeout=2
+                    )
+                    if stats_resp.status_code == 200:
+                        statistics = stats_resp.json().get('statistics', {})
+                except:
+                    pass
+
                 return JsonResponse({
                     'success': True,
                     'agent_id': agent_id,
                     'status': 'running',
                     'uptime': status_data.get('uptime'),
                     'interface': agent.interface.name,
+                    'statistics': statistics,
                 })
         except:
             agent.status = 'stopped'
@@ -623,6 +637,7 @@ def api_agent_status(request):
                 'success': True,
                 'agent_id': agent_id,
                 'status': 'stopped',
+                'statistics': {},
             })
 
     except LocalAgent.DoesNotExist:
@@ -738,6 +753,32 @@ def api_send_packet(request):
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         logger.exception(f"发送报文失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_stop_send(request):
+    """停止发送报文"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        # 转发请求到 Agent
+        resp = requests.post(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/stop",
+            json={},
+            timeout=5
+        )
+
+        return JsonResponse(resp.json())
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        logger.exception(f"停止发送失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 

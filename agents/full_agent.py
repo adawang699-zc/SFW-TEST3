@@ -176,6 +176,27 @@ def api_send_packet():
             'error': str(e)
         }), 500
 
+@app.route('/api/stop', methods=['POST'])
+def api_stop():
+    """停止发送报文"""
+    from agents.full_agent_base import stop_sending
+    stop_sending.set()
+    logger.info("停止发送报文")
+    return jsonify({
+        'success': True,
+        'message': '已停止发送'
+    })
+
+@app.route('/api/statistics', methods=['GET'])
+def api_statistics():
+    """获取发送统计"""
+    from agents.full_agent_base import statistics, stats_lock
+    with stats_lock:
+        return jsonify({
+            'success': True,
+            'statistics': statistics.copy()
+        })
+
 # ========== 端口扫描功能 ==========
 
 @app.route('/api/port_scan', methods=['POST'])
