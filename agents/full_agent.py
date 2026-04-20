@@ -135,9 +135,46 @@ def shutdown():
 @app.route('/api/send_packet', methods=['POST'])
 def api_send_packet():
     """发送报文 API"""
-    # 导入完整实现
-    from agents.full_agent_base import api_send_packet_impl
-    return api_send_packet_impl(request, BIND_INTERFACE)
+    # 直接使用 full_agent_base 中的函数
+    from agents.full_agent_base import send_packets_worker, statistics, stop_sending, stats_lock
+    import threading
+    import time as time_module
+
+    global sending_thread
+
+    try:
+        data = request.json
+        interface = data.get('interface', BIND_INTERFACE)
+        packet_config = data.get('packet_config', {})
+        send_config = data.get('send_config', {})
+
+        # 停止之前的发送
+        if sending_thread and sending_thread.is_alive():
+            stop_sending.set()
+            sending_thread.join(timeout=2)
+
+        # 重置停止标志
+        stop_sending.clear()
+
+        # 启动发送线程
+        sending_thread = threading.Thread(
+            target=send_packets_worker,
+            args=(interface, packet_config, send_config)
+        )
+        sending_thread.daemon = True
+        sending_thread.start()
+
+        return jsonify({
+            'success': True,
+            'message': '开始发送报文'
+        })
+
+    except Exception as e:
+        logger.exception(f"发送报文失败: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ========== 端口扫描功能 ==========
 

@@ -672,10 +672,63 @@ def api_send_packet(request):
         if agent.status != 'running':
             return JsonResponse({'success': False, 'error': 'Agent 未运行'})
 
+        packet_config = data.get('packet_config', {})
+        send_config = data.get('send_config', {})
+
+        # 转换前端格式到 Agent 格式
+        # 1. 添加 protocol 字段（前端使用 currentProtocol，需要从发送逻辑传递）
+        if 'protocol' not in packet_config:
+            # 根据 tcp_flags 或其他字段推断协议
+            if 'tcp_flags' in packet_config:
+                packet_config['protocol'] = 'tcp'
+            elif 'icmp_type' in packet_config:
+                packet_config['protocol'] = 'icmp'
+            elif 'arp_type' in packet_config:
+                packet_config['protocol'] = 'arp'
+            elif 'udp_type' in packet_config:
+                packet_config['protocol'] = 'udp'
+            else:
+                packet_config['protocol'] = 'tcp'  # 默认
+
+        # 2. 转换 tcp_flags 对象格式为 flags 数组格式
+        if 'tcp_flags' in packet_config:
+            tcp_flags = packet_config['tcp_flags']
+            flags = []
+            if tcp_flags.get('syn'):
+                flags.append('SYN')
+            if tcp_flags.get('ack'):
+                flags.append('ACK')
+            if tcp_flags.get('fin'):
+                flags.append('FIN')
+            if tcp_flags.get('rst'):
+                flags.append('RST')
+            if tcp_flags.get('psh'):
+                flags.append('PSH')
+            if tcp_flags.get('urg'):
+                flags.append('URG')
+            packet_config['flags'] = flags
+            del packet_config['tcp_flags']  # 移除旧格式
+
+        # 3. 转换 UDP/ICMP type 字段名称
+        if 'udp_type' in packet_config:
+            udp_type = packet_config['udp_type']
+            if udp_type == 'udp_normal':
+                packet_config['udp_type'] = 'udp'
+            elif udp_type == 'teardrop':
+                packet_config['udp_type'] = 'teardrop'
+            # icmp_type 和 arp_type 名称匹配，无需转换
+
+        # 构造转发请求
+        forward_data = {
+            'interface': agent.interface.name,
+            'packet_config': packet_config,
+            'send_config': send_config
+        }
+
         # 转发请求到 Agent
         resp = requests.post(
             f"http://{agent.interface.ip_address}:{agent.port}/api/send_packet",
-            json=data,
+            json=forward_data,
             timeout=30
         )
 
@@ -684,6 +737,7 @@ def api_send_packet(request):
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
+        logger.exception(f"发送报文失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
