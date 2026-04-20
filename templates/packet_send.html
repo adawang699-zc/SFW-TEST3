@@ -3,159 +3,703 @@
 
 {% block content %}
 <div class="card">
-    <div class="card-header">报文发送</div>
-    <p style="color: var(--text-secondary); margin-bottom: 20px;">
-        选择本地 Agent（即网卡）发送测试报文
-    </p>
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span style="font-size: 1.2rem;">报文发送</span>
+                <p style="color: var(--text-secondary); margin: 4px 0 0 0;">选择 Agent 发送测试报文，支持多种协议和攻击测试</p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary" onclick="loadAgents()">刷新Agent</button>
+            </div>
+        </div>
+    </div>
 </div>
 
+<!-- Agent 选择 -->
 <div class="card">
     <div class="card-header">选择发送 Agent</div>
     <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
         <p style="color: var(--text-secondary);">加载中...</p>
     </div>
+    <div id="selected-agent-info" style="margin-top: 10px; padding: 10px; background: var(--bg-secondary); border-radius: 8px; display: none;">
+        <span style="color: var(--success);">已选择: </span>
+        <span id="selected-agent-name"></span>
+        <span style="color: var(--text-muted); margin-left: 10px;">网卡: <span id="selected-agent-interface"></span></span>
+    </div>
 </div>
 
+<!-- 报文配置 -->
 <div class="card">
-    <div class="card-header">报文配置</div>
-
-    <div class="form-group">
-        <label class="form-label">协议类型</label>
-        <select id="protocol" class="form-input" onchange="updateFields()">
-            <option value="tcp">TCP</option>
-            <option value="udp">UDP</option>
-            <option value="icmp">ICMP</option>
-        </select>
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>报文配置</span>
+            <button class="btn btn-secondary" onclick="toggleVariations()">
+                <i class="fas fa-exchange-alt"></i> 报文变化
+            </button>
+        </div>
     </div>
+    <div class="card-body">
+        <!-- 协议标签页 -->
+        <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border);">
+            <button class="btn btn-outline-primary protocol-tab active" data-protocol="tcp" onclick="switchProtocol('tcp')">TCP</button>
+            <button class="btn btn-outline-primary protocol-tab" data-protocol="udp" onclick="switchProtocol('udp')">UDP</button>
+            <button class="btn btn-outline-primary protocol-tab" data-protocol="icmp" onclick="switchProtocol('icmp')">ICMP</button>
+            <button class="btn btn-outline-primary protocol-tab" data-protocol="arp" onclick="switchProtocol('arp')">ARP</button>
+        </div>
 
-    <div class="form-group">
-        <label class="form-label">目标 IP</label>
-        <input type="text" id="dst-ip" class="form-input" placeholder="例如: 192.168.1.100">
-    </div>
+        <!-- TCP 配置 -->
+        <div id="tcp-config" class="protocol-config">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">源MAC地址</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="tcp-src-mac" class="form-input" placeholder="随机生成">
+                            <button class="btn btn-outline-secondary" onclick="randomMac('tcp-src-mac')" title="随机生成">
+                                <i class="fas fa-dice"></i>
+                            </button>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-muted);">
+                            <input type="checkbox" id="tcp-use-local-mac" onchange="useLocalMac('tcp')">
+                            使用本机MAC
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的MAC地址</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="tcp-dst-mac" class="form-input" placeholder="随机生成">
+                            <button class="btn btn-outline-secondary" onclick="randomMac('tcp-dst-mac')" title="随机生成">
+                                <i class="fas fa-dice"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源IP地址</label>
+                        <input type="text" id="tcp-src-ip" class="form-input" placeholder="例如: 192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的IP地址 <span style="color: var(--danger);">*</span></label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="tcp-dst-ip" class="form-input" placeholder="例如: 192.168.1.200" required>
+                            <label style="display: flex; align-items: center; gap: 4px; color: var(--text-muted);">
+                                <input type="checkbox" id="tcp-land" onchange="toggleLand('tcp')">
+                                LAND
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">源端口</label>
+                        <input type="number" id="tcp-src-port" class="form-input" value="12345" min="0" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的端口 <span style="color: var(--danger);">*</span></label>
+                        <input type="number" id="tcp-dst-port" class="form-input" value="80" min="0" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">TCP标志位</label>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" id="tcp-flag-syn" checked> SYN
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" id="tcp-flag-ack"> ACK
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" id="tcp-flag-fin"> FIN
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" id="tcp-flag-rst"> RST
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" id="tcp-flag-psh"> PSH
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" id="tcp-flag-urg"> URG
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数据 (HEX)</label>
+                        <input type="text" id="tcp-data" class="form-input" placeholder="例如: 00 11 22 33">
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div class="form-group" id="port-group">
-        <label class="form-label">目标端口</label>
-        <input type="number" id="dst-port" class="form-input" value="80" placeholder="端口">
-    </div>
+        <!-- UDP 配置 -->
+        <div id="udp-config" class="protocol-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">类型 <span style="color: var(--danger);">*</span></label>
+                        <select id="udp-type" class="form-input">
+                            <option value="udp">普通UDP</option>
+                            <option value="teardrop">Teardrop攻击</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源MAC地址</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="udp-src-mac" class="form-input" placeholder="随机生成">
+                            <button class="btn btn-outline-secondary" onclick="randomMac('udp-src-mac')">
+                                <i class="fas fa-dice"></i>
+                            </button>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-muted);">
+                            <input type="checkbox" id="udp-use-local-mac" onchange="useLocalMac('udp')">
+                            使用本机MAC
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的MAC地址</label>
+                        <input type="text" id="udp-dst-mac" class="form-input" placeholder="例如: FF:FF:FF:FF:FF:FF">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源IP地址</label>
+                        <input type="text" id="udp-src-ip" class="form-input" placeholder="例如: 192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的IP地址 <span style="color: var(--danger);">*</span></label>
+                        <input type="text" id="udp-dst-ip" class="form-input" placeholder="例如: 192.168.1.200">
+                    </div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">源端口</label>
+                        <input type="number" id="udp-src-port" class="form-input" value="12345" min="0" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的端口</label>
+                        <input type="number" id="udp-dst-port" class="form-input" value="80" min="0" max="65535">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数据长度</label>
+                        <input type="number" id="udp-data-length" class="form-input" value="16" min="0">
+                        <small style="color: var(--text-muted);">普通UDP建议16-64字节</small>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div class="form-group">
-        <label class="form-label">Payload (可选)</label>
-        <textarea id="payload" class="form-input" rows="3" placeholder="报文内容"></textarea>
-    </div>
+        <!-- ICMP 配置 -->
+        <div id="icmp-config" class="protocol-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">类型 <span style="color: var(--danger);">*</span></label>
+                        <select id="icmp-type" class="form-input" onchange="updateIcmpType()">
+                            <option value="echo">ICMP Echo Request</option>
+                            <option value="echo_reply">ICMP Echo Reply</option>
+                            <option value="ping_of_death">Ping of Death攻击</option>
+                            <option value="smurf">ICMP Smurf攻击</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源MAC地址</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="icmp-src-mac" class="form-input" placeholder="随机生成">
+                            <button class="btn btn-outline-secondary" onclick="randomMac('icmp-src-mac')">
+                                <i class="fas fa-dice"></i>
+                            </button>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-muted);">
+                            <input type="checkbox" id="icmp-use-local-mac" onchange="useLocalMac('icmp')">
+                            使用本机MAC
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的MAC地址</label>
+                        <input type="text" id="icmp-dst-mac" class="form-input" placeholder="例如: FF:FF:FF:FF:FF:FF">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源IP地址</label>
+                        <input type="text" id="icmp-src-ip" class="form-input" placeholder="例如: 192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的IP地址 <span style="color: var(--danger);">*</span></label>
+                        <input type="text" id="icmp-dst-ip" class="form-input" placeholder="例如: 192.168.1.200">
+                    </div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">数据长度</label>
+                        <input type="number" id="icmp-data-length" class="form-input" value="64" min="0">
+                        <small id="icmp-data-hint" style="color: var(--text-muted);">普通ICMP建议64字节</small>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div class="form-group">
-        <label class="form-label">发送次数</label>
-        <input type="number" id="count" class="form-input" value="1">
-    </div>
+        <!-- ARP 配置 -->
+        <div id="arp-config" class="protocol-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">ARP类型 <span style="color: var(--danger);">*</span></label>
+                        <select id="arp-type" class="form-input">
+                            <option value="arp_req">ARP Request</option>
+                            <option value="arp_reply">ARP Reply</option>
+                            <option value="rarp_req">RARP Request</option>
+                            <option value="rarp_reply">RARP Reply</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源MAC地址</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="arp-src-mac" class="form-input" value="22:22:22:22:22:22">
+                            <button class="btn btn-outline-secondary" onclick="randomMac('arp-src-mac')">
+                                <i class="fas fa-dice"></i>
+                            </button>
+                        </div>
+                        <label style="display: flex; align-items: center; gap: 8px; margin-top: 8px; color: var(--text-muted);">
+                            <input type="checkbox" id="arp-use-local-mac" onchange="useLocalMac('arp')">
+                            使用本机MAC
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的MAC地址</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="arp-dst-mac" class="form-input" value="FF:FF:FF:FF:FF:FF">
+                            <label style="display: flex; align-items: center; gap: 4px; color: var(--text-muted);">
+                                <input type="checkbox" id="arp-use-broadcast" checked onchange="toggleArpBroadcast()">
+                                广播
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源IP地址</label>
+                        <input type="text" id="arp-src-ip" class="form-input" value="10.0.0.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的IP地址 <span style="color: var(--danger);">*</span></label>
+                        <input type="text" id="arp-dst-ip" class="form-input" value="10.0.0.2">
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div class="form-group">
-        <label class="form-label">发送间隔 (秒)</label>
-        <input type="number" id="interval" class="form-input" value="0" step="0.1">
-    </div>
+        <!-- 报文变化配置（默认隐藏） -->
+        <div id="variations-config" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <h4 style="margin-bottom: 15px;"><i class="fas fa-exchange-alt"></i> 报文变化配置</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">源MAC变化</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="var-src-mac-type" class="form-input" style="width: 120px;">
+                                <option value="fixed">固定</option>
+                                <option value="increment">递增</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的MAC变化</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="var-dst-mac-type" class="form-input" style="width: 120px;">
+                                <option value="fixed">固定</option>
+                                <option value="increment">递增</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">源IP变化</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="var-src-ip-type" class="form-input" style="width: 120px;">
+                                <option value="fixed">固定</option>
+                                <option value="increment">递增</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的IP变化</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="var-dst-ip-type" class="form-input" style="width: 120px;">
+                                <option value="fixed">固定</option>
+                                <option value="increment">递增</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">源端口变化</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="var-src-port-type" class="form-input" style="width: 120px;">
+                                <option value="fixed">固定</option>
+                                <option value="increment">递增</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目的端口变化</label>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="var-dst-port-type" class="form-input" style="width: 120px;">
+                                <option value="fixed">固定</option>
+                                <option value="increment">递增</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div class="form-group">
-        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);">
-            <input type="checkbox" id="continuous">
-            连续发送模式
-        </label>
-    </div>
+        <!-- 发送控制 -->
+        <hr style="margin: 20px 0;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+            <div class="form-group">
+                <label class="form-label">发送次数</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="radio" name="send-mode" value="continuous" checked onchange="updateSendMode()">
+                        连续发送
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="radio" name="send-mode" value="count" onchange="updateSendMode()">
+                        <input type="number" id="send-count" class="form-input" value="1" min="1" style="width: 80px;"> 次
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">发送间隔</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="radio" name="interval-mode" value="none" checked onchange="updateIntervalMode()">
+                        无延迟
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 4px;">
+                        <input type="radio" name="interval-mode" value="delay" onchange="updateIntervalMode()">
+                        <input type="number" id="interval-value" class="form-input" value="100" min="0" style="width: 80px;"> ms
+                    </label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">发送速率 (可选)</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="number" id="send-rate" class="form-input" placeholder="包/秒" min="0" style="width: 100px;">
+                    <small style="color: var(--text-muted);">留空则不限速</small>
+                </div>
+            </div>
+        </div>
 
-    <div style="display: flex; gap: 12px;">
-        <button class="btn btn-primary" onclick="sendPacket()">发送报文</button>
-        <button class="btn btn-danger" onclick="stopSend()" id="stop-btn" style="display: none;">停止发送</button>
+        <!-- 发送按钮 -->
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+            <button class="btn btn-primary" onclick="sendPacket()" id="send-btn">
+                <i class="fas fa-paper-plane"></i> 发送报文
+            </button>
+            <button class="btn btn-danger" onclick="stopSend()" id="stop-btn" style="display: none;">
+                <i class="fas fa-stop"></i> 停止发送
+            </button>
+        </div>
     </div>
 </div>
 
+<!-- 发送统计 -->
 <div class="card">
     <div class="card-header">发送统计</div>
-    <div id="stats-display" style="color: var(--text-secondary);">
-        总发送: <span id="total-sent">0</span> 个报文
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 20px;">
+        <div style="text-align: center; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="color: var(--text-muted); margin-bottom: 8px;">发送报文数</div>
+            <div style="font-size: 1.5rem; color: var(--primary);"><span id="stat-sent">0</span></div>
+        </div>
+        <div style="text-align: center; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="color: var(--text-muted); margin-bottom: 8px;">发送速率</div>
+            <div style="font-size: 1.5rem; color: var(--success);"><span id="stat-rate">0</span> 包/秒</div>
+        </div>
+        <div style="text-align: center; padding: 15px; background: var(--bg-secondary); border-radius: 8px;">
+            <div style="color: var(--text-muted); margin-bottom: 8px;">发送带宽</div>
+            <div style="font-size: 1.5rem; color: var(--warning);"><span id="stat-bandwidth">0</span> KB/s</div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作日志 -->
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>操作日志</span>
+            <button class="btn btn-outline-secondary" onclick="clearLog()">清空</button>
+        </div>
+    </div>
+    <div id="operation-log" style="padding: 15px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+        <p style="color: var(--text-muted);">等待操作...</p>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let selectedAgentId = null;
+let selectedAgent = null;
+let agents = [];
+let currentProtocol = 'tcp';
 let sendingInterval = null;
+let statsInterval = null;
 
+// 加载 Agent 列表
 async function loadAgents() {
     try {
         const result = await apiRequest('/api/agents/list/');
         const container = document.getElementById('agent-selector');
+        agents = result.agents || [];
 
-        if (result.agents && result.agents.length > 0) {
+        if (agents.length > 0) {
             let html = '';
-            result.agents.forEach(agent => {
-                if (agent.status === 'running') {
-                    html += `
-                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer;">
-                            <div class="agent-id">${agent.agent_id}</div>
-                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address}:${agent.port}</div>
-                            <div class="status-badge status-running">运行中</div>
+            agents.forEach(agent => {
+                const isRunning = agent.status === 'running';
+                html += `
+                    <div class="agent-card ${isRunning ? 'running' : 'stopped'}"
+                         onclick="selectAgent('${agent.agent_id}')"
+                         data-agent-id="${agent.agent_id}"
+                         style="cursor: pointer; padding: 12px; border: 2px solid var(--border); border-radius: 8px;">
+                        <div style="font-weight: bold;">${agent.agent_id}</div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">
+                            ${agent.interface_name} - ${agent.ip_address}:${agent.port}
                         </div>
-                    `;
-                }
+                        <div class="status-badge ${isRunning ? 'status-running' : 'status-stopped'}"
+                             style="margin-top: 8px;">
+                            ${isRunning ? '运行中' : '已停止'}
+                        </div>
+                    </div>
+                `;
             });
-            container.innerHTML = html || '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
+            container.innerHTML = html;
         } else {
-            container.innerHTML = '<p style="color: var(--text-secondary);">没有运行中的 Agent，请先在"网卡 & Agent"页面启动 Agent</p>';
+            container.innerHTML = '<p style="color: var(--text-muted);">没有可用的 Agent，请先启动 Agent</p>';
         }
     } catch (e) {
-        container.innerHTML = '<p style="color: var(--danger);">加载失败: ' + e.message + '</p>';
+        document.getElementById('agent-selector').innerHTML = '<p style="color: var(--danger);">加载失败: ' + e.message + '</p>';
     }
 }
 
+// 选择 Agent
 function selectAgent(agentId) {
-    selectedAgentId = agentId;
+    selectedAgent = agents.find(a => a.agent_id === agentId);
+    if (!selectedAgent) return;
+
+    // 更新选中样式
     document.querySelectorAll('.agent-card').forEach(card => {
-        card.style.borderColor = card.classList.contains('running') && card.querySelector('.agent-id').textContent === agentId
-            ? 'var(--primary)' : 'var(--border)';
+        card.style.borderColor = card.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
     });
+
+    // 显示选中信息
+    document.getElementById('selected-agent-info').style.display = 'block';
+    document.getElementById('selected-agent-name').textContent = selectedAgent.agent_id;
+    document.getElementById('selected-agent-interface').textContent = selectedAgent.interface_name;
+
+    addLog('选中 Agent: ' + selectedAgent.agent_id + ' (' + selectedAgent.interface_name + ')');
 }
 
-function updateFields() {
-    const protocol = document.getElementById('protocol').value;
-    const portGroup = document.getElementById('port-group');
-    portGroup.style.display = protocol === 'icmp' ? 'none' : 'block';
+// 切换协议
+function switchProtocol(protocol) {
+    currentProtocol = protocol;
+
+    // 更新标签页样式
+    document.querySelectorAll('.protocol-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.protocol === protocol) {
+            tab.classList.add('active');
+        }
+    });
+
+    // 显示对应配置
+    document.querySelectorAll('.protocol-config').forEach(config => {
+        config.style.display = 'none';
+    });
+    document.getElementById(protocol + '-config').style.display = 'block';
 }
 
+// 随机生成 MAC 地址
+function randomMac(inputId) {
+    const mac = Array.from({length: 6}, () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(':');
+    document.getElementById(inputId).value = mac.toUpperCase();
+}
+
+// 使用本机 MAC
+function useLocalMac(protocol) {
+    const checkbox = document.getElementById(protocol + '-use-local-mac');
+    const input = document.getElementById(protocol + '-src-mac');
+    if (checkbox.checked && selectedAgent) {
+        // 这里可以获取 Agent 的本地 MAC，暂时留空
+        addLog('已勾选使用本机MAC，请手动填入或联系 Agent 获取');
+    }
+}
+
+// LAND 攻击设置
+function toggleLand(protocol) {
+    const checkbox = document.getElementById(protocol + '-land');
+    const srcIpInput = document.getElementById(protocol + '-src-ip');
+    const dstIpInput = document.getElementById(protocol + '-dst-ip');
+
+    if (checkbox.checked) {
+        srcIpInput.value = dstIpInput.value;
+        srcIpInput.disabled = true;
+        addLog('LAND攻击：源IP已设置为与目的IP相同');
+    } else {
+        srcIpInput.disabled = false;
+    }
+}
+
+// ARP 广播设置
+function toggleArpBroadcast() {
+    const checkbox = document.getElementById('arp-use-broadcast');
+    const input = document.getElementById('arp-dst-mac');
+    if (checkbox.checked) {
+        input.value = 'FF:FF:FF:FF:FF:FF';
+        input.disabled = true;
+    } else {
+        input.disabled = false;
+    }
+}
+
+// 更新 ICMP 类型提示
+function updateIcmpType() {
+    const type = document.getElementById('icmp-type').value;
+    const hint = document.getElementById('icmp-data-hint');
+    const dataLength = document.getElementById('icmp-data-length');
+
+    if (type === 'ping_of_death') {
+        hint.textContent = 'Ping of Death: 自动设置为65536字节（超大包）';
+        dataLength.value = 65536;
+        dataLength.disabled = true;
+    } else if (type === 'smurf') {
+        hint.textContent = 'Smurf: 目的IP应为广播地址（如 x.x.x.255）';
+        dataLength.disabled = false;
+    } else {
+        hint.textContent = '普通ICMP建议64字节';
+        dataLength.disabled = false;
+    }
+}
+
+// 显示/隐藏报文变化配置
+function toggleVariations() {
+    const config = document.getElementById('variations-config');
+    config.style.display = config.style.display === 'none' ? 'block' : 'none';
+}
+
+// 发送模式更新
+function updateSendMode() {
+    const mode = document.querySelector('input[name="send-mode"]:checked').value;
+    document.getElementById('send-count').disabled = mode === 'continuous';
+}
+
+// 间隔模式更新
+function updateIntervalMode() {
+    const mode = document.querySelector('input[name="interval-mode"]:checked').value;
+    document.getElementById('interval-value').disabled = mode === 'none';
+}
+
+// 获取报文配置
+function getPacketConfig() {
+    const config = {
+        protocol: currentProtocol,
+        variations: {}
+    };
+
+    // 根据协议获取配置
+    if (currentProtocol === 'tcp') {
+        config.src_mac = document.getElementById('tcp-src-mac').value;
+        config.dst_mac = document.getElementById('tcp-dst-mac').value;
+        config.src_ip = document.getElementById('tcp-src-ip').value;
+        config.dst_ip = document.getElementById('tcp-dst-ip').value;
+        config.src_port = parseInt(document.getElementById('tcp-src-port').value) || 0;
+        config.dst_port = parseInt(document.getElementById('tcp-dst-port').value) || 80;
+        config.tcp_flags = {
+            syn: document.getElementById('tcp-flag-syn').checked,
+            ack: document.getElementById('tcp-flag-ack').checked,
+            fin: document.getElementById('tcp-flag-fin').checked,
+            rst: document.getElementById('tcp-flag-rst').checked,
+            psh: document.getElementById('tcp-flag-psh').checked,
+            urg: document.getElementById('tcp-flag-urg').checked
+        };
+        config.data = document.getElementById('tcp-data').value;
+
+        if (document.getElementById('tcp-land').checked) {
+            config.src_ip = config.dst_ip;  // LAND: 源IP=目的IP
+        }
+    } else if (currentProtocol === 'udp') {
+        config.type = document.getElementById('udp-type').value;
+        config.src_mac = document.getElementById('udp-src-mac').value;
+        config.dst_mac = document.getElementById('udp-dst-mac').value;
+        config.src_ip = document.getElementById('udp-src-ip').value;
+        config.dst_ip = document.getElementById('udp-dst-ip').value;
+        config.src_port = parseInt(document.getElementById('udp-src-port').value) || 0;
+        config.dst_port = parseInt(document.getElementById('udp-dst-port').value) || 80;
+        config.data_length = parseInt(document.getElementById('udp-data-length').value) || 16;
+    } else if (currentProtocol === 'icmp') {
+        config.icmp_type = document.getElementById('icmp-type').value;
+        config.src_mac = document.getElementById('icmp-src-mac').value;
+        config.dst_mac = document.getElementById('icmp-dst-mac').value;
+        config.src_ip = document.getElementById('icmp-src-ip').value;
+        config.dst_ip = document.getElementById('icmp-dst-ip').value;
+        config.data_length = parseInt(document.getElementById('icmp-data-length').value) || 64;
+    } else if (currentProtocol === 'arp') {
+        config.arp_type = document.getElementById('arp-type').value;
+        config.src_mac = document.getElementById('arp-src-mac').value;
+        config.dst_mac = document.getElementById('arp-dst-mac').value;
+        config.src_ip = document.getElementById('arp-src-ip').value;
+        config.dst_ip = document.getElementById('arp-dst-ip').value;
+    }
+
+    // 获取变化配置
+    config.variations = {
+        src_mac: { type: document.getElementById('var-src-mac-type').value },
+        dst_mac: { type: document.getElementById('var-dst-mac-type').value },
+        src_ip: { type: document.getElementById('var-src-ip-type').value },
+        dst_ip: { type: document.getElementById('var-dst-ip-type').value },
+        src_port: { type: document.getElementById('var-src-port-type').value },
+        dst_port: { type: document.getElementById('var-dst-port-type').value }
+    };
+
+    return config;
+}
+
+// 获取发送配置
+function getSendConfig() {
+    const sendMode = document.querySelector('input[name="send-mode"]:checked').value;
+    const intervalMode = document.querySelector('input[name="interval-mode"]:checked').value;
+
+    return {
+        count: sendMode === 'count' ? parseInt(document.getElementById('send-count').value) : -1,
+        continuous: sendMode === 'continuous',
+        interval: intervalMode === 'delay' ? parseInt(document.getElementById('interval-value').value) : 0,
+        rate: parseInt(document.getElementById('send-rate').value) || 0
+    };
+}
+
+// 发送报文
 async function sendPacket() {
-    if (!selectedAgentId) {
+    if (!selectedAgent) {
         showToast('请先选择一个 Agent', 'error');
         return;
     }
 
-    const protocol = document.getElementById('protocol').value;
-    const dstIp = document.getElementById('dst-ip').value;
-    const dstPort = parseInt(document.getElementById('dst-port').value);
-    const payload = document.getElementById('payload').value;
-    const count = parseInt(document.getElementById('count').value);
-    const interval = parseFloat(document.getElementById('interval').value);
-    const continuous = document.getElementById('continuous').checked;
+    const packetConfig = getPacketConfig();
+    const sendConfig = getSendConfig();
 
-    if (!dstIp) {
-        showToast('请输入目标 IP', 'error');
+    // 验证必填字段
+    if (!packetConfig.dst_ip) {
+        showToast('请输入目的IP地址', 'error');
         return;
     }
 
+    addLog('发送报文: ' + currentProtocol.toUpperCase() + ' -> ' + packetConfig.dst_ip);
+
     try {
         const result = await apiRequest('/api/send_packet/', 'POST', {
-            agent_id: selectedAgentId,
-            protocol: protocol,
-            dst_ip: dstIp,
-            dst_port: dstPort,
-            payload: payload,
-            count: count,
-            interval: interval,
-            continuous: continuous
+            agent_id: selectedAgent.agent_id,
+            packet_config: packetConfig,
+            send_config: sendConfig
         });
 
-        if (result.status === 'sent' || result.status === 'continuous_sending') {
+        if (result.success || result.status === 'sent' || result.status === 'continuous_sending') {
             showToast('报文发送成功');
-            if (continuous) {
-                document.getElementById('stop-btn').style.display = 'inline-block';
-                sendingInterval = setInterval(updateStats, 1000);
+            document.getElementById('stop-btn').style.display = 'inline-block';
+
+            // 启动统计更新
+            if (!statsInterval) {
+                statsInterval = setInterval(updateStats, 1000);
             }
         } else {
             showToast('发送失败: ' + (result.error || '未知错误'), 'error');
@@ -165,27 +709,58 @@ async function sendPacket() {
     }
 }
 
+// 停止发送
 async function stopSend() {
+    if (!selectedAgent) return;
+
     try {
-        const result = await apiRequest('/api/stop_send/', 'POST', { agent_id: selectedAgentId });
-        if (result.status === 'stopped') {
+        const result = await apiRequest('/api/stop_send/', 'POST', {
+            agent_id: selectedAgent.agent_id
+        });
+
+        if (result.success || result.status === 'stopped') {
             showToast('已停止发送');
             document.getElementById('stop-btn').style.display = 'none';
-            if (sendingInterval) clearInterval(sendingInterval);
+            if (statsInterval) {
+                clearInterval(statsInterval);
+                statsInterval = null;
+            }
         }
     } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
+        showToast('停止失败: ' + e.message, 'error');
     }
 }
 
+// 更新统计
 async function updateStats() {
-    if (!selectedAgentId) return;
+    if (!selectedAgent) return;
+
     try {
-        const result = await apiRequest(`/api/agents/status/?agent_id=${selectedAgentId}`);
-        // 可以通过 Agent API 获取统计
+        const result = await apiRequest('/api/agents/status/?agent_id=' + selectedAgent.agent_id);
+        if (result.statistics) {
+            document.getElementById('stat-sent').textContent = result.statistics.total_sent || 0;
+            document.getElementById('stat-rate').textContent = Math.round(result.statistics.rate || 0);
+            document.getElementById('stat-bandwidth').textContent = Math.round((result.statistics.bandwidth || 0) / 1024);
+        }
     } catch (e) {}
 }
 
+// 添加日志
+function addLog(message) {
+    const log = document.getElementById('operation-log');
+    const time = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.innerHTML = `<span style="color: var(--text-muted);">[${time}]</span> ${message}`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+// 清空日志
+function clearLog() {
+    document.getElementById('operation-log').innerHTML = '<p style="color: var(--text-muted);">等待操作...</p>';
+}
+
+// 初始化
 window.onload = loadAgents;
 </script>
 {% endblock %}
