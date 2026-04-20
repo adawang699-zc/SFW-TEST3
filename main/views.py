@@ -355,6 +355,7 @@ def api_agent_list(request):
             'agent_id': agent.agent_id,
             'interface_name': agent.interface.name,
             'ip_address': agent.interface.ip_address,
+            'mac_address': agent.interface.mac_address,
             'port': agent.port,
             'status': actual_status,
             'auto_start': agent.auto_start,

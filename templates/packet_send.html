@@ -501,34 +501,31 @@ async function selectAgent(agentId) {
 
 // 填充默认值
 async function fillDefaultValues() {
-    // 获取 Agent 网卡信息
-    try {
-        const resp = await fetch(`http://${selectedAgent.ip_address}:${selectedAgent.port}/api/interfaces`);
-        const data = await resp.json();
-        if (data.success && data.interfaces) {
-            const iface = data.interfaces.find(i => i.name === selectedAgent.interface_name) || data.interfaces[0];
-            agentMac = iface.mac || '';
-            agentIp = iface.ip || selectedAgent.ip_address;
-        }
-    } catch (e) {
-        agentMac = '';
-    }
+    // 使用 selectedAgent 中已有的网卡信息
+    agentIp = selectedAgent.ip_address || '';
+    agentMac = selectedAgent.mac_address || '';
 
     // 填充源MAC（勾选本机MAC）
-    document.getElementById('src-mac').value = agentMac;
-    document.getElementById('use-local-mac').checked = true;
+    if (agentMac) {
+        document.getElementById('src-mac').value = agentMac;
+        document.getElementById('use-local-mac').checked = true;
+    }
 
     // 填充源IP
-    document.getElementById('src-ip').value = agentIp;
+    if (agentIp) {
+        document.getElementById('src-ip').value = agentIp;
+    }
 
     // 填充目的IP（同网段第一个地址）
-    const dstIp = calculateNetworkIp(agentIp, 1);
-    document.getElementById('dst-ip').value = dstIp;
+    if (agentIp) {
+        const dstIp = calculateNetworkIp(agentIp, 1);
+        document.getElementById('dst-ip').value = dstIp;
+    }
 
     // 随机目的MAC并显示
     randomMac('dst-mac');
 
-    addLog('默认值: 源MAC=' + agentMac + ', 源IP=' + agentIp + ', 目的IP=' + dstIp);
+    addLog('默认值: 源MAC=' + agentMac + ', 源IP=' + agentIp + ', 目的IP=' + (agentIp ? calculateNetworkIp(agentIp, 1) : ''));
 }
 
 // 计算同网段IP
