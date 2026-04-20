@@ -139,6 +139,7 @@ function renderAgents(agents) {
         const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
         const statusText = agent.status === 'running' ? '运行中' : '已停止';
         const isRunning = agent.status === 'running';
+        const currentIp = agent.ip_address || '';
 
         html += `
             <tr>
@@ -152,7 +153,7 @@ function renderAgents(agents) {
                         `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>
                          <button class="btn btn-sm btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed;" title="运行中不可配置IP">配置IP</button>` :
                         `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>
-                         <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}')">配置IP</button>`
+                         <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}', '${currentIp}')">配置IP</button>`
                     }
                     <button class="btn btn-sm btn-secondary" onclick="showLogs('${agent.agent_id}')">日志</button>
                 </td>
@@ -243,12 +244,12 @@ function showToast(message, type = 'success') {
 
 let configAgentId = null;
 
-// 显示配置 IP 模态框
-function showConfigIPModal(agentId, interfaceName) {
+// 显示配置 IP 模态框（回显当前 IP）
+function showConfigIPModal(agentId, interfaceName, currentIp) {
     configAgentId = agentId;
     document.getElementById('config-agent-id').value = agentId;
     document.getElementById('config-interface-name').value = interfaceName;
-    document.getElementById('config-ip-address').value = '';
+    document.getElementById('config-ip-address').value = currentIp || '';
     document.getElementById('config-netmask').value = '24';
     document.getElementById('config-ip-modal').style.display = 'block';
 }

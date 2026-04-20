@@ -700,7 +700,15 @@ def api_agent_config_ip(request):
             timeout=10
         )
 
-        # 配置 IP 地址（CIDR 格式）
+        # 清空网卡上所有旧的 IP 地址
+        flush_result = subprocess.run(
+            ['sudo', 'ip', 'addr', 'flush', 'dev', interface_name],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # 配置新的 IP 地址（CIDR 格式）
         cidr = f"{ip_address}/{netmask}"
         result = subprocess.run(
             ['sudo', 'ip', 'addr', 'add', cidr, 'dev', interface_name],
