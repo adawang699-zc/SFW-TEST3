@@ -386,15 +386,6 @@ def api_agent_create(request):
         if interface.is_management:
             return JsonResponse({'success': False, 'error': '管理网卡不能绑定 Agent'})
 
-        # 检查网卡是否有 IP 地址
-        if not interface.ip_address:
-            return JsonResponse({
-                'success': False,
-                'error': '网卡未配置 IP 地址，请先配置 IP 才能绑定 Agent',
-                'need_config_ip': True,
-                'interface_name': interface_name
-            })
-
         # 检查网卡是否已绑定 Agent
         if LocalAgent.objects.filter(interface=interface).exists():
             return JsonResponse({'success': False, 'error': '网卡已绑定 Agent'})
@@ -407,7 +398,7 @@ def api_agent_create(request):
         while port in existing_ports:
             port += 1
 
-        # 创建 Agent
+        # 创建 Agent（允许没有 IP 的网卡创建 Agent，状态为 stopped）
         agent = LocalAgent.objects.create(
             agent_id=agent_id,
             interface=interface,
@@ -484,6 +475,14 @@ def api_agent_start(request):
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        # 检查网卡是否有 IP 地址
+        if not agent.interface.ip_address:
+            return JsonResponse({
+                'success': False,
+                'error': '网卡未配置 IP 地址，请先配置 IP',
+                'need_config_ip': True
+            })
 
         # 创建 systemd 服务文件（如果不存在）
         service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
@@ -670,6 +669,67 @@ def api_agent_logs(request):
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_agent_config_ip(request):
+    """配置 Agent 网卡的 IP 地址"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+        ip_address = data.get('ip_address')
+        netmask = data.get('netmask', '24')
+
+        if not agent_id or not ip_address:
+            return JsonResponse({'success': False, 'error': '缺少 Agent ID 或 IP 地址'})
+
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+        interface_name = agent.interface.name
+
+        # 检查 Agent 是否正在运行
+        if agent.status == 'running':
+            return JsonResponse({'success': False, 'error': 'Agent 正在运行，请先停止 Agent'})
+
+        # 先启动网卡
+        subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # 配置 IP 地址（CIDR 格式）
+        cidr = f"{ip_address}/{netmask}"
+        result = subprocess.run(
+            ['sudo', 'ip', 'addr', 'add', cidr, 'dev', interface_name],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0 or 'File exists' in result.stderr:
+            # 更新数据库
+            agent.interface.ip_address = ip_address
+            agent.interface.is_up = True
+            agent.interface.status = 'UP'
+            agent.interface.save()
+
+            logger.info(f"Agent {agent_id} 网卡 {interface_name} 配置 IP: {cidr}")
+            return JsonResponse({
+                'success': True,
+                'message': f'网卡 {interface_name} 已配置 IP: {cidr}',
+                'ip_address': ip_address
+            })
+        else:
+            logger.error(f"配置 IP 失败: {result.stderr}")
+            return JsonResponse({'success': False, 'error': result.stderr})
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        logger.exception(f"配置 Agent IP 失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 

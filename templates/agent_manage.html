@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}网卡 & Agent 管理{% endblock %}
+{% block title %}Agent 管理{% endblock %}
 
 {% block content %}
 <div class="card">
@@ -23,12 +23,16 @@
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); padding: 24px; border-radius: 16px; width: 400px;">
         <div class="card-header" style="margin-bottom: 20px;">配置网卡 IP</div>
         <div class="form-group">
+            <label class="form-label">Agent ID</label>
+            <input type="text" id="config-agent-id" class="form-input" readonly>
+        </div>
+        <div class="form-group">
             <label class="form-label">网卡名称</label>
             <input type="text" id="config-interface-name" class="form-input" readonly>
         </div>
         <div class="form-group">
             <label class="form-label">IP 地址</label>
-            <input type="text" id="config-ip-address" class="form-input" placeholder="例如: 192.168.1.100">
+            <input type="text" id="config-ip-address" class="form-input" placeholder="例如: 11.11.11.11">
         </div>
         <div class="form-group">
             <label class="form-label">子网掩码 (CIDR)</label>
@@ -42,16 +46,9 @@
 </div>
 
 <div class="card">
-    <div class="card-header">网卡列表</div>
-    <div id="interface-list">
-        <p style="color: var(--text-secondary);">点击"扫描网卡"获取系统网卡信息...</p>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">已绑定 Agent</div>
+    <div class="card-header">Agent 列表</div>
     <div id="agent-list">
-        <p style="color: var(--text-secondary);">暂无 Agent...</p>
+        <p style="color: var(--text-secondary);">扫描网卡后自动创建 Agent...</p>
     </div>
 </div>
 
@@ -67,15 +64,43 @@
 <script>
 let selectedAgent = null;
 
-// 扫描网卡
+// 扫描网卡 - 同时自动创建 Agent
 async function scanInterfaces() {
     try {
-        const result = await apiRequest('/api/interfaces/scan/', 'POST');
-        if (result.success) {
-            renderInterfaces(result.interfaces);
-            showToast(`扫描到 ${result.count} 个网卡`);
+        // 1. 扫描网卡
+        const scanResult = await apiRequest('/api/interfaces/scan/', 'POST');
+        if (scanResult.success) {
+            showToast(`扫描到 ${scanResult.count} 个网卡`);
+
+            // 2. 获取网卡列表
+            const listResult = await apiRequest('/api/interfaces/list/');
+            if (listResult.interfaces) {
+                // 3. 为所有非管理网卡自动创建 Agent（包括没有 IP 的网卡）
+                for (const iface of listResult.interfaces) {
+                    if (!iface.is_management) {
+                        // 检查是否已有 Agent
+                        const agentsResult = await apiRequest('/api/agents/list/');
+                        const existingAgent = agentsResult.agents?.find(a => a.interface_name === iface.name);
+
+                        if (!existingAgent) {
+                            // 自动创建 Agent（即使网卡没有 IP）
+                            try {
+                                await apiRequest('/api/agents/create/', 'POST', {
+                                    interface_name: iface.name
+                                });
+                            } catch (e) {
+                                // 如果创建失败（可能因为没有 IP），仍然记录但不报错
+                                console.log(`创建 Agent ${iface.name} 失败: ${e.message}`);
+                            }
+                        }
+                    }
+                }
+
+                // 4. 刷新 Agent 列表
+                await loadAgents();
+            }
         } else {
-            showToast('扫描失败: ' + result.error, 'error');
+            showToast('扫描失败: ' + scanResult.error, 'error');
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
@@ -84,78 +109,7 @@ async function scanInterfaces() {
 
 // 刷新状态
 async function refreshStatus() {
-    await loadInterfaces();
     await loadAgents();
-}
-
-// 加载网卡列表
-async function loadInterfaces() {
-    try {
-        const result = await apiRequest('/api/interfaces/list/');
-        if (result.interfaces) {
-            renderInterfaces(result.interfaces);
-        }
-    } catch (e) {
-        console.error('加载网卡失败:', e);
-    }
-}
-
-// 渲染网卡列表
-function renderInterfaces(interfaces) {
-    const container = document.getElementById('interface-list');
-
-    if (interfaces.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary);">未检测到网卡</p>';
-        return;
-    }
-
-    let html = '';
-    interfaces.forEach(iface => {
-        const isManagement = iface.is_management;
-        const hasAgent = iface.has_agent;
-        const isUp = iface.is_up;
-        const hasIP = iface.ip_address && iface.ip_address !== '';
-
-        let cardClass = 'interface-card';
-        if (isManagement) cardClass += ' management';
-        if (hasAgent) cardClass += ' bound';
-        if (!isUp) cardClass += ' stopped';
-
-        html += `
-            <div class="${cardClass}">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div class="interface-name">
-                            ${iface.name}
-                            <span class="status-badge ${isUp ? 'status-running' : 'status-stopped'}" style="margin-left: 8px;">
-                                ${iface.status || (isUp ? 'UP' : 'DOWN')}
-                            </span>
-                        </div>
-                        <div class="interface-ip">
-                            ${hasIP ? iface.ip_address : '未配置 IP'}
-                            ${iface.speed ? '(' + iface.speed + ' Mbps)' : ''}
-                        </div>
-                    </div>
-                    <div>
-                        ${isManagement ?
-                            '<span class="status-badge status-management">管理网卡</span>' :
-                            (hasAgent ?
-                                `<span class="status-badge status-running">已绑定 Agent</span>
-                                 <button class="btn btn-sm btn-danger" onclick="deleteAgent('${iface.agent_id}')">删除 Agent</button>` :
-                                (hasIP ?
-                                    `<button class="btn btn-sm btn-primary" onclick="createAgent('${iface.name}')">创建 Agent</button>` :
-                                    `<button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${iface.name}')">配置 IP</button>
-                                     ${isUp ? '' : `<button class="btn btn-sm btn-secondary" onclick="startupInterface('${iface.name}')">启动网卡</button>`}`
-                                )
-                            )
-                        }
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-
-    container.innerHTML = html;
 }
 
 // 加载 Agent 列表
@@ -175,7 +129,7 @@ function renderAgents(agents) {
     const container = document.getElementById('agent-list');
 
     if (agents.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary);">暂无 Agent，请选择网卡创建</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary);">暂无 Agent，请先扫描网卡</p>';
         return;
     }
 
@@ -184,18 +138,21 @@ function renderAgents(agents) {
     agents.forEach(agent => {
         const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
         const statusText = agent.status === 'running' ? '运行中' : '已停止';
+        const isRunning = agent.status === 'running';
 
         html += `
             <tr>
                 <td><span class="agent-id">${agent.agent_id}</span></td>
                 <td>${agent.interface_name}</td>
-                <td>${agent.ip_address}</td>
+                <td>${agent.ip_address || '未配置'}</td>
                 <td>${agent.port}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
-                    ${agent.status === 'running' ?
-                        `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>` :
-                        `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>`
+                    ${isRunning ?
+                        `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>
+                         <button class="btn btn-sm btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed;" title="运行中不可配置IP">配置IP</button>` :
+                        `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>
+                         <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}')">配置IP</button>`
                     }
                     <button class="btn btn-sm btn-secondary" onclick="showLogs('${agent.agent_id}')">日志</button>
                 </td>
@@ -205,44 +162,6 @@ function renderAgents(agents) {
 
     html += '</tbody></table>';
     container.innerHTML = html;
-}
-
-// 创建 Agent
-async function createAgent(interfaceName) {
-    try {
-        const result = await apiRequest('/api/agents/create/', 'POST', {
-            interface_name: interfaceName
-        });
-
-        if (result.success) {
-            showToast(`Agent ${result.agent.agent_id} 创建成功`);
-            await refreshStatus();
-        } else {
-            showToast('创建失败: ' + result.error, 'error');
-        }
-    } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
-    }
-}
-
-// 删除 Agent
-async function deleteAgent(agentId) {
-    if (!confirm(`确定删除 Agent ${agentId}?`)) return;
-
-    try {
-        const result = await apiRequest('/api/agents/delete/', 'POST', {
-            agent_id: agentId
-        });
-
-        if (result.success) {
-            showToast(result.message);
-            await refreshStatus();
-        } else {
-            showToast('删除失败: ' + result.error, 'error');
-        }
-    } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
-    }
 }
 
 // 启动 Agent
@@ -320,13 +239,14 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 3000);
 }
 
-// ========== 网卡配置功能 ==========
+// ========== 配置 IP 功能 ==========
 
-let configInterfaceName = null;
+let configAgentId = null;
 
 // 显示配置 IP 模态框
-function showConfigIPModal(interfaceName) {
-    configInterfaceName = interfaceName;
+function showConfigIPModal(agentId, interfaceName) {
+    configAgentId = agentId;
+    document.getElementById('config-agent-id').value = agentId;
     document.getElementById('config-interface-name').value = interfaceName;
     document.getElementById('config-ip-address').value = '';
     document.getElementById('config-netmask').value = '24';
@@ -336,11 +256,12 @@ function showConfigIPModal(interfaceName) {
 // 关闭配置 IP 模态框
 function closeConfigModal() {
     document.getElementById('config-ip-modal').style.display = 'none';
-    configInterfaceName = null;
+    configAgentId = null;
 }
 
 // 确认配置 IP
 async function confirmConfigIP() {
+    const agentId = document.getElementById('config-agent-id').value;
     const interfaceName = document.getElementById('config-interface-name').value;
     const ipAddress = document.getElementById('config-ip-address').value;
     const netmask = document.getElementById('config-netmask').value;
@@ -351,8 +272,8 @@ async function confirmConfigIP() {
     }
 
     try {
-        const result = await apiRequest('/api/interfaces/config-ip/', 'POST', {
-            interface_name: interfaceName,
+        const result = await apiRequest('/api/agents/config-ip/', 'POST', {
+            agent_id: agentId,
             ip_address: ipAddress,
             netmask: netmask
         });
@@ -360,7 +281,7 @@ async function confirmConfigIP() {
         if (result.success) {
             showToast(result.message);
             closeConfigModal();
-            await refreshStatus();
+            await loadAgents();
         } else {
             showToast('配置失败: ' + result.error, 'error');
         }
@@ -369,31 +290,10 @@ async function confirmConfigIP() {
     }
 }
 
-// 启动网卡
-async function startupInterface(interfaceName) {
-    try {
-        const result = await apiRequest('/api/interfaces/startup/', 'POST', {
-            interface_name: interfaceName
-        });
-
-        if (result.success) {
-            showToast(result.message);
-            await refreshStatus();
-        } else {
-            showToast('启动失败: ' + result.error, 'error');
-        }
-    } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
-    }
-}
-
-// 页面加载时自动扫描并加载完整数据
+// 页面加载时自动扫描并加载 Agent 数据
 window.onload = async function() {
-    // 先扫描网卡（更新数据库）
+    // 先扫描网卡（自动创建 Agent）
     await scanInterfaces();
-    // 然后从数据库获取完整数据（包含 Agent 绑定信息）
-    await loadInterfaces();
-    await loadAgents();
 };
 </script>
 {% endblock %}

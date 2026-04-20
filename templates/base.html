@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% csrf_token %}
     <title>{% block title %}Ubuntu 多 Agent 部署平台{% endblock %}</title>
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -512,6 +511,9 @@
     <!-- Toast 容器 -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- CSRF Token -->
+    {% csrf_token %}
+
     <!-- 确认弹窗 -->
     <div class="confirm-modal" id="confirm-modal">
         <div class="confirm-content">
@@ -542,13 +544,29 @@
                 method: method,
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                    'X-CSRFToken': getCookie('csrftoken') || ''
                 }
             };
             if (data) options.body = JSON.stringify(data);
 
             const response = await fetch(url, options);
             return response.json();
+        }
+
+        // 获取 Cookie
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
         }
 
         // Toast 提示函数

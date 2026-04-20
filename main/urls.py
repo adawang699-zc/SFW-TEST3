@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/agents/stop/', views.api_agent_stop, name='api_agent_stop'),
     path('api/agents/status/', views.api_agent_status, name='api_agent_status'),
     path('api/agents/logs/', views.api_agent_logs, name='api_agent_logs'),
+    path('api/agents/config-ip/', views.api_agent_config_ip, name='api_agent_config_ip'),
 
     # ========== 功能 API（代理到 Agent）==========
     path('api/send_packet/', views.api_send_packet, name='api_send_packet'),
