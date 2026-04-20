@@ -90,6 +90,75 @@ class LocalAgent(models.Model):
         return f"agent_{self.interface.name}"
 
 
+class AgentLock(models.Model):
+    """
+    Agent 租用锁定模型 - 多用户并发使用 Agent 的资源管理
+
+    用户租用 Agent 组后锁定，防止其他用户同时使用
+    支持手动释放和超时自动释放
+    """
+    LOCK_STATUS = [
+        ('active', '活跃'),
+        ('expired', '已过期'),
+        ('released', '已释放'),
+    ]
+
+    user_identifier = models.CharField(
+        max_length=100,
+        verbose_name="用户标识符",
+        help_text="用户输入的标识，如 user1、张三"
+    )
+    client_ip = models.GenericIPAddressField(
+        verbose_name="客户端 IP",
+        help_text="访问前端的 IP 地址，用于追踪"
+    )
+    locked_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="租用时间"
+    )
+    expire_at = models.DateTimeField(
+        verbose_name="过期时间",
+        help_text="默认租用时间 + 4小时"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=LOCK_STATUS,
+        default='active',
+        verbose_name="状态"
+    )
+    released_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="释放时间"
+    )
+    agents = models.ManyToManyField(
+        LocalAgent,
+        verbose_name="租用的 Agent",
+        help_text="被租用的 Agent 组"
+    )
+
+    class Meta:
+        verbose_name = "Agent 租用"
+        verbose_name_plural = "Agent 租用管理"
+        ordering = ['-locked_at']
+
+    def __str__(self):
+        return f"{self.user_identifier} ({self.client_ip}) - {self.status}"
+
+    def is_expired(self):
+        """检查是否已过期"""
+        from django.utils import timezone
+        return timezone.now() > self.expire_at
+
+    def get_remaining_time(self):
+        """获取剩余租用时间（秒）"""
+        from django.utils import timezone
+        if self.status != 'active':
+            return 0
+        remaining = (self.expire_at - timezone.now()).total_seconds()
+        return max(0, int(remaining))
+
+
 class TestDevice(models.Model):
     """
     测试设备模型 - 防火墙被测设备

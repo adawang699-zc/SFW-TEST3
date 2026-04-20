@@ -741,6 +741,252 @@ def api_agent_config_ip(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+# ========== Agent 租用管理 API ==========
+
+DEFAULT_LOCK_DURATION_HOURS = 4  # 默认租用时长 4 小时
+
+
+def check_and_release_expired_locks():
+    """检查并释放过期的租用"""
+    from django.utils import timezone
+    from .models import AgentLock
+
+    expired_locks = AgentLock.objects.filter(
+        status='active',
+        expire_at__lt=timezone.now()
+    )
+
+    for lock in expired_locks:
+        lock.status = 'expired'
+        lock.released_at = timezone.now()
+        lock.save()
+        logger.info(f"租用过期自动释放: {lock.user_identifier} ({lock.client_ip})")
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_agents_lock(request):
+    """租用 Agent 组"""
+    from django.utils import timezone
+    from .models import AgentLock, LocalAgent
+
+    try:
+        # 先检查并释放过期的租用
+        check_and_release_expired_locks()
+
+        data = json.loads(request.body)
+        user_identifier = data.get('user_identifier', '').strip()
+        agent_ids = data.get('agent_ids', [])  # 要租用的 agent_id 列表
+        client_ip = request.META.get('REMOTE_ADDR', '')  # 获取客户端 IP
+
+        if not user_identifier:
+            return JsonResponse({'success': False, 'error': '请输入用户标识符'})
+
+        if not agent_ids or len(agent_ids) == 0:
+            return JsonResponse({'success': False, 'error': '请选择要租用的 Agent'})
+
+        # 检查该用户是否已有活跃租用
+        existing_lock = AgentLock.objects.filter(
+            user_identifier=user_identifier,
+            status='active'
+        ).first()
+
+        if existing_lock:
+            return JsonResponse({
+                'success': False,
+                'error': f'您已有租用记录，请先释放后再租用',
+                'existing_lock': {
+                    'lock_id': existing_lock.id,
+                    'locked_agents': [a.agent_id for a in existing_lock.agents.all()],
+                    'expire_at': existing_lock.expire_at.isoformat(),
+                    'remaining_seconds': existing_lock.get_remaining_time()
+                }
+            })
+
+        # 检查要租用的 Agent 是否已被其他人租用
+        locked_agent_ids = []
+        for agent_id in agent_ids:
+            try:
+                agent = LocalAgent.objects.get(agent_id=agent_id)
+                # 检查是否被活跃租用锁定
+                is_locked = AgentLock.objects.filter(
+                    status='active',
+                    agents__id=agent.id
+                ).exists()
+                if is_locked:
+                    locked_agent_ids.append(agent_id)
+            except LocalAgent.DoesNotExist:
+                return JsonResponse({'success': False, 'error': f'Agent {agent_id} 不存在'})
+
+        if locked_agent_ids:
+            return JsonResponse({
+                'success': False,
+                'error': f'以下 Agent 已被租用: {", ".join(locked_agent_ids)}'
+            })
+
+        # 创建租用记录
+        expire_at = timezone.now() + timezone.timedelta(hours=DEFAULT_LOCK_DURATION_HOURS)
+        lock = AgentLock.objects.create(
+            user_identifier=user_identifier,
+            client_ip=client_ip,
+            expire_at=expire_at,
+            status='active'
+        )
+
+        # 关联 Agent
+        for agent_id in agent_ids:
+            agent = LocalAgent.objects.get(agent_id=agent_id)
+            lock.agents.add(agent)
+
+        logger.info(f"租用成功: {user_identifier} ({client_ip}) 租用 Agent: {agent_ids}, 过期时间: {expire_at}")
+
+        return JsonResponse({
+            'success': True,
+            'message': f'租用成功，有效期至 {expire_at.strftime("%Y-%m-%d %H:%M:%S")}',
+            'lock': {
+                'lock_id': lock.id,
+                'user_identifier': lock.user_identifier,
+                'client_ip': lock.client_ip,
+                'locked_agents': agent_ids,
+                'locked_at': lock.locked_at.isoformat(),
+                'expire_at': lock.expire_at.isoformat(),
+                'remaining_seconds': lock.get_remaining_time()
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"租用 Agent 失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_agents_unlock(request):
+    """释放租用"""
+    from django.utils import timezone
+    from .models import AgentLock
+
+    try:
+        # 先检查并释放过期的租用
+        check_and_release_expired_locks()
+
+        data = json.loads(request.body)
+        user_identifier = data.get('user_identifier', '').strip()
+
+        if not user_identifier:
+            return JsonResponse({'success': False, 'error': '请输入用户标识符'})
+
+        # 查找该用户的活跃租用
+        locks = AgentLock.objects.filter(
+            user_identifier=user_identifier,
+            status='active'
+        )
+
+        if not locks.exists():
+            # 检查是否有已过期但未标记的租用
+            expired_locks = AgentLock.objects.filter(
+                user_identifier=user_identifier,
+                status='expired'
+            )
+            if expired_locks.exists():
+                return JsonResponse({'success': False, 'error': '您的租用已过期，无需手动释放'})
+            return JsonResponse({'success': False, 'error': '没有找到您的租用记录'})
+
+        # 释放所有租用
+        released_agents = []
+        for lock in locks:
+            released_agents.extend([a.agent_id for a in lock.agents.all()])
+            lock.status = 'released'
+            lock.released_at = timezone.now()
+            lock.save()
+
+        logger.info(f"手动释放租用: {user_identifier}, Agent: {released_agents}")
+
+        return JsonResponse({
+            'success': True,
+            'message': f'已释放租用的 Agent: {", ".join(released_agents)}'
+        })
+
+    except Exception as e:
+        logger.exception(f"释放租用失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_agents_locks(request):
+    """获取所有租用记录"""
+    from .models import AgentLock
+
+    try:
+        # 先检查并释放过期的租用
+        check_and_release_expired_locks()
+
+        locks = AgentLock.objects.filter(status='active').order_by('-locked_at')
+
+        data = []
+        for lock in locks:
+            data.append({
+                'lock_id': lock.id,
+                'user_identifier': lock.user_identifier,
+                'client_ip': lock.client_ip,
+                'locked_agents': [a.agent_id for a in lock.agents.all()],
+                'locked_at': lock.locked_at.isoformat(),
+                'expire_at': lock.expire_at.isoformat(),
+                'remaining_seconds': lock.get_remaining_time(),
+                'status': lock.status
+            })
+
+        return JsonResponse({
+            'success': True,
+            'locks': data,
+            'total': len(data)
+        })
+
+    except Exception as e:
+        logger.exception(f"获取租用记录失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_agents_my_lock(request):
+    """获取指定用户的租用信息"""
+    from .models import AgentLock
+
+    try:
+        # 先检查并释放过期的租用
+        check_and_release_expired_locks()
+
+        user_identifier = request.GET.get('user_identifier', '').strip()
+
+        if not user_identifier:
+            return JsonResponse({'success': True, 'lock': None})
+
+        lock = AgentLock.objects.filter(
+            user_identifier=user_identifier,
+            status='active'
+        ).first()
+
+        if not lock:
+            return JsonResponse({'success': True, 'lock': None})
+
+        return JsonResponse({
+            'success': True,
+            'lock': {
+                'lock_id': lock.id,
+                'user_identifier': lock.user_identifier,
+                'client_ip': lock.client_ip,
+                'locked_agents': [a.agent_id for a in lock.agents.all()],
+                'locked_at': lock.locked_at.isoformat(),
+                'expire_at': lock.expire_at.isoformat(),
+                'remaining_seconds': lock.get_remaining_time()
+            }
+        })
+
+    except Exception as e:
+        logger.exception(f"获取用户租用信息失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
 # ========== 功能 API（代理到 Agent） ==========
 
 @require_http_methods(["POST"])

@@ -33,6 +33,12 @@ urlpatterns = [
     path('api/agents/logs/', views.api_agent_logs, name='api_agent_logs'),
     path('api/agents/config-ip/', views.api_agent_config_ip, name='api_agent_config_ip'),
 
+    # ========== Agent 租用管理 API ==========
+    path('api/agents/lock/', views.api_agents_lock, name='api_agents_lock'),
+    path('api/agents/unlock/', views.api_agents_unlock, name='api_agents_unlock'),
+    path('api/agents/locks/', views.api_agents_locks, name='api_agents_locks'),
+    path('api/agents/my-lock/', views.api_agents_my_lock, name='api_agents_my_lock'),
+
     # ========== 功能 API（代理到 Agent）==========
     path('api/send_packet/', views.api_send_packet, name='api_send_packet'),
     path('api/stop_send/', views.api_stop_send, name='api_stop_send'),

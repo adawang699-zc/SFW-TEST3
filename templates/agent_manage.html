@@ -18,6 +18,50 @@
     </p>
 </div>
 
+<!-- Agent 租用区域 -->
+<div class="card">
+    <div class="card-header">Agent 租用</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <!-- 租用表单 -->
+        <div>
+            <div class="form-group">
+                <label class="form-label">用户标识符</label>
+                <input type="text" id="lock-user-identifier" class="form-input" placeholder="输入您的标识，如 user1、张三">
+            </div>
+            <div class="form-group">
+                <label class="form-label">选择要租用的 Agent（仅运行中的 Agent 可租用）</label>
+                <div id="lock-agent-checkboxes" style="max-height: 150px; overflow-y: auto; padding: 8px; background: var(--bg-dark); border-radius: 8px;">
+                    <p style="color: var(--text-secondary);">加载中...</p>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-primary" onclick="lockAgents()">🔒 租用选中 Agent</button>
+                <button class="btn btn-secondary" onclick="unlockAgents()">🔓 释放我的租用</button>
+            </div>
+            <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 8px;">
+                租用时长: 4 小时，到期后自动释放。请及时释放以便他人使用。
+            </p>
+        </div>
+        <!-- 我的租用状态 -->
+        <div>
+            <div class="form-group">
+                <label class="form-label">我的租用状态</label>
+                <div id="my-lock-status" style="padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                    <p style="color: var(--text-secondary);">输入标识符后查看</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 当前租用列表 -->
+<div class="card">
+    <div class="card-header">当前租用列表</div>
+    <div id="locks-list">
+        <p style="color: var(--text-secondary);">加载中...</p>
+    </div>
+</div>
+
 <!-- 配置 IP 模态框 -->
 <div id="config-ip-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000;">
     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); padding: 24px; border-radius: 16px; width: 400px;">
@@ -63,6 +107,8 @@
 {% block extra_js %}
 <script>
 let selectedAgent = null;
+let allAgents = [];
+let allLocks = [];
 
 // 扫描网卡 - 同时自动创建 Agent
 async function scanInterfaces() {
@@ -75,29 +121,26 @@ async function scanInterfaces() {
             // 2. 获取网卡列表
             const listResult = await apiRequest('/api/interfaces/list/');
             if (listResult.interfaces) {
-                // 3. 为所有非管理网卡自动创建 Agent（包括没有 IP 的网卡）
+                // 3. 为所有非管理网卡自动创建 Agent
                 for (const iface of listResult.interfaces) {
                     if (!iface.is_management) {
-                        // 检查是否已有 Agent
                         const agentsResult = await apiRequest('/api/agents/list/');
                         const existingAgent = agentsResult.agents?.find(a => a.interface_name === iface.name);
 
                         if (!existingAgent) {
-                            // 自动创建 Agent（即使网卡没有 IP）
                             try {
                                 await apiRequest('/api/agents/create/', 'POST', {
                                     interface_name: iface.name
                                 });
                             } catch (e) {
-                                // 如果创建失败（可能因为没有 IP），仍然记录但不报错
                                 console.log(`创建 Agent ${iface.name} 失败: ${e.message}`);
                             }
                         }
                     }
                 }
 
-                // 4. 刷新 Agent 列表
-                await loadAgents();
+                // 4. 刷新所有数据
+                await loadAllData();
             }
         } else {
             showToast('扫描失败: ' + scanResult.error, 'error');
@@ -109,7 +152,17 @@ async function scanInterfaces() {
 
 // 刷新状态
 async function refreshStatus() {
-    await loadAgents();
+    await loadAllData();
+}
+
+// 加载所有数据
+async function loadAllData() {
+    await Promise.all([
+        loadAgents(),
+        loadLocks(),
+        loadMyLock()
+    ]);
+    updateLockAgentCheckboxes();
 }
 
 // 加载 Agent 列表
@@ -117,10 +170,194 @@ async function loadAgents() {
     try {
         const result = await apiRequest('/api/agents/list/');
         if (result.agents) {
+            allAgents = result.agents;
             renderAgents(result.agents);
         }
     } catch (e) {
         console.error('加载 Agent 失败:', e);
+    }
+}
+
+// 加载租用列表
+async function loadLocks() {
+    try {
+        const result = await apiRequest('/api/agents/locks/');
+        if (result.success) {
+            allLocks = result.locks || [];
+            renderLocks(allLocks);
+        }
+    } catch (e) {
+        console.error('加载租用列表失败:', e);
+    }
+}
+
+// 加载我的租用状态
+async function loadMyLock() {
+    const userIdentifier = document.getElementById('lock-user-identifier').value.trim();
+    const container = document.getElementById('my-lock-status');
+
+    if (!userIdentifier) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">输入标识符后查看</p>';
+        return;
+    }
+
+    try {
+        const result = await apiRequest(`/api/agents/my-lock/?user_identifier=${encodeURIComponent(userIdentifier)}`);
+        if (result.success) {
+            if (result.lock) {
+                const remainingMinutes = Math.floor(result.lock.remaining_seconds / 60);
+                const expireTime = new Date(result.lock.expire_at).toLocaleString('zh-CN');
+                container.innerHTML = `
+                    <div style="color: var(--success);">
+                        <strong>已租用 Agent:</strong> ${result.lock.locked_agents.join(', ')}<br>
+                        <strong>租用时间:</strong> ${new Date(result.lock.locked_at).toLocaleString('zh-CN')}<br>
+                        <strong>到期时间:</strong> ${expireTime}<br>
+                        <strong>剩余时间:</strong> ${remainingMinutes} 分钟<br>
+                        <strong>客户端 IP:</strong> ${result.lock.client_ip}
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '<p style="color: var(--text-secondary);">当前无租用记录</p>';
+            }
+        }
+    } catch (e) {
+        console.error('加载我的租用失败:', e);
+    }
+}
+
+// 渲染租用列表
+function renderLocks(locks) {
+    const container = document.getElementById('locks-list');
+
+    if (locks.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">当前无活跃租用</p>';
+        return;
+    }
+
+    let html = '<table class="table"><thead><tr><th>用户</th><th>客户端 IP</th><th>租用的 Agent</th><th>租用时间</th><th>到期时间</th><th>剩余时间</th></tr></thead><tbody>';
+
+    locks.forEach(lock => {
+        const remainingMinutes = Math.floor(lock.remaining_seconds / 60);
+        const lockedTime = new Date(lock.locked_at).toLocaleString('zh-CN');
+        const expireTime = new Date(lock.expire_at).toLocaleString('zh-CN');
+
+        html += `
+            <tr>
+                <td><strong>${lock.user_identifier}</strong></td>
+                <td>${lock.client_ip}</td>
+                <td>${lock.locked_agents.join(', ')}</td>
+                <td>${lockedTime}</td>
+                <td>${expireTime}</td>
+                <td><span class="status-badge status-running">${remainingMinutes} 分钟</span></td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+// 更新租用 Agent 选择框
+function updateLockAgentCheckboxes() {
+    const container = document.getElementById('lock-agent-checkboxes');
+
+    // 找出已被租用的 Agent
+    const lockedAgentIds = new Set();
+    allLocks.forEach(lock => {
+        lock.locked_agents.forEach(agentId => lockedAgentIds.add(agentId));
+    });
+
+    // 只显示运行中的 Agent
+    const runningAgents = allAgents.filter(a => a.status === 'running');
+
+    if (runningAgents.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
+        return;
+    }
+
+    let html = '';
+    runningAgents.forEach(agent => {
+        const isLocked = lockedAgentIds.has(agent.agent_id);
+        const disabled = isLocked ? 'disabled' : '';
+        const lockedBy = isLocked ? allLocks.find(l => l.locked_agents.includes(agent.agent_id))?.user_identifier : '';
+        const style = isLocked ? 'opacity: 0.5;' : '';
+        const label = isLocked ? `${agent.agent_id} (已被 ${lockedBy} 租用)` : agent.agent_id;
+
+        html += `
+            <div style="padding: 4px 0; ${style}">
+                <input type="checkbox" id="lock-cb-${agent.agent_id}" value="${agent.agent_id}" ${disabled}>
+                <label for="lock-cb-${agent.agent_id}" style="color: ${isLocked ? 'var(--text-muted)' : 'var(--text-primary)'};">
+                    ${label}
+                </label>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// 租用 Agent
+async function lockAgents() {
+    const userIdentifier = document.getElementById('lock-user-identifier').value.trim();
+
+    if (!userIdentifier) {
+        showToast('请输入用户标识符', 'error');
+        return;
+    }
+
+    // 获取选中的 Agent
+    const checkboxes = document.querySelectorAll('#lock-agent-checkboxes input[type="checkbox"]:checked');
+    const agentIds = Array.from(checkboxes).map(cb => cb.value);
+
+    if (agentIds.length === 0) {
+        showToast('请选择要租用的 Agent', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/agents/lock/', 'POST', {
+            user_identifier: userIdentifier,
+            agent_ids: agentIds
+        });
+
+        if (result.success) {
+            showToast(result.message);
+            await loadAllData();
+        } else {
+            showToast('租用失败: ' + result.error, 'error');
+            if (result.existing_lock) {
+                // 显示已有租用信息
+                const remainingMinutes = Math.floor(result.existing_lock.remaining_seconds / 60);
+                showToast(`您已有租用: ${result.existing_lock.locked_agents.join(', ')}, 剩余 ${remainingMinutes} 分钟`, 'error');
+            }
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// 释放租用
+async function unlockAgents() {
+    const userIdentifier = document.getElementById('lock-user-identifier').value.trim();
+
+    if (!userIdentifier) {
+        showToast('请输入用户标识符', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/agents/unlock/', 'POST', {
+            user_identifier: userIdentifier
+        });
+
+        if (result.success) {
+            showToast(result.message);
+            await loadAllData();
+        } else {
+            showToast('释放失败: ' + result.error, 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
@@ -133,13 +370,29 @@ function renderAgents(agents) {
         return;
     }
 
-    let html = '<table class="table"><thead><tr><th>Agent ID</th><th>网卡</th><th>IP</th><th>端口</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+    // 找出已被租用的 Agent
+    const lockedAgentIds = new Set();
+    const lockInfo = {};
+    allLocks.forEach(lock => {
+        lock.locked_agents.forEach(agentId => {
+            lockedAgentIds.add(agentId);
+            lockInfo[agentId] = lock;
+        });
+    });
+
+    let html = '<table class="table"><thead><tr><th>Agent ID</th><th>网卡</th><th>IP</th><th>端口</th><th>运行状态</th><th>租用状态</th><th>操作</th></tr></thead><tbody>';
 
     agents.forEach(agent => {
         const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
         const statusText = agent.status === 'running' ? '运行中' : '已停止';
         const isRunning = agent.status === 'running';
         const currentIp = agent.ip_address || '';
+
+        // 租用状态
+        const isLocked = lockedAgentIds.has(agent.agent_id);
+        const lockStatusHtml = isLocked ?
+            `<span class="status-badge" style="background: rgba(255, 107, 53, 0.2); color: var(--primary);">已租用(${lockInfo[agent.agent_id]?.user_identifier})</span>` :
+            `<span class="status-badge status-stopped">空闲</span>`;
 
         html += `
             <tr>
@@ -148,6 +401,7 @@ function renderAgents(agents) {
                 <td>${agent.ip_address || '未配置'}</td>
                 <td>${agent.port}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td>${lockStatusHtml}</td>
                 <td>
                     ${isRunning ?
                         `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>
@@ -175,7 +429,7 @@ async function startAgent(agentId) {
 
         if (result.success) {
             showToast(`Agent ${agentId} 启动成功`);
-            await loadAgents();
+            await loadAllData();
         } else {
             showToast('启动失败: ' + result.error, 'error');
         }
@@ -193,7 +447,7 @@ async function stopAgent(agentId) {
 
         if (result.success) {
             showToast(`Agent ${agentId} 已停止`);
-            await loadAgents();
+            await loadAllData();
         } else {
             showToast('停止失败: ' + result.error, 'error');
         }
@@ -233,6 +487,7 @@ function showToast(message, type = 'success') {
         border-radius: 8px;
         z-index: 9999;
         animation: fadeIn 0.3s;
+        max-width: 300px;
     `;
     toast.textContent = message;
     document.body.appendChild(toast);
@@ -244,7 +499,6 @@ function showToast(message, type = 'success') {
 
 let configAgentId = null;
 
-// 显示配置 IP 模态框（回显当前 IP）
 function showConfigIPModal(agentId, interfaceName, currentIp) {
     configAgentId = agentId;
     document.getElementById('config-agent-id').value = agentId;
@@ -254,16 +508,13 @@ function showConfigIPModal(agentId, interfaceName, currentIp) {
     document.getElementById('config-ip-modal').style.display = 'block';
 }
 
-// 关闭配置 IP 模态框
 function closeConfigModal() {
     document.getElementById('config-ip-modal').style.display = 'none';
     configAgentId = null;
 }
 
-// 确认配置 IP
 async function confirmConfigIP() {
     const agentId = document.getElementById('config-agent-id').value;
-    const interfaceName = document.getElementById('config-interface-name').value;
     const ipAddress = document.getElementById('config-ip-address').value;
     const netmask = document.getElementById('config-netmask').value;
 
@@ -282,7 +533,7 @@ async function confirmConfigIP() {
         if (result.success) {
             showToast(result.message);
             closeConfigModal();
-            await loadAgents();
+            await loadAllData();
         } else {
             showToast('配置失败: ' + result.error, 'error');
         }
@@ -291,9 +542,11 @@ async function confirmConfigIP() {
     }
 }
 
+// 监听标识符输入变化
+document.getElementById('lock-user-identifier').addEventListener('input', loadMyLock);
+
 // 页面加载时自动扫描并加载 Agent 数据
 window.onload = async function() {
-    // 先扫描网卡（自动创建 Agent）
     await scanInterfaces();
 };
 </script>
