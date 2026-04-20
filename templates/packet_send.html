@@ -1,6 +1,126 @@
 {% extends 'base.html' %}
 {% block title %}报文发送{% endblock %}
 
+{% block extra_css %}
+<style>
+/* Agent 卡片选中效果 */
+.agent-card {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.agent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.agent-card.selected {
+    border-color: var(--primary) !important;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(255, 107, 53, 0.05) 100%);
+    box-shadow: 0 4px 16px rgba(255, 107, 53, 0.25);
+}
+
+.agent-card.selected::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--primary-light));
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 协议标签页 */
+.protocol-tab {
+    transition: all 0.2s ease;
+    border-radius: 8px 8px 0 0;
+    padding: 10px 20px;
+}
+
+.protocol-tab:hover {
+    background: rgba(255, 107, 53, 0.1);
+}
+
+.protocol-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* 发送按钮动画 */
+.btn-send {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-send:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+.btn-send:active {
+    transform: translateY(0);
+}
+
+.btn-send::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s, height 0.3s;
+}
+
+.btn-send:hover::after {
+    width: 200px;
+    height: 200px;
+}
+
+/* 输入框聚焦效果 */
+.form-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.2);
+    transition: all 0.2s ease;
+}
+
+/* 统计卡片动画 */
+.stat-card {
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: scale(1.05);
+}
+
+/* 日志条目 */
+.log-entry {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="card">
     <div class="card-header">
@@ -436,6 +556,46 @@ let agents = [];
 let currentProtocol = 'tcp';
 let sendingInterval = null;
 let statsInterval = null;
+let agentMacAddress = '';
+let agentIpAddress = '';
+
+// 填充默认值
+function fillDefaultValues() {
+    // TCP 默认值
+    if (agentMacAddress) {
+        document.getElementById('tcp-src-mac').value = agentMacAddress;
+        document.getElementById('tcp-use-local-mac').checked = true;
+    }
+    if (agentIpAddress) {
+        document.getElementById('tcp-src-ip').value = agentIpAddress;
+    }
+
+    // UDP 默认值
+    if (agentMacAddress) {
+        document.getElementById('udp-src-mac').value = agentMacAddress;
+        document.getElementById('udp-use-local-mac').checked = true;
+    }
+    if (agentIpAddress) {
+        document.getElementById('udp-src-ip').value = agentIpAddress;
+    }
+
+    // ICMP 默认值
+    if (agentMacAddress) {
+        document.getElementById('icmp-src-mac').value = agentMacAddress;
+        document.getElementById('icmp-use-local-mac').checked = true;
+    }
+    if (agentIpAddress) {
+        document.getElementById('icmp-src-ip').value = agentIpAddress;
+    }
+
+    // ARP 默认值
+    if (agentMacAddress) {
+        document.getElementById('arp-src-mac').value = agentMacAddress;
+    }
+    if (agentIpAddress) {
+        document.getElementById('arp-src-ip').value = agentIpAddress;
+    }
+}
 
 // 加载 Agent 列表
 async function loadAgents() {
@@ -474,13 +634,25 @@ async function loadAgents() {
 }
 
 // 选择 Agent
-function selectAgent(agentId) {
+async function selectAgent(agentId) {
     selectedAgent = agents.find(a => a.agent_id === agentId);
     if (!selectedAgent) return;
 
-    // 更新选中样式
+    // 更新选中样式（带动画）
     document.querySelectorAll('.agent-card').forEach(card => {
-        card.style.borderColor = card.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+        card.classList.remove('selected');
+        if (card.dataset.agentId === agentId) {
+            card.classList.add('selected');
+            // 添加选中动画
+            card.style.transform = 'scale(1.02)';
+            card.style.boxShadow = '0 4px 12px rgba(255, 107, 53, 0.3)';
+            setTimeout(() => {
+                card.style.transform = 'scale(1)';
+            }, 200);
+        } else {
+            card.style.transform = 'scale(1)';
+            card.style.boxShadow = 'none';
+        }
     });
 
     // 显示选中信息
@@ -489,6 +661,27 @@ function selectAgent(agentId) {
     document.getElementById('selected-agent-interface').textContent = selectedAgent.interface_name;
 
     addLog('选中 Agent: ' + selectedAgent.agent_id + ' (' + selectedAgent.interface_name + ')');
+
+    // 获取 Agent 网卡信息并填充默认值
+    try {
+        const resp = await fetch(`http://${selectedAgent.ip_address}:${selectedAgent.port}/api/interfaces`);
+        const data = await resp.json();
+        if (data.success && data.interfaces && data.interfaces.length > 0) {
+            // 找到绑定的网卡
+            const iface = data.interfaces.find(i => i.name === selectedAgent.interface_name) || data.interfaces[0];
+            agentMacAddress = iface.mac || '';
+            agentIpAddress = iface.ip || selectedAgent.ip_address;
+
+            // 填充默认值
+            fillDefaultValues();
+            addLog('获取网卡信息: MAC=' + agentMacAddress + ', IP=' + agentIpAddress);
+        }
+    } catch (e) {
+        // 使用 Agent IP 作为默认
+        agentIpAddress = selectedAgent.ip_address;
+        fillDefaultValues();
+        addLog('使用 Agent IP 作为默认源IP: ' + agentIpAddress);
+    }
 }
 
 // 切换协议
