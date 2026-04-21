@@ -121,11 +121,14 @@ async function scanInterfaces() {
             // 2. 获取网卡列表
             const listResult = await apiRequest('/api/interfaces/list/');
             if (listResult.interfaces) {
-                // 3. 为所有非管理网卡自动创建 Agent
+                // 3. 一次性获取已存在的 Agent 列表（避免重复调用）
+                const agentsResult = await apiRequest('/api/agents/list/');
+                const existingAgents = agentsResult.agents || [];
+
+                // 4. 为所有非管理网卡自动创建 Agent（如果不存在）
                 for (const iface of listResult.interfaces) {
                     if (!iface.is_management) {
-                        const agentsResult = await apiRequest('/api/agents/list/');
-                        const existingAgent = agentsResult.agents?.find(a => a.interface_name === iface.name);
+                        const existingAgent = existingAgents.find(a => a.interface_name === iface.name);
 
                         if (!existingAgent) {
                             try {
@@ -139,7 +142,7 @@ async function scanInterfaces() {
                     }
                 }
 
-                // 4. 刷新所有数据
+                // 5. 刷新所有数据
                 await loadAllData();
             }
         } else {
@@ -588,9 +591,15 @@ async function confirmConfigIP() {
 // 监听标识符输入变化
 document.getElementById('lock-user-identifier').addEventListener('input', loadMyLock);
 
-// 页面加载时自动扫描并加载 Agent 数据
+// 页面加载时：先加载现有数据，如果无Agent则扫描
 window.onload = async function() {
-    await scanInterfaces();
+    // 先加载现有 Agent
+    await loadAllData();
+
+    // 如果没有 Agent，则扫描网卡并创建
+    if (allAgents.length === 0) {
+        await scanInterfaces();
+    }
 };
 </script>
 {% endblock %}
