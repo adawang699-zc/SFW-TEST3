@@ -578,6 +578,52 @@ async function selectAgent(agentId) {
     // 获取网卡信息并填充默认值
     agentIp = selectedAgent.ip_address;
     await fillDefaultValues();
+
+    // 查询 Agent 当前发送状态
+    await checkAgentSendingStatus();
+}
+
+// 检查 Agent 是否正在发送报文
+async function checkAgentSendingStatus() {
+    if (!selectedAgent) return;
+
+    try {
+        const result = await apiRequest('/api/agents/status/?agent_id=' + selectedAgent.agent_id);
+
+        if (result.success && result.statistics) {
+            const stats = result.statistics;
+            const isSending = stats.rate > 0 || stats.total_sent > 0;
+
+            if (isSending) {
+                // Agent 正在发送，显示停止按钮并开始统计更新
+                document.getElementById('stop-btn').style.display = 'inline-block';
+                addLog(`Agent 正在发送: 已发送 ${stats.total_sent} 包, 速率 ${stats.rate} 包/秒`);
+
+                // 开始更新统计
+                if (!statsInterval) {
+                    statsInterval = setInterval(updateStats, 500);
+                }
+
+                // 立即更新一次统计显示
+                document.getElementById('stat-sent').textContent = stats.total_sent || 0;
+                document.getElementById('stat-rate').textContent = Math.round(stats.rate || 0);
+                document.getElementById('stat-bandwidth').textContent = Math.round((stats.bandwidth || 0) / 1024);
+            } else {
+                // Agent 不在发送，隐藏停止按钮
+                document.getElementById('stop-btn').style.display = 'none';
+                if (statsInterval) {
+                    clearInterval(statsInterval);
+                    statsInterval = null;
+                }
+                // 重置统计显示
+                document.getElementById('stat-sent').textContent = '0';
+                document.getElementById('stat-rate').textContent = '0';
+                document.getElementById('stat-bandwidth').textContent = '0';
+            }
+        }
+    } catch (e) {
+        console.error('查询 Agent 状态失败:', e);
+    }
 }
 
 // 填充默认值
@@ -885,9 +931,20 @@ async function updateStats() {
     try {
         const result = await apiRequest('/api/agents/status/?agent_id=' + selectedAgent.agent_id);
         if (result.statistics) {
-            document.getElementById('stat-sent').textContent = result.statistics.total_sent || 0;
-            document.getElementById('stat-rate').textContent = Math.round(result.statistics.rate || 0);
-            document.getElementById('stat-bandwidth').textContent = Math.round((result.statistics.bandwidth || 0) / 1024);
+            const stats = result.statistics;
+            document.getElementById('stat-sent').textContent = stats.total_sent || 0;
+            document.getElementById('stat-rate').textContent = Math.round(stats.rate || 0);
+            document.getElementById('stat-bandwidth').textContent = Math.round((stats.bandwidth || 0) / 1024);
+
+            // 如果发送速率变为 0，说明发送已停止，隐藏停止按钮
+            if (stats.rate === 0 && stats.total_sent > 0) {
+                document.getElementById('stop-btn').style.display = 'none';
+                if (statsInterval) {
+                    clearInterval(statsInterval);
+                    statsInterval = null;
+                }
+                addLog('发送已完成，共发送 ' + stats.total_sent + ' 包');
+            }
         }
     } catch (e) {}
 }
