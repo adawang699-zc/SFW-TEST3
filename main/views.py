@@ -161,6 +161,13 @@ def packet_send(request):
     return render(request, 'packet_send.html', context)
 
 
+def service_deploy(request):
+    """服务下发页面"""
+    agents = LocalAgent.objects.filter(status='running')
+    context = {'agents': agents}
+    return render(request, 'service_deploy.html', context)
+
+
 def industrial_protocol(request):
     """工控协议页面"""
     agents = LocalAgent.objects.filter(status='running')
@@ -3109,4 +3116,139 @@ def api_device_coredump_list(request):
 
     except Exception as e:
         logger.exception(f"获取 coredump 文件列表失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ==================== 服务下发功能 ====================
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_services_listener(request):
+    """监听服务下发API - 转发到指定Agent"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+
+        if not agent_id:
+            return JsonResponse({'success': False, 'error': '缺少 agent_id'})
+
+        # 获取Agent信息
+        from .models import LocalAgent
+        agent = LocalAgent.objects.filter(agent_id=agent_id).first()
+        if not agent:
+            return JsonResponse({'success': False, 'error': 'Agent不存在'})
+
+        if not agent.interface.ip_address:
+            return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
+
+        # 转发请求到Agent
+        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/listener"
+        resp = requests.post(agent_url, json=data, timeout=10)
+
+        return JsonResponse(resp.json())
+
+    except requests.exceptions.Timeout:
+        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
+    except Exception as e:
+        logger.exception(f"监听服务下发失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_services_client(request):
+    """客户端服务下发API - 转发到指定Agent"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+
+        if not agent_id:
+            return JsonResponse({'success': False, 'error': '缺少 agent_id'})
+
+        # 获取Agent信息
+        from .models import LocalAgent
+        agent = LocalAgent.objects.filter(agent_id=agent_id).first()
+        if not agent:
+            return JsonResponse({'success': False, 'error': 'Agent不存在'})
+
+        if not agent.interface.ip_address:
+            return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
+
+        # 转发请求到Agent
+        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/client"
+        resp = requests.post(agent_url, json=data, timeout=10)
+
+        return JsonResponse(resp.json())
+
+    except requests.exceptions.Timeout:
+        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
+    except Exception as e:
+        logger.exception(f"客户端服务下发失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_services_status(request):
+    """获取Agent服务状态"""
+    try:
+        agent_id = request.GET.get('agent_id')
+
+        if not agent_id:
+            return JsonResponse({'success': False, 'error': '缺少 agent_id'})
+
+        # 获取Agent信息
+        from .models import LocalAgent
+        agent = LocalAgent.objects.filter(agent_id=agent_id).first()
+        if not agent:
+            return JsonResponse({'success': False, 'error': 'Agent不存在'})
+
+        if not agent.interface.ip_address:
+            return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
+
+        # 转发请求到Agent
+        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/status"
+        resp = requests.get(agent_url, timeout=5)
+
+        return JsonResponse(resp.json())
+
+    except requests.exceptions.Timeout:
+        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
+    except Exception as e:
+        logger.exception(f"获取服务状态失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_services_logs(request):
+    """获取Agent服务日志"""
+    try:
+        agent_id = request.GET.get('agent_id')
+        protocol = request.GET.get('protocol', '')
+        limit = int(request.GET.get('limit', 100))
+
+        if not agent_id:
+            return JsonResponse({'success': False, 'error': '缺少 agent_id'})
+
+        # 获取Agent信息
+        from .models import LocalAgent
+        agent = LocalAgent.objects.filter(agent_id=agent_id).first()
+        if not agent:
+            return JsonResponse({'success': False, 'error': 'Agent不存在'})
+
+        if not agent.interface.ip_address:
+            return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
+
+        # 转发请求到Agent
+        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/logs"
+        params = {'limit': limit}
+        if protocol:
+            params['protocol'] = protocol
+        resp = requests.get(agent_url, params=params, timeout=5)
+
+        return JsonResponse(resp.json())
+
+    except requests.exceptions.Timeout:
+        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
+    except Exception as e:
+        logger.exception(f"获取服务日志失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})

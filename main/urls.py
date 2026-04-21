@@ -13,6 +13,7 @@ urlpatterns = [
     path('agent-manage/', views.agent_manage, name='agent_manage'),
     path('device-monitor/', views.device_monitor, name='device_monitor'),
     path('packet-send/', views.packet_send, name='packet_send'),
+    path('service-deploy/', views.service_deploy, name='service_deploy'),
     path('industrial-protocol/', views.industrial_protocol, name='industrial_protocol'),
     path('port-scan/', views.port_scan, name='port_scan'),
     path('packet-replay/', views.packet_replay, name='packet_replay'),
@@ -53,6 +54,12 @@ urlpatterns = [
     path('api/start_replay/', views.api_start_replay, name='api_start_replay'),
     path('api/stop_replay/', views.api_stop_replay, name='api_stop_replay'),
     path('api/replay_stats/', views.api_replay_stats, name='api_replay_stats'),
+
+    # ========== 服务下发 API ==========
+    path('api/services/listener/', views.api_services_listener, name='api_services_listener'),
+    path('api/services/client/', views.api_services_client, name='api_services_client'),
+    path('api/services/status/', views.api_services_status, name='api_services_status'),
+    path('api/services/logs/', views.api_services_logs, name='api_services_logs'),
 
     # ========== 测试设备 API ==========
     path('api/devices/list/', views.api_device_list, name='api_device_list'),

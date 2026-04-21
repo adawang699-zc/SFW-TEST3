@@ -1,0 +1,810 @@
+{% extends 'base.html' %}
+{% block title %}服务下发{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Agent 卡片选中效果 */
+.agent-card {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.agent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.agent-card.selected {
+    border-color: var(--primary) !important;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(255, 107, 53, 0.05) 100%);
+    box-shadow: 0 4px 16px rgba(255, 107, 53, 0.3);
+}
+
+.agent-card.selected::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--primary-light));
+}
+
+/* 服务类型标签页 */
+.service-type-tab {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 0.95rem;
+}
+
+.service-type-tab:hover {
+    background: rgba(255, 107, 53, 0.15);
+}
+
+.service-type-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* 协议标签页 */
+.protocol-tab {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+.protocol-tab:hover {
+    background: rgba(255, 107, 53, 0.15);
+}
+
+.protocol-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* 操作按钮 */
+.btn-action {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.35);
+}
+
+.btn-stop {
+    background: linear-gradient(135deg, var(--danger), #b00000);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-stop:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(208, 0, 0, 0.35);
+}
+
+/* 输入框 */
+.form-input {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+    outline: none;
+}
+
+/* 配置卡片 */
+.config-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+/* 状态指示 */
+.status-running {
+    color: var(--success);
+}
+
+.status-stopped {
+    color: var(--danger);
+}
+
+/* 连接列表 */
+.connection-item {
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    padding: 10px;
+    margin: 6px 0;
+}
+
+/* 日志区域 */
+.log-entry {
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin: 4px 0;
+    font-size: 0.85rem;
+}
+
+.log-info { background: rgba(0, 255, 0, 0.1); color: var(--success); }
+.log-error { background: rgba(255, 0, 0, 0.1); color: var(--danger); }
+.log-warning { background: rgba(255, 165, 0, 0.1); color: var(--warning); }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 页面标题 -->
+<div class="card">
+    <div class="card-header">
+        <span style="font-size: 1.1rem;">服务下发</span>
+    </div>
+</div>
+
+<!-- Agent 选择 -->
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>选择已租用的 Agent（当前 IP: <span id="client-ip-info" style="color: var(--primary);">加载中...</span>）</span>
+            <button class="btn btn-secondary" onclick="loadAgents()">刷新</button>
+        </div>
+    </div>
+    <div id="agent-selector" style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <span style="color: var(--text-muted);">加载中...</span>
+    </div>
+    <div id="selected-agent-info" style="margin-top: 12px; padding: 10px; background: var(--bg-secondary); border-radius: 6px; display: none;">
+        <span style="color: var(--success);">已选择:</span>
+        <span id="selected-agent-name" style="font-weight: 600;"></span>
+        <span style="color: var(--text-muted); margin-left: 12px;">IP: <span id="selected-agent-ip"></span></span>
+    </div>
+</div>
+
+<!-- 服务类型选择 -->
+<div class="card">
+    <div class="card-header">
+        <span>服务类型</span>
+    </div>
+    <div style="display: flex; gap: 12px; padding: 12px;">
+        <button class="service-type-tab active" onclick="selectServiceType('listener')">监听服务</button>
+        <button class="service-type-tab" onclick="selectServiceType('client')">客户端服务</button>
+    </div>
+</div>
+
+<!-- 协议选择 -->
+<div class="card">
+    <div class="card-header">
+        <span>协议选择</span>
+    </div>
+    <div id="protocol-tabs" style="display: flex; gap: 12px; padding: 12px;">
+        <button class="protocol-tab active" onclick="selectProtocol('tcp')">TCP</button>
+        <button class="protocol-tab" onclick="selectProtocol('udp')">UDP</button>
+        <button class="protocol-tab" onclick="selectProtocol('ftp')">FTP</button>
+        <button class="protocol-tab" onclick="selectProtocol('http')">HTTP</button>
+        <button class="protocol-tab" onclick="selectProtocol('mail')">Mail</button>
+    </div>
+</div>
+
+<!-- 配置区域 -->
+<div class="card">
+    <div class="card-header">
+        <span id="config-title">TCP 监听配置</span>
+    </div>
+    <div id="config-area" class="config-card">
+        <!-- TCP监听配置 -->
+        <div id="tcp-listener-config">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听地址</label>
+                    <input type="text" id="tcp-listener-host" class="form-input" value="0.0.0.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听端口</label>
+                    <input type="number" id="tcp-listener-port" class="form-input" value="8080" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- UDP监听配置 -->
+        <div id="udp-listener-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听地址</label>
+                    <input type="text" id="udp-listener-host" class="form-input" value="0.0.0.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听端口</label>
+                    <input type="number" id="udp-listener-port" class="form-input" value="8080" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- FTP服务器配置 -->
+        <div id="ftp-listener-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听地址</label>
+                    <input type="text" id="ftp-listener-host" class="form-input" value="0.0.0.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听端口</label>
+                    <input type="number" id="ftp-listener-port" class="form-input" value="21" style="width: 100%;">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 12px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">用户名</label>
+                    <input type="text" id="ftp-username" class="form-input" value="tdhx" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">密码</label>
+                    <input type="text" id="ftp-password" class="form-input" value="tdhx@2017" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">共享目录</label>
+                    <input type="text" id="ftp-directory" class="form-input" value="" placeholder="默认/opt/packet_agent" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- HTTP服务器配置 -->
+        <div id="http-listener-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听地址</label>
+                    <input type="text" id="http-listener-host" class="form-input" value="0.0.0.0" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">监听端口</label>
+                    <input type="number" id="http-listener-port" class="form-input" value="80" style="width: 100%;">
+                </div>
+            </div>
+            <div style="margin-top: 12px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">Web根目录</label>
+                <input type="text" id="http-directory" class="form-input" value="" placeholder="默认/opt/packet_agent/http" style="width: 100%;">
+            </div>
+        </div>
+
+        <!-- Mail服务器配置 -->
+        <div id="mail-listener-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">SMTP端口</label>
+                    <input type="number" id="smtp-port" class="form-input" value="25" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">IMAP端口</label>
+                    <input type="number" id="imap-port" class="form-input" value="143" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">POP3端口</label>
+                    <input type="number" id="pop3-port" class="form-input" value="110" style="width: 100%;">
+                </div>
+            </div>
+            <div style="margin-top: 12px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">邮件域</label>
+                <input type="text" id="mail-domain" class="form-input" value="autotest.com" style="width: 100%;">
+            </div>
+        </div>
+
+        <!-- TCP客户端配置 -->
+        <div id="tcp-client-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器IP</label>
+                    <input type="text" id="tcp-client-server-ip" class="form-input" placeholder="如: 192.168.1.100" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器端口</label>
+                    <input type="number" id="tcp-client-server-port" class="form-input" value="8080" style="width: 100%;">
+                </div>
+            </div>
+            <div style="margin-top: 12px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">发送数据（可选）</label>
+                <input type="text" id="tcp-client-message" class="form-input" placeholder="HEX格式或文本" style="width: 100%;">
+            </div>
+        </div>
+
+        <!-- UDP客户端配置 -->
+        <div id="udp-client-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器IP</label>
+                    <input type="text" id="udp-client-server-ip" class="form-input" placeholder="如: 192.168.1.100" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器端口</label>
+                    <input type="number" id="udp-client-server-port" class="form-input" value="8080" style="width: 100%;">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">发送数据</label>
+                    <input type="text" id="udp-client-message" class="form-input" placeholder="HEX格式或文本" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">发送间隔(秒)</label>
+                    <input type="number" id="udp-client-interval" class="form-input" value="1" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- FTP客户端配置 -->
+        <div id="ftp-client-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器IP</label>
+                    <input type="text" id="ftp-client-server-ip" class="form-input" placeholder="如: 192.168.1.100" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器端口</label>
+                    <input type="number" id="ftp-client-server-port" class="form-input" value="21" style="width: 100%;">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">用户名</label>
+                    <input type="text" id="ftp-client-username" class="form-input" value="tdhx" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">密码</label>
+                    <input type="text" id="ftp-client-password" class="form-input" value="tdhx@2017" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+
+        <!-- HTTP客户端配置 -->
+        <div id="http-client-config" style="display: none;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器IP</label>
+                    <input type="text" id="http-client-server-ip" class="form-input" placeholder="如: 192.168.1.100" style="width: 100%;">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 6px; color: var(--text-muted);">服务器端口</label>
+                    <input type="number" id="http-client-server-port" class="form-input" value="80" style="width: 100%;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div style="padding: 16px; display: flex; gap: 12px;">
+        <button class="btn-action" onclick="startService()">启动服务</button>
+        <button class="btn-stop" id="stop-btn" onclick="stopService()" style="display: none;">停止服务</button>
+        <button class="btn btn-secondary" onclick="refreshStatus()">刷新状态</button>
+    </div>
+</div>
+
+<!-- 服务状态 -->
+<div class="card">
+    <div class="card-header">
+        <span>服务状态</span>
+    </div>
+    <div id="service-status" style="padding: 16px;">
+        <div style="color: var(--text-muted);">请先选择 Agent</div>
+    </div>
+</div>
+
+<!-- 操作日志 -->
+<div class="card">
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>操作日志</span>
+            <button class="btn btn-secondary btn-sm" onclick="clearLogs()">清空</button>
+        </div>
+    </div>
+    <div id="operation-log" style="padding: 16px; max-height: 300px; overflow-y: auto; font-size: 0.85rem;">
+        <div style="color: var(--text-muted);">等待操作...</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedAgent = null;
+let agents = [];
+let currentServiceType = 'listener';
+let currentProtocol = 'tcp';
+let statusInterval = null;
+
+// 页面加载
+window.onload = function() {
+    loadAgents();
+};
+
+// 加载Agent列表
+async function loadAgents() {
+    try {
+        const result = await apiRequest('/api/agents/my-rented/');
+        const container = document.getElementById('agent-selector');
+
+        const clientIpInfo = document.getElementById('client-ip-info');
+        if (clientIpInfo) {
+            clientIpInfo.textContent = result.client_ip || '未知';
+        }
+
+        if (!result.has_rental) {
+            container.innerHTML = `
+                <div style="padding: 16px; text-align: center;">
+                    <div style="color: var(--warning);">当前 IP 无租用记录</div>
+                    <div style="color: var(--text-muted); margin-top: 8px;">
+                        请在 <a href="/agent-manage/" style="color: var(--primary);">Agent 管理</a> 页面租用 Agent
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        agents = result.agents || [];
+
+        if (agents.length > 0) {
+            agents.sort((a, b) => {
+                const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
+                const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
+                return numA - numB;
+            });
+
+            let html = '';
+            agents.forEach(agent => {
+                const isRunning = agent.status === 'running';
+                const hasIp = agent.has_ip && agent.ip_address;
+                const canUse = isRunning && hasIp;
+
+                let statusText = isRunning ? '运行中' : '已停止';
+                let statusColor = isRunning ? 'var(--success)' : 'var(--danger)';
+                let opacity = canUse ? '' : 'opacity: 0.5;';
+                let cursor = canUse ? 'pointer' : 'not-allowed';
+
+                html += `
+                    <div class="agent-card"
+                         onclick="${canUse ? `selectAgent('${agent.agent_id}')` : ''}"
+                         data-agent-id="${agent.agent_id}"
+                         style="padding: 12px 16px; border: 2px solid var(--border); border-radius: 6px; min-width: 180px; ${opacity} cursor: ${cursor};">
+                        <div style="font-weight: 600;">${agent.agent_id}</div>
+                        <div style="color: var(--text-muted); font-size: 0.8rem;">${agent.ip_address || '无IP'}:${agent.port}</div>
+                        <div style="margin-top: 6px; font-size: 0.8rem; color: ${statusColor};">
+                            ${statusText}
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `<div style="padding: 16px; color: var(--warning);">无可用 Agent</div>`;
+        }
+    } catch (e) {
+        document.getElementById('agent-selector').innerHTML = `<div style="color: var(--danger);">加载失败: ${e.message}</div>`;
+    }
+}
+
+// 选择Agent
+function selectAgent(agentId) {
+    selectedAgent = agents.find(a => a.agent_id === agentId);
+    if (!selectedAgent) return;
+
+    document.querySelectorAll('.agent-card').forEach(card => {
+        card.classList.remove('selected');
+        if (card.dataset.agentId === agentId) {
+            card.classList.add('selected');
+        }
+    });
+
+    document.getElementById('selected-agent-info').style.display = 'block';
+    document.getElementById('selected-agent-name').textContent = selectedAgent.agent_id;
+    document.getElementById('selected-agent-ip').textContent = selectedAgent.ip_address;
+
+    addLog(`选择 Agent: ${selectedAgent.agent_id} (${selectedAgent.ip_address})`);
+    refreshStatus();
+}
+
+// 选择服务类型
+function selectServiceType(type) {
+    currentServiceType = type;
+    document.querySelectorAll('.service-type-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    updateConfigDisplay();
+    updateConfigTitle();
+}
+
+// 选择协议
+function selectProtocol(protocol) {
+    currentProtocol = protocol;
+    document.querySelectorAll('.protocol-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    updateConfigDisplay();
+    updateConfigTitle();
+}
+
+// 更新配置显示
+function updateConfigDisplay() {
+    // 隐藏所有配置
+    document.querySelectorAll('#config-area > div').forEach(div => {
+        div.style.display = 'none';
+    });
+
+    // 显示当前配置
+    const configId = `${currentProtocol}-${currentServiceType}-config`;
+    const configDiv = document.getElementById(configId);
+    if (configDiv) {
+        configDiv.style.display = 'block';
+    }
+}
+
+// 更新配置标题
+function updateConfigTitle() {
+    const titles = {
+        'tcp-listener': 'TCP 监听配置',
+        'udp-listener': 'UDP 监听配置',
+        'ftp-listener': 'FTP 服务器配置',
+        'http-listener': 'HTTP 服务器配置',
+        'mail-listener': 'Mail 服务器配置',
+        'tcp-client': 'TCP 客户端配置',
+        'udp-client': 'UDP 客户端配置',
+        'ftp-client': 'FTP 客户端配置',
+        'http-client': 'HTTP 客户端配置'
+    };
+    const key = `${currentProtocol}-${currentServiceType}`;
+    document.getElementById('config-title').textContent = titles[key] || '服务配置';
+}
+
+// 获取配置数据
+function getConfig() {
+    const config = {};
+
+    if (currentServiceType === 'listener') {
+        config.protocol = currentProtocol;
+        config.action = 'start';
+
+        if (currentProtocol === 'tcp') {
+            config.host = document.getElementById('tcp-listener-host').value;
+            config.port = parseInt(document.getElementById('tcp-listener-port').value);
+        } else if (currentProtocol === 'udp') {
+            config.host = document.getElementById('udp-listener-host').value;
+            config.port = parseInt(document.getElementById('udp-listener-port').value);
+        } else if (currentProtocol === 'ftp') {
+            config.host = document.getElementById('ftp-listener-host').value;
+            config.port = parseInt(document.getElementById('ftp-listener-port').value);
+            config.username = document.getElementById('ftp-username').value;
+            config.password = document.getElementById('ftp-password').value;
+            config.directory = document.getElementById('ftp-directory').value;
+        } else if (currentProtocol === 'http') {
+            config.host = document.getElementById('http-listener-host').value;
+            config.port = parseInt(document.getElementById('http-listener-port').value);
+            config.directory = document.getElementById('http-directory').value;
+        } else if (currentProtocol === 'mail') {
+            config.smtp_port = parseInt(document.getElementById('smtp-port').value);
+            config.imap_port = parseInt(document.getElementById('imap-port').value);
+            config.pop3_port = parseInt(document.getElementById('pop3-port').value);
+            config.domain = document.getElementById('mail-domain').value;
+        }
+    } else {
+        config.protocol = currentProtocol;
+        config.action = 'start';
+        config.config = {};
+
+        if (currentProtocol === 'tcp') {
+            config.config.server_ip = document.getElementById('tcp-client-server-ip').value;
+            config.config.server_port = parseInt(document.getElementById('tcp-client-server-port').value);
+            config.config.message = document.getElementById('tcp-client-message').value;
+        } else if (currentProtocol === 'udp') {
+            config.config.server_ip = document.getElementById('udp-client-server-ip').value;
+            config.config.server_port = parseInt(document.getElementById('udp-client-server-port').value);
+            config.config.message = document.getElementById('udp-client-message').value;
+            config.config.interval = parseFloat(document.getElementById('udp-client-interval').value);
+        } else if (currentProtocol === 'ftp') {
+            config.config.server_ip = document.getElementById('ftp-client-server-ip').value;
+            config.config.server_port = parseInt(document.getElementById('ftp-client-server-port').value);
+            config.config.username = document.getElementById('ftp-client-username').value;
+            config.config.password = document.getElementById('ftp-client-password').value;
+        } else if (currentProtocol === 'http') {
+            config.config.server_ip = document.getElementById('http-client-server-ip').value;
+            config.config.server_port = parseInt(document.getElementById('http-client-server-port').value);
+        }
+    }
+
+    return config;
+}
+
+// 启动服务
+async function startService() {
+    if (!selectedAgent) {
+        showToast('请先选择 Agent', 'error');
+        return;
+    }
+
+    const config = getConfig();
+    config.agent_id = selectedAgent.agent_id;
+
+    const apiUrl = currentServiceType === 'listener' ? '/api/services/listener/' : '/api/services/client/';
+
+    addLog(`启动 ${currentProtocol.toUpperCase()} ${currentServiceType === 'listener' ? '监听' : '客户端'}...`);
+
+    try {
+        const result = await apiRequest(apiUrl, 'POST', config);
+
+        if (result.success) {
+            showToast('服务启动成功');
+            document.getElementById('stop-btn').style.display = 'inline-block';
+            addLog(`${currentProtocol.toUpperCase()} 服务已启动`);
+            if (!statusInterval) {
+                statusInterval = setInterval(refreshStatus, 2000);
+            }
+        } else {
+            showToast('启动失败: ' + result.error, 'error');
+            addLog(`启动失败: ${result.error}`);
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+        addLog(`请求失败: ${e.message}`);
+    }
+}
+
+// 停止服务
+async function stopService() {
+    if (!selectedAgent) return;
+
+    const config = {
+        agent_id: selectedAgent.agent_id,
+        protocol: currentProtocol,
+        action: 'stop'
+    };
+
+    const apiUrl = currentServiceType === 'listener' ? '/api/services/listener/' : '/api/services/client/';
+
+    addLog(`停止 ${currentProtocol.toUpperCase()} 服务...`);
+
+    try {
+        const result = await apiRequest(apiUrl, 'POST', config);
+
+        if (result.success) {
+            showToast('服务已停止');
+            document.getElementById('stop-btn').style.display = 'none';
+            addLog(`${currentProtocol.toUpperCase()} 服务已停止`);
+            if (statusInterval) {
+                clearInterval(statusInterval);
+                statusInterval = null;
+            }
+        } else {
+            showToast('停止失败: ' + result.error, 'error');
+            addLog(`停止失败: ${result.error}`);
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+        addLog(`请求失败: ${e.message}`);
+    }
+}
+
+// 刷新状态
+async function refreshStatus() {
+    if (!selectedAgent) return;
+
+    try {
+        const result = await apiRequest(`/api/services/status/?agent_id=${selectedAgent.agent_id}`);
+
+        if (result.success) {
+            const statusDiv = document.getElementById('service-status');
+            const listeners = result.listeners || {};
+            const clients = result.clients || {};
+
+            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">';
+
+            // 监听服务状态
+            html += '<div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px;">';
+            html += '<div style="font-weight: 600; margin-bottom: 12px;">监听服务</div>';
+            for (const [proto, state] of Object.entries(listeners)) {
+                const isRunning = state.running;
+                const statusColor = isRunning ? 'var(--success)' : 'var(--text-muted)';
+                html += `<div style="margin: 6px 0;">
+                    <span style="color: ${statusColor};">${isRunning ? '●' : '○'} ${proto.toUpperCase()}</span>
+                    ${isRunning ? `<small style="color: var(--text-muted); margin-left: 8px;">${state.host}:${state.port}</small>` : ''}
+                </div>`;
+                if (isRunning && state.connections && state.connections.length > 0) {
+                    html += `<div style="margin-left: 16px; font-size: 0.8rem; color: var(--text-muted);">
+                        连接数: ${state.connections.length}
+                    </div>`;
+                }
+            }
+            html += '</div>';
+
+            // 客户端服务状态
+            html += '<div style="background: var(--bg-secondary); padding: 12px; border-radius: 8px;">';
+            html += '<div style="font-weight: 600; margin-bottom: 12px;">客户端服务</div>';
+            for (const [proto, state] of Object.entries(clients)) {
+                const isRunning = state.running;
+                const statusColor = isRunning ? 'var(--success)' : 'var(--text-muted)';
+                html += `<div style="margin: 6px 0;">
+                    <span style="color: ${statusColor};">${isRunning ? '●' : '○'} ${proto.toUpperCase()}</span>
+                    ${isRunning ? `<small style="color: var(--text-muted); margin-left: 8px;">${state.server_ip}:${state.server_port}</small>` : ''}
+                </div>`;
+            }
+            html += '</div>';
+
+            html += '</div>';
+            statusDiv.innerHTML = html;
+        }
+    } catch (e) {
+        document.getElementById('service-status').innerHTML = `<div style="color: var(--danger);">状态获取失败: ${e.message}</div>`;
+    }
+}
+
+// API请求封装
+async function apiRequest(url, method = 'GET', data = null) {
+    const options = {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    };
+
+    if (data) {
+        options.body = JSON.stringify(data);
+    }
+
+    const response = await fetch(url, options);
+    return response.json();
+}
+
+// 添加日志
+function addLog(msg) {
+    const log = document.getElementById('operation-log');
+    const time = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.className = 'log-entry log-info';
+    entry.textContent = `[${time}] ${msg}`;
+
+    // 移除初始提示
+    if (log.children.length === 1 && log.children[0].textContent === '等待操作...') {
+        log.innerHTML = '';
+    }
+
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+// 清空日志
+function clearLogs() {
+    document.getElementById('operation-log').innerHTML = '<div style="color: var(--text-muted);">等待操作...</div>';
+}
+
+// Toast提示
+function showToast(msg, type = 'info') {
+    // 简单实现
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+        position: fixed; top: 20px; right: 20px;
+        padding: 12px 20px; border-radius: 6px;
+        background: ${type === 'error' ? 'var(--danger)' : 'var(--success)'};
+        color: white; z-index: 9999;
+        animation: fadeIn 0.3s;
+    `;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+</script>
+{% endblock %}
