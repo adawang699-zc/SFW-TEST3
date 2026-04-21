@@ -639,9 +639,10 @@ def api_agent_status(request):
 
         # 通过 HTTP 查询实际状态
         try:
+            # 增加超时时间，避免发送报文时误判为停止
             resp = requests.get(
                 f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                timeout=2
+                timeout=5
             )
             if resp.status_code == 200:
                 status_data = resp.json()
@@ -653,7 +654,7 @@ def api_agent_status(request):
                 try:
                     stats_resp = requests.get(
                         f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
-                        timeout=2
+                        timeout=5
                     )
                     if stats_resp.status_code == 200:
                         statistics = stats_resp.json().get('statistics', {})
@@ -669,13 +670,15 @@ def api_agent_status(request):
                     'statistics': statistics,
                 })
         except:
-            agent.status = 'stopped'
-            agent.save()
+            # 查询失败时，保持数据库原有状态，不强制更新为 stopped
+            # 这样可以避免发送报文时因超时误判为停止
             return JsonResponse({
                 'success': True,
                 'agent_id': agent_id,
-                'status': 'stopped',
+                'status': agent.status,  # 保持数据库原有状态
+                'interface': agent.interface.name,
                 'statistics': {},
+                'query_failed': True,  # 标记查询失败，前端可显示提示
             })
 
     except LocalAgent.DoesNotExist:
@@ -1310,7 +1313,7 @@ def api_send_packet(request):
         resp = requests.post(
             f"http://{agent.interface.ip_address}:{agent.port}/api/send_packet",
             json=forward_data,
-            timeout=30
+            timeout=10
         )
 
         return JsonResponse(resp.json())
@@ -1336,7 +1339,7 @@ def api_stop_send(request):
         resp = requests.post(
             f"http://{agent.interface.ip_address}:{agent.port}/api/stop",
             json={},
-            timeout=5
+            timeout=10
         )
 
         return JsonResponse(resp.json())
