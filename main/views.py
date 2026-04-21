@@ -1205,7 +1205,7 @@ def api_agents_my_rented(request):
                             stats = stats_resp.json().get('statistics', {})
                             send_rate = stats.get('rate', 0)
                             send_total = stats.get('total_sent', 0)
-                            is_sending = send_rate > 0
+                            is_sending = stats.get('sending', False)
                 except:
                     actual_status = 'stopped'
 

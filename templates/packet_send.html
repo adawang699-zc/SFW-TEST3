@@ -481,6 +481,7 @@ let currentProtocol = 'tcp';
 let statsInterval = null;
 let agentMac = '';
 let agentIp = '';
+let sendCompleted = false;  // 发送完成标记
 
 // 页面加载
 window.onload = function() {
@@ -906,6 +907,7 @@ async function sendPacket() {
         return;
     }
 
+    sendCompleted = false;  // 重置发送完成标记
     const packetConfig = getPacketConfig();
     const sendConfig = getSendConfig();
 
@@ -987,7 +989,8 @@ async function updateStats() {
             document.getElementById('stat-bandwidth').textContent = Math.round((stats.bandwidth || 0) / 1024);
 
             // 如果发送状态变为 false 且发送数量大于0，说明发送已自动完成
-            if (stats.sending === false && stats.total_sent > 0) {
+            if (stats.sending === false && stats.total_sent > 0 && !sendCompleted) {
+                sendCompleted = true;  // 标记已完成，避免重复触发
                 document.getElementById('stop-btn').style.display = 'none';
                 if (statsInterval) {
                     clearInterval(statsInterval);
