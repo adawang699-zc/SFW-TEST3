@@ -419,8 +419,16 @@ def goose_sv_interfaces():
 
 # ========== 主入口 ==========
 
+# Gunicorn 入口：在模块导入时初始化 start_time
+start_time = datetime.now()
+logger.info(f"全功能 Agent 初始化: ID={AGENT_ID}, Interface={BIND_INTERFACE}, IP={BIND_IP}, Port={AGENT_PORT}")
+
+# Gunicorn 会直接导入此模块并使用 app 对象
+# 命令: gunicorn -w 1 -b {BIND_IP}:{AGENT_PORT} --preload agents.full_agent:app
+
+
 def main():
-    """Agent 主入口"""
+    """Agent 主入口（直接运行 Flask，用于开发/测试）"""
     global start_time
     start_time = datetime.now()
 

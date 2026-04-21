@@ -1011,6 +1011,9 @@ def send_packets_worker(interface, packet_config, send_config):
 
                                         last_update_time = current_time
 
+                                # 每批次后微延迟，让 Flask/Gunicorn 有机会处理请求
+                                time.sleep(0.001)
+
                             sock.close()
                         except Exception as e:
                             print(f"批量发送失败，回退到逐包发送: {e}")

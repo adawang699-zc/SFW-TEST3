@@ -525,6 +525,7 @@ def api_agent_start(request):
         # 创建 systemd 服务文件（如果不存在）
         service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
 
+        # 使用 Gunicorn 启动（单 worker + preload，保证全局变量共享）
         service_content = f"""[Unit]
 Description=Packet Agent {agent.agent_id} ({agent.interface.name})
 After=network.target
@@ -536,7 +537,7 @@ Environment="BIND_IP={agent.interface.ip_address}"
 Environment="BIND_INTERFACE={agent.interface.name}"
 Environment="AGENT_PORT={agent.port}"
 WorkingDirectory={settings.AGENT_WORK_DIR}
-ExecStart={settings.AGENT_VENV_PYTHON} -m agents.full_agent
+ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
 Restart=always
 RestartSec=5
 
@@ -767,6 +768,7 @@ def api_agent_config_ip(request):
 
             # 更新 systemd 服务配置文件中的 BIND_IP
             service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
+            # 使用 Gunicorn 启动（单 worker + preload）
             service_content = f"""[Unit]
 Description=Packet Agent {agent.agent_id} ({interface_name})
 After=network.target
@@ -778,7 +780,7 @@ Environment="BIND_IP={ip_address}"
 Environment="BIND_INTERFACE={interface_name}"
 Environment="AGENT_PORT={agent.port}"
 WorkingDirectory={settings.AGENT_WORK_DIR}
-ExecStart={settings.AGENT_VENV_PYTHON} -m agents.full_agent
+ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
 Restart=always
 RestartSec=5
 
