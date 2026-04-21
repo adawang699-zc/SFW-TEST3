@@ -1,0 +1,206 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - link "Ubuntu 多 Agent 部署平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 10:44:45"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 网卡 & Agent" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: 网卡 & Agent
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "⚙️ 工控协议" [ref=e19] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e20]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e22] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e23]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e25] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e26]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e28] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e29]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e31] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e32]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e34] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e35]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e37] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e38]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e40] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e41]: 🔑
+      - text: 授权管理
+  - generic [ref=e42]:
+    - generic [ref=e45]:
+      - generic [ref=e46]:
+        - text: 报文发送
+        - paragraph [ref=e47]: 选择 Agent 发送测试报文，支持多种协议和攻击测试
+      - button "刷新Agent" [ref=e49] [cursor=pointer]
+    - generic [ref=e50]:
+      - generic [ref=e51]: 选择发送 Agent
+      - generic [ref=e52]:
+        - generic [ref=e162] [cursor=pointer]:
+          - generic [ref=e163]: agent_eth1
+          - generic [ref=e164]: eth1 - 11.11.11.11:8888
+          - generic [ref=e165]: 运行中
+        - generic [ref=e166] [cursor=pointer]:
+          - generic [ref=e167]: agent_eth2
+          - generic [ref=e168]: eth2 - 11.11.11.12:8889
+          - generic [ref=e169]: 运行中
+        - generic [ref=e170] [cursor=pointer]:
+          - generic [ref=e171]: agent_eth7
+          - generic [ref=e172]: eth7 - 11.11.11.17:8890
+          - generic [ref=e173]: 已停止
+    - generic [ref=e54]:
+      - generic [ref=e56]:
+        - generic [ref=e57]: 报文配置
+        - button " 报文变化" [ref=e58] [cursor=pointer]:
+          - generic [ref=e59]: 
+          - text: 报文变化
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - button "TCP" [ref=e62] [cursor=pointer]
+          - button "UDP" [ref=e63] [cursor=pointer]
+          - button "ICMP" [active] [ref=e64] [cursor=pointer]
+          - button "ARP" [ref=e65] [cursor=pointer]
+        - text:   
+        - generic [ref=e205]:
+          - generic [ref=e206]:
+            - generic [ref=e207]:
+              - generic [ref=e208]: 类型 *
+              - combobox [ref=e209]:
+                - option "ICMP Echo Request" [selected]
+                - option "ICMP Echo Reply"
+                - option "Ping of Death攻击"
+                - option "ICMP Smurf攻击"
+            - generic [ref=e210]:
+              - generic [ref=e211]: 源MAC地址
+              - generic [ref=e212]:
+                - textbox "随机生成" [ref=e213]
+                - button "" [ref=e214] [cursor=pointer]:
+                  - generic [ref=e215]: 
+              - generic [ref=e216]:
+                - checkbox "使用本机MAC" [ref=e217]
+                - text: 使用本机MAC
+            - generic [ref=e218]:
+              - generic [ref=e219]: 目的MAC地址
+              - 'textbox "例如: FF:FF:FF:FF:FF:FF" [ref=e220]'
+            - generic [ref=e221]:
+              - generic [ref=e222]: 源IP地址
+              - 'textbox "例如: 192.168.1.100" [ref=e223]'
+            - generic [ref=e224]:
+              - generic [ref=e225]: 目的IP地址 *
+              - 'textbox "例如: 192.168.1.200" [ref=e226]'
+          - generic [ref=e228]:
+            - generic [ref=e229]: 数据长度
+            - spinbutton [ref=e230]: "64"
+            - text: 普通ICMP建议64字节
+        - text: 
+        - generic [ref=e174]:
+          - heading " 报文变化配置" [level=4] [ref=e175]:
+            - generic [ref=e176]: 
+            - text: 报文变化配置
+          - generic [ref=e177]:
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - generic [ref=e180]: 源MAC变化
+                - combobox [ref=e182]:
+                  - option "固定" [selected]
+                  - option "递增"
+              - generic [ref=e183]:
+                - generic [ref=e184]: 目的MAC变化
+                - combobox [ref=e186]:
+                  - option "固定" [selected]
+                  - option "递增"
+              - generic [ref=e187]:
+                - generic [ref=e188]: 源IP变化
+                - combobox [ref=e190]:
+                  - option "固定" [selected]
+                  - option "递增"
+              - generic [ref=e191]:
+                - generic [ref=e192]: 目的IP变化
+                - combobox [ref=e194]:
+                  - option "固定" [selected]
+                  - option "递增"
+            - generic [ref=e195]:
+              - generic [ref=e196]:
+                - generic [ref=e197]: 源端口变化
+                - combobox [ref=e199]:
+                  - option "固定" [selected]
+                  - option "递增"
+              - generic [ref=e200]:
+                - generic [ref=e201]: 目的端口变化
+                - combobox [ref=e203]:
+                  - option "固定" [selected]
+                  - option "递增"
+        - separator [ref=e117]
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - generic [ref=e120]: 发送次数
+            - generic [ref=e121]:
+              - generic [ref=e122]:
+                - radio "连续发送" [checked] [ref=e123]
+                - text: 连续发送
+              - generic [ref=e124]:
+                - radio "1 次" [ref=e125]
+                - spinbutton [ref=e126]: "1"
+                - text: 次
+          - generic [ref=e127]:
+            - generic [ref=e128]: 发送间隔
+            - generic [ref=e129]:
+              - generic [ref=e130]:
+                - radio "无延迟" [checked] [ref=e131]
+                - text: 无延迟
+              - generic [ref=e132]:
+                - radio "100 ms" [ref=e133]
+                - spinbutton [ref=e134]: "100"
+                - text: ms
+          - generic [ref=e135]:
+            - generic [ref=e136]: 发送速率 (可选)
+            - generic [ref=e137]:
+              - spinbutton [ref=e138]
+              - generic [ref=e139]: 留空则不限速
+        - generic [ref=e140]:
+          - button " 发送报文" [ref=e141] [cursor=pointer]:
+            - generic [ref=e142]: 
+            - text: 发送报文
+          - text: 
+    - generic [ref=e143]:
+      - generic [ref=e144]: 发送统计
+      - generic [ref=e145]:
+        - generic [ref=e146]:
+          - generic [ref=e147]: 发送报文数
+          - generic [ref=e148]: "0"
+        - generic [ref=e149]:
+          - generic [ref=e150]: 发送速率
+          - generic [ref=e151]: 0 包/秒
+        - generic [ref=e152]:
+          - generic [ref=e153]: 发送带宽
+          - generic [ref=e154]: 0 KB/s
+    - generic [ref=e155]:
+      - generic [ref=e157]:
+        - generic [ref=e158]: 操作日志
+        - button "清空" [ref=e159] [cursor=pointer]
+      - paragraph [ref=e161]: 等待操作...

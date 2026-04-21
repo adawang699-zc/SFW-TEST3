@@ -650,37 +650,51 @@ def build_packet(packet_config, variation_index=0):
 def send_packets_worker(interface, packet_config, send_config):
     """发送报文的工作线程"""
     global statistics, stop_sending, start_time
-    
+
     count = send_config.get('count', 1)
     interval = send_config.get('interval', 0) / 1000.0  # 转换为秒
     continuous = send_config.get('continuous', False)
-    
+
     # 调试：打印配置信息
     print(f"开始发送报文 - 接口: {interface}, 协议: {packet_config.get('protocol')}, 连续: {continuous}, 数量: {count}")
-    
+
     variations = packet_config.get('variations', {})
     # 检查是否有递增配置
     has_increment = any(var_config.get('type') == 'increment' for var_config in variations.values())
-    
+
     total_to_send = count if not continuous else float('inf')
-    
+
+    # 优化：如果没有变化配置，预先构造模板包
+    template_packet = None
+    if not has_increment and interval == 0:
+        try:
+            template_packet = build_packet(packet_config, 0)
+            print(f"预构造模板包成功，协议: {packet_config.get('protocol')}")
+        except Exception as e:
+            print(f"预构造模板包失败: {e}，将每次重新构造")
+
     sent = 0
     start_time = time.time()
     last_update_time = start_time
-    
+
     with stats_lock:
         statistics['start_time'] = start_time
         statistics['last_update'] = start_time
-    
+
     try:
         while not stop_sending.is_set() and sent < total_to_send:
             # 计算变化索引：每次发送都递增，递增逻辑在build_packet中处理循环
             # var_index直接等于sent，这样每次发送都会递增
             var_index = sent if has_increment else 0
-            
-            # 构造报文
+
+            # 构造报文（使用模板或重新构造）
             try:
-                packet = build_packet(packet_config, var_index)
+                if template_packet and not has_increment:
+                    # 使用预构造的模板包（快速发送）
+                    packet = template_packet
+                else:
+                    # 需要变化或模板无效，每次重新构造
+                    packet = build_packet(packet_config, var_index)
             except Exception as e:
                 print(f"构造报文失败: {e}")
                 import traceback
@@ -936,9 +950,53 @@ def send_packets_worker(interface, packet_config, send_config):
                     if sent % 10 == 0:  # 每10个包打印一次
                         print(f"已发送 {sent} 个Teardrop分片包")
                 else:
-                    # 普通包：正常发送
-                    sendp(packet, iface=interface, verbose=False)
-                    sent += 1
+                    # 普通包：使用批量发送优化
+                    if continuous and not has_increment and template_packet:
+                        # 连续发送模式：使用 sendp 的 loop/count 参数实现批量发送
+                        # 这样一次系统调用可以发送大量包，大幅提升速率
+                        try:
+                            # 使用 socket 保持连接，避免每次发送重新建立
+                            from scapy.arch.linux import L2Socket
+                            sock = L2Socket(iface=interface)
+
+                            while not stop_sending.is_set():
+                                # 批量发送：每次发送1000个包
+                                batch_size = 1000
+                                sent_batch = 0
+                                while sent_batch < batch_size and not stop_sending.is_set():
+                                    sock.send(template_packet)
+                                    sent_batch += 1
+                                    sent += 1
+
+                                    # 更新统计
+                                    current_time = time.time()
+                                    if current_time - last_update_time >= 0.5:  # 每0.5秒更新一次
+                                        elapsed = current_time - start_time
+                                        rate = sent / elapsed if elapsed > 0 else 0
+                                        try:
+                                            avg_packet_size = len(template_packet) * 8
+                                        except:
+                                            avg_packet_size = 1500 * 8
+                                        bandwidth = rate * avg_packet_size
+
+                                        with stats_lock:
+                                            statistics['total_sent'] = sent
+                                            statistics['rate'] = int(rate)
+                                            statistics['bandwidth'] = int(bandwidth)
+                                            statistics['last_update'] = current_time
+
+                                        last_update_time = current_time
+
+                            sock.close()
+                        except Exception as e:
+                            print(f"批量发送失败，回退到逐包发送: {e}")
+                            # 回退到普通发送
+                            sendp(packet, iface=interface, verbose=False)
+                            sent += 1
+                    else:
+                        # 有变化或非连续模式：逐包发送
+                        sendp(packet, iface=interface, verbose=False)
+                        sent += 1
                 
                 # 每100个包打印一次进度（仅用于调试，Ping of Death已在上面打印）
                 if not (hasattr(packet, '_ping_of_death') and packet._ping_of_death):

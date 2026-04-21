@@ -946,7 +946,7 @@ def api_agents_lock(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_agents_unlock(request):
-    """释放租用"""
+    """释放租用（租用管理页面使用，需要 user_identifier）"""
     from django.utils import timezone
     from .models import AgentLock
 
@@ -1033,7 +1033,7 @@ def api_agents_locks(request):
 
 @require_http_methods(["GET"])
 def api_agents_my_lock(request):
-    """获取指定用户的租用信息"""
+    """获取指定用户的租用信息（租用管理页面使用）"""
     from .models import AgentLock
 
     try:
@@ -1074,7 +1074,7 @@ def api_agents_my_lock(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_agents_keepalive(request):
-    """更新租用活跃时间（心跳）"""
+    """更新租用活跃时间（心跳，租用管理页面使用）"""
     try:
         data = json.loads(request.body)
         user_identifier = data.get('user_identifier', '').strip()
@@ -1106,6 +1106,72 @@ def api_agents_keepalive(request):
 
     except Exception as e:
         logger.exception(f"更新活跃时间失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_agents_my_rented(request):
+    """获取当前 IP 租用的 Agent 列表（用于其他页面选择 Agent）"""
+    from .models import AgentLock, LocalAgent
+
+    try:
+        # 先检查并释放过期的租用
+        check_and_release_expired_locks()
+
+        # 自动获取客户端 IP
+        client_ip = request.META.get('REMOTE_ADDR', '')
+
+        if not client_ip:
+            return JsonResponse({
+                'success': True,
+                'agents': [],
+                'client_ip': '',
+                'has_rental': False
+            })
+
+        # 按 IP 查找活跃租用
+        lock = AgentLock.objects.filter(
+            client_ip=client_ip,
+            status='active'
+        ).first()
+
+        if not lock:
+            return JsonResponse({
+                'success': True,
+                'agents': [],
+                'client_ip': client_ip,
+                'has_rental': False,
+                'message': f'当前 IP ({client_ip}) 无租用记录，请在 Agent 管理页面租用 Agent'
+            })
+
+        # 获取租用的 Agent 详情
+        rented_agents = []
+        for agent in lock.agents.all():
+            # 只返回运行中的 Agent
+            if agent.status == 'running' and agent.interface.ip_address:
+                rented_agents.append({
+                    'agent_id': agent.agent_id,
+                    'interface_name': agent.interface.name,
+                    'ip_address': agent.interface.ip_address,
+                    'mac_address': agent.interface.mac_address,
+                    'port': agent.port,
+                    'status': agent.status,
+                })
+
+        # 更新活跃时间
+        lock.update_activity()
+
+        return JsonResponse({
+            'success': True,
+            'agents': rented_agents,
+            'client_ip': client_ip,
+            'has_rental': True,
+            'user_identifier': lock.user_identifier,
+            'remaining_seconds': lock.get_remaining_time()
+        })
+
+    except Exception as e:
+        logger.exception(f"获取租用 Agent 列表失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 

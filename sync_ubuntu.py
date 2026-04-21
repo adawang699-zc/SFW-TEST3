@@ -46,11 +46,11 @@ try:
         print('=== Stash 错误 ===')
         print(err)
 
-    print('执行 git pull...')
-    cmd = f'cd {REMOTE_PATH} && git pull origin main'
+    print('执行 git reset --hard...')
+    cmd = f'cd {REMOTE_PATH} && git reset --hard origin/main'
     exit_status, out, err = execute_ssh_command(ssh, cmd)
 
-    print('=== Git Pull 输出 ===')
+    print('=== Git Reset 输出 ===')
     print(out)
     if err:
         print('=== 错误 ===')

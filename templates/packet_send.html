@@ -111,38 +111,81 @@
     font-size: 0.95rem;
 }
 
-/* 输入行 */
-.input-row {
-    display: flex;
+/* 网格布局容器 */
+.config-grid {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto 1fr;
+    gap: 8px 16px;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
 }
 
-.input-row label {
-    min-width: 80px;
+.config-grid label {
     color: var(--text-secondary);
     font-size: 0.85rem;
+    white-space: nowrap;
 }
 
-.input-row input, .input-row select {
+/* 固定宽度输入框 */
+.input-mac {
+    width: 150px;
+    font-family: monospace;
+}
+
+.input-ip {
+    width: 130px;
+    font-family: monospace;
+}
+
+.input-port {
+    width: 80px;
+}
+
+.input-small {
+    width: 70px;
+    min-width: 70px;
+}
+
+.input-flex {
     flex: 1;
-    min-width: 0;
+    min-width: 100px;
 }
 
-/* 复选框组 */
-.checkbox-group {
+/* 下拉框颜色修复 - 使用固定颜色确保可见 */
+select.form-input, select {
+    color: var(--text-primary) !important;
+    background-color: var(--bg-secondary) !important;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+/* 下拉选项使用浅色背景和深色文字，确保在深色主题下可见 */
+select.form-input option, select option {
+    color: #333 !important;
+    background-color: #f5f5f5 !important;
+}
+
+/* 行内元素组 */
+.inline-group {
     display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
 }
 
+/* 按钮组紧凑 */
+.btn-group {
+    display: flex;
+    gap: 8px;
+}
+
+/* 复选框项 */
 .checkbox-item {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
     color: var(--text-secondary);
     font-size: 0.85rem;
+    white-space: nowrap;
 }
 
 /* 统计卡片 */
@@ -194,9 +237,14 @@
     </div>
 </div>
 
-<!-- Agent 选择 -->
+<!-- Agent 选择（自动 IP 识别） -->
 <div class="card">
-    <div class="card-header">选择 Agent</div>
+    <div class="card-header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>选择已租用的 Agent（当前 IP: <span id="client-ip-info" style="color: var(--primary);">加载中...</span>）</span>
+            <button class="btn btn-secondary" onclick="loadAgents()">刷新</button>
+        </div>
+    </div>
     <div id="agent-selector" style="display: flex; gap: 12px; flex-wrap: wrap;">
         <span style="color: var(--text-muted);">加载中...</span>
     </div>
@@ -205,6 +253,9 @@
         <span id="selected-agent-name" style="font-weight: 600;"></span>
         <span style="color: var(--text-muted); margin-left: 12px;">IP: <span id="selected-agent-ip"></span></span>
     </div>
+    <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">
+        系统根据您的访问 IP 自动识别租用的 Agent。如无租用记录，请在 <a href="{% url 'main:agent_manage' %}" style="color: var(--primary);">Agent管理</a> 页面租用
+    </p>
 </div>
 
 <!-- 协议选择 -->
@@ -219,117 +270,115 @@
     </div>
 </div>
 
-<!-- 地址配置 -->
+<!-- 地址配置 - 网格布局 -->
 <div class="card">
     <div class="card-header">地址配置</div>
-    <div style="padding: 12px;">
-        <!-- MAC 地址行 -->
-        <div class="input-row">
-            <label>源MAC</label>
-            <input type="text" id="src-mac" class="form-input" placeholder="自动填充">
-            <button class="btn btn-outline-secondary" onclick="randomMac('src-mac')" title="随机生成" style="padding: 6px 10px;">
+    <div style="padding: 12px;" class="config-grid">
+        <!-- MAC地址行 -->
+        <label>源MAC</label>
+        <input type="text" id="src-mac" class="form-input input-mac" placeholder="自动填充">
+        <div class="inline-group">
+            <button class="btn btn-outline-secondary" onclick="randomMac('src-mac')" title="随机生成" style="padding: 4px 8px;">
                 <i class="fas fa-dice"></i>
             </button>
-            <label class="checkbox-item" style="min-width: auto;">
-                <input type="checkbox" id="use-local-mac" checked> 本机MAC
-            </label>
+            <label class="checkbox-item"><input type="checkbox" id="use-local-mac" checked> 本机MAC</label>
         </div>
-        <div class="input-row">
-            <label>目的MAC</label>
-            <input type="text" id="dst-mac" class="form-input" placeholder="随机生成">
-            <button class="btn btn-outline-secondary" onclick="randomMac('dst-mac')" title="随机生成" style="padding: 6px 10px;">
+
+        <label>目的MAC</label>
+        <input type="text" id="dst-mac" class="form-input input-mac" placeholder="随机生成">
+        <div class="inline-group">
+            <button class="btn btn-outline-secondary" onclick="randomMac('dst-mac')" title="随机生成" style="padding: 4px 8px;">
                 <i class="fas fa-dice"></i>
             </button>
             <span id="dst-mac-display" style="color: var(--text-muted); font-size: 0.8rem;"></span>
         </div>
-        <!-- IP 地址行 -->
-        <div class="input-row">
-            <label>源IP</label>
-            <input type="text" id="src-ip" class="form-input" placeholder="自动填充">
+
+        <!-- IP地址行 -->
+        <label>源IP</label>
+        <input type="text" id="src-ip" class="form-input input-ip" placeholder="自动填充">
+        <div class="inline-group">
+            <label class="checkbox-item" id="land-checkbox-container"><input type="checkbox" id="land-checkbox" onchange="toggleLand()"> LAND</label>
         </div>
-        <div class="input-row">
-            <label>目的IP <span style="color: var(--danger);">*</span></label>
-            <input type="text" id="dst-ip" class="form-input" placeholder="必填">
-            <label class="checkbox-item" id="land-checkbox-container" style="min-width: auto;">
-                <input type="checkbox" id="land-checkbox" onchange="toggleLand()"> LAND
-            </label>
-        </div>
+
+        <label>目的IP <span style="color: var(--danger);">*</span></label>
+        <input type="text" id="dst-ip" class="form-input input-ip" placeholder="必填">
+        <span></span>
+
         <!-- 端口行 -->
-        <div class="input-row" id="port-row">
-            <label>源端口</label>
-            <input type="number" id="src-port" class="form-input" value="12345" min="0" max="65535" style="max-width: 100px;">
-            <label style="min-width: 80px;">目的端口 <span style="color: var(--danger);">*</span></label>
-            <input type="number" id="dst-port" class="form-input" value="80" min="0" max="65535" style="max-width: 100px;">
-        </div>
+        <label>源端口</label>
+        <input type="number" id="src-port" class="form-input input-port" value="12345" min="0" max="65535">
+        <span></span>
+
+        <label>目的端口 <span style="color: var(--danger);">*</span></label>
+        <input type="number" id="dst-port" class="form-input input-port" value="80" min="0" max="65535">
+        <span id="port-row-hint"></span>
     </div>
 </div>
 
-<!-- 协议配置 -->
+<!-- 协议配置 - 紧凑布局 -->
 <div class="card" id="protocol-config-card">
     <div class="card-header">协议配置</div>
     <div style="padding: 12px;" id="protocol-config-content">
         <!-- TCP 配置 -->
         <div id="tcp-config" class="protocol-config">
-            <div class="input-row">
-                <label>TCP标志位</label>
-                <div class="checkbox-group">
-                    <label class="checkbox-item"><input type="checkbox" id="tcp-syn" checked> SYN</label>
-                    <label class="checkbox-item"><input type="checkbox" id="tcp-ack"> ACK</label>
-                    <label class="checkbox-item"><input type="checkbox" id="tcp-fin"> FIN</label>
-                    <label class="checkbox-item"><input type="checkbox" id="tcp-rst"> RST</label>
-                    <label class="checkbox-item"><input type="checkbox" id="tcp-psh"> PSH</label>
-                    <label class="checkbox-item"><input type="checkbox" id="tcp-urg"> URG</label>
-                </div>
+            <div class="inline-group" style="margin-bottom: 8px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">TCP标志位:</label>
+                <label class="checkbox-item"><input type="checkbox" id="tcp-syn" checked> SYN</label>
+                <label class="checkbox-item"><input type="checkbox" id="tcp-ack"> ACK</label>
+                <label class="checkbox-item"><input type="checkbox" id="tcp-fin"> FIN</label>
+                <label class="checkbox-item"><input type="checkbox" id="tcp-rst"> RST</label>
+                <label class="checkbox-item"><input type="checkbox" id="tcp-psh"> PSH</label>
+                <label class="checkbox-item"><input type="checkbox" id="tcp-urg"> URG</label>
             </div>
-            <div class="input-row">
-                <label>数据(HEX)</label>
-                <input type="text" id="tcp-data" class="form-input" placeholder="如: 00 11 22 33">
+            <div class="inline-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">数据(HEX):</label>
+                <input type="text" id="tcp-data" class="form-input input-flex" placeholder="如: 00 11 22 33">
             </div>
         </div>
         <!-- UDP 配置 -->
         <div id="udp-config" class="protocol-config" style="display: none;">
-            <div class="input-row">
-                <label>类型</label>
-                <select id="udp-type" class="form-input" onchange="updateUdpType()">
+            <div class="inline-group" style="margin-bottom: 8px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">类型:</label>
+                <select id="udp-type" class="form-input" style="width: 140px;" onchange="updateUdpType()">
                     <option value="udp">普通UDP</option>
                     <option value="teardrop">Teardrop攻击</option>
                 </select>
             </div>
-            <div class="input-row">
-                <label>数据长度</label>
-                <input type="number" id="udp-length" class="form-input" value="64" min="0" style="max-width: 100px;">
+            <div class="inline-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">数据长度:</label>
+                <input type="number" id="udp-length" class="form-input input-port" value="64" min="0">
                 <span style="color: var(--text-muted); font-size: 0.8rem;">字节</span>
             </div>
         </div>
         <!-- ICMP 配置 -->
         <div id="icmp-config" class="protocol-config" style="display: none;">
-            <div class="input-row">
-                <label>类型</label>
-                <select id="icmp-type" class="form-input" onchange="updateIcmpType()">
+            <div class="inline-group" style="margin-bottom: 8px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">类型:</label>
+                <select id="icmp-type" class="form-input" style="width: 140px;" onchange="updateIcmpType()">
                     <option value="echo">Echo Request</option>
                     <option value="echo_reply">Echo Reply</option>
                     <option value="ping_of_death">Ping of Death</option>
                     <option value="smurf">Smurf攻击</option>
                 </select>
             </div>
-            <div class="input-row">
-                <label>数据长度</label>
-                <input type="number" id="icmp-length" class="form-input" value="64" min="0" style="max-width: 100px;">
+            <div class="inline-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">数据长度:</label>
+                <input type="number" id="icmp-length" class="form-input input-port" value="64" min="0">
                 <span id="icmp-hint" style="color: var(--text-muted); font-size: 0.8rem;">字节</span>
             </div>
         </div>
         <!-- ARP 配置 -->
         <div id="arp-config" class="protocol-config" style="display: none;">
-            <div class="input-row">
-                <label>ARP类型</label>
-                <select id="arp-type" class="form-input">
+            <div class="inline-group" style="margin-bottom: 8px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">ARP类型:</label>
+                <select id="arp-type" class="form-input" style="width: 140px;">
                     <option value="arp_req">ARP Request</option>
                     <option value="arp_reply">ARP Reply</option>
                     <option value="rarp_req">RARP Request</option>
                     <option value="rarp_reply">RARP Reply</option>
                 </select>
             </div>
-            <div class="input-row">
+            <div class="inline-group">
                 <label class="checkbox-item">
                     <input type="checkbox" id="arp-broadcast" checked onchange="toggleArpBroadcast()"> 使用广播MAC
                 </label>
@@ -369,27 +418,29 @@
     </div>
 </div>
 
-<!-- 发送控制 -->
+<!-- 发送控制 - 紧凑一行 -->
 <div class="card">
     <div class="card-header">发送控制</div>
     <div style="padding: 12px;">
-        <div style="display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px;">
-            <div>
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">发送次数:</span>
-                <label class="checkbox-item" style="margin-left: 8px;"><input type="radio" name="send-mode" value="continuous" checked> 连续</label>
-                <label class="checkbox-item" style="margin-left: 8px;"><input type="radio" name="send-mode" value="count" onchange="updateSendMode()"> 指定次数</label>
-                <input type="number" id="send-count" class="form-input" value="100" min="1" style="max-width: 80px; margin-left: 8px;" disabled>
+        <div class="inline-group" style="flex-wrap: wrap; gap: 16px;">
+            <div class="inline-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">发送次数:</label>
+                <label class="checkbox-item"><input type="radio" name="send-mode" value="continuous" checked> 连续</label>
+                <label class="checkbox-item"><input type="radio" name="send-mode" value="count" onchange="updateSendMode()"> 指定</label>
+                <input type="number" id="send-count" class="form-input input-small" value="100" min="1" disabled>
+                <span style="color: var(--text-muted); font-size: 0.8rem;">次</span>
             </div>
-            <div>
-                <span style="color: var(--text-secondary); font-size: 0.85rem;">发送间隔:</span>
-                <label class="checkbox-item" style="margin-left: 8px;"><input type="radio" name="interval-mode" value="none" checked> 无延迟</label>
-                <label class="checkbox-item" style="margin-left: 8px;"><input type="radio" name="interval-mode" value="ms" onchange="updateIntervalMode()"> 指定ms</label>
-                <input type="number" id="interval-ms" class="form-input" value="0" min="0" style="max-width: 80px; margin-left: 8px;" disabled>
+            <div class="inline-group">
+                <label style="color: var(--text-secondary); font-size: 0.85rem;">间隔:</label>
+                <label class="checkbox-item"><input type="radio" name="interval-mode" value="none" checked> 无</label>
+                <label class="checkbox-item"><input type="radio" name="interval-mode" value="ms" onchange="updateIntervalMode()"> 指定</label>
+                <input type="number" id="interval-ms" class="form-input input-small" value="0" min="0" disabled>
+                <span style="color: var(--text-muted); font-size: 0.8rem;">ms</span>
             </div>
-        </div>
-        <div style="display: flex; gap: 12px;">
-            <button class="btn-send" onclick="sendPacket()"><i class="fas fa-paper-plane"></i> 发送报文</button>
-            <button class="btn-stop" id="stop-btn" style="display: none;" onclick="stopSend()"><i class="fas fa-stop"></i> 停止发送</button>
+            <div class="btn-group" style="margin-left: auto;">
+                <button class="btn-send" onclick="sendPacket()"><i class="fas fa-paper-plane"></i> 发送</button>
+                <button class="btn-stop" id="stop-btn" style="display: none;" onclick="stopSend()"><i class="fas fa-stop"></i> 停止</button>
+            </div>
         </div>
     </div>
 </div>
@@ -441,36 +492,66 @@ window.onload = function() {
     randomMac('dst-mac');
 };
 
-// 加载 Agent 列表
+// 加载 Agent 列表（只显示当前 IP 租用的 Agent）
 async function loadAgents() {
     try {
-        const result = await apiRequest('/api/agents/list/');
+        const result = await apiRequest('/api/agents/my-rented/');
         const container = document.getElementById('agent-selector');
+
+        // 显示当前 IP 信息
+        const clientIpInfo = document.getElementById('client-ip-info');
+        if (clientIpInfo) {
+            clientIpInfo.textContent = result.client_ip || '未知';
+        }
+
+        if (!result.has_rental) {
+            container.innerHTML = `
+                <div style="padding: 16px; text-align: center;">
+                    <div style="color: var(--warning); font-size: 0.95rem;">当前 IP 无租用记录</div>
+                    <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">
+                        请在 <a href="/agent-manage/" style="color: var(--primary);">Agent 管理</a> 页面租用 Agent
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
         agents = result.agents || [];
 
         if (agents.length > 0) {
             let html = '';
             agents.forEach(agent => {
-                const isRunning = agent.status === 'running';
                 html += `
-                    <div class="agent-card ${isRunning ? '' : 'opacity: 0.5;'}"
+                    <div class="agent-card"
                          onclick="selectAgent('${agent.agent_id}')"
                          data-agent-id="${agent.agent_id}"
                          style="padding: 12px 16px; border: 2px solid var(--border); border-radius: 6px; min-width: 180px;">
                         <div style="font-weight: 600;">${agent.agent_id}</div>
                         <div style="color: var(--text-muted); font-size: 0.8rem;">${agent.ip_address}:${agent.port}</div>
-                        <div style="margin-top: 6px; font-size: 0.8rem; color: ${isRunning ? 'var(--success)' : 'var(--danger)'};">
-                            ${isRunning ? '运行中' : '已停止'}
+                        <div style="margin-top: 6px; font-size: 0.8rem; color: var(--success);">
+                            运行中
                         </div>
                     </div>
                 `;
             });
             container.innerHTML = html;
+
+            // 显示租用信息
+            addLog(`当前租用: ${result.user_identifier}, 剩余 ${Math.floor(result.remaining_seconds / 60)} 分钟`);
         } else {
-            container.innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            container.innerHTML = `
+                <div style="padding: 16px; text-align: center;">
+                    <div style="color: var(--warning); font-size: 0.95rem;">租用的 Agent 未运行</div>
+                    <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">
+                        请检查 Agent 状态
+                    </div>
+                </div>
+            `;
         }
     } catch (e) {
-        document.getElementById('agent-selector').innerHTML = '<span style="color: var(--danger);">加载失败</span>';
+        document.getElementById('agent-selector').innerHTML = `
+            <div style="color: var(--danger);">加载失败: ${e.message}</div>
+        `;
     }
 }
 
@@ -567,11 +648,29 @@ function switchProtocol(protocol) {
     document.querySelectorAll('.protocol-config').forEach(cfg => cfg.style.display = 'none');
     document.getElementById(protocol + '-config').style.display = 'block';
 
-    // 端口行显示控制（ARP无端口）
-    document.getElementById('port-row').style.display = protocol === 'arp' ? 'none' : 'flex';
+    // 端口行显示控制（ARP无端口）- 隐藏端口相关的grid行
+    const portElements = ['src-port', 'dst-port', 'port-row-hint'];
+    const grid = document.querySelector('.config-grid');
+    if (protocol === 'arp') {
+        // ARP时隐藏端口输入框
+        document.getElementById('src-port').style.display = 'none';
+        document.getElementById('dst-port').style.display = 'none';
+        // 找到端口相关的label并隐藏
+        const labels = grid.querySelectorAll('label');
+        labels.forEach(l => {
+            if (l.textContent.includes('端口')) l.style.display = 'none';
+        });
+    } else {
+        document.getElementById('src-port').style.display = '';
+        document.getElementById('dst-port').style.display = '';
+        const labels = grid.querySelectorAll('label');
+        labels.forEach(l => {
+            if (l.textContent.includes('端口')) l.style.display = '';
+        });
+    }
 
     // LAND选项显示控制（仅TCP）
-    document.getElementById('land-checkbox-container').style.display = protocol === 'tcp' ? 'inline' : 'none';
+    document.getElementById('land-checkbox-container').style.display = protocol === 'tcp' ? 'inline-flex' : 'none';
 
     // Smurf/广播特殊处理
     if (protocol === 'icmp') {
