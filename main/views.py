@@ -909,10 +909,12 @@ def api_agents_lock(request):
             })
 
         # 创建租用记录（基于活跃时间，无固定过期时间）
+        from django.utils import timezone
         lock = AgentLock.objects.create(
             user_identifier=user_identifier,
             client_ip=client_ip,
-            status='active'
+            status='active',
+            last_activity_at=timezone.now()
         )
 
         # 关联 Agent

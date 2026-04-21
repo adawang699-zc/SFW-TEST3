@@ -117,9 +117,10 @@ class AgentLock(models.Model):
         verbose_name="租用时间"
     )
     last_activity_at = models.DateTimeField(
-        auto_now_add=True,
         verbose_name="最后活跃时间",
-        help_text="用户最后一次访问 Agent 相关功能的时间"
+        help_text="用户最后一次访问 Agent 相关功能的时间",
+        null=True,
+        blank=True
     )
     expire_at = models.DateTimeField(
         null=True,
@@ -157,7 +158,9 @@ class AgentLock(models.Model):
         from django.utils import timezone
         INACTIVITY_TIMEOUT_HOURS = 2  # 无活动 2 小时后过期
         timeout = timezone.timedelta(hours=INACTIVITY_TIMEOUT_HOURS)
-        return timezone.now() > self.last_activity_at + timeout
+        # 如果 last_activity_at 为空，使用 locked_at
+        activity_time = self.last_activity_at or self.locked_at
+        return timezone.now() > activity_time + timeout
 
     def get_remaining_time(self):
         """获取剩余时间（基于活跃时间，秒）"""
@@ -166,7 +169,8 @@ class AgentLock(models.Model):
             return 0
         INACTIVITY_TIMEOUT_HOURS = 2
         timeout = timezone.timedelta(hours=INACTIVITY_TIMEOUT_HOURS)
-        remaining = (self.last_activity_at + timeout - timezone.now()).total_seconds()
+        activity_time = self.last_activity_at or self.locked_at
+        remaining = (activity_time + timeout - timezone.now()).total_seconds()
         return max(0, int(remaining))
 
     def update_activity(self):
