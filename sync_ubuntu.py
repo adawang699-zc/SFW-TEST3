@@ -1,6 +1,7 @@
 import paramiko
 import sys
 import io
+import time
 
 # 设置 stdout 为 UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -27,15 +28,26 @@ try:
 
     print('SSH 连接成功!')
 
-    # Git stash + pull
-    print('执行 git fetch...')
-    cmd = f'cd {REMOTE_PATH} && git fetch --prune origin'
-    exit_status, out, err = execute_ssh_command(ssh, cmd)
-    print('=== Git Fetch 输出 ===')
-    print(out)
-    if err:
-        print('=== Fetch 错误 ===')
-        print(err)
+    # 多次尝试 git fetch
+    success = False
+    for attempt in range(5):
+        print(f'\n尝试 #{attempt+1}: git fetch...')
+        cmd = f'cd {REMOTE_PATH} && git fetch --prune origin'
+        exit_status, out, err = execute_ssh_command(ssh, cmd)
+
+        if exit_status == 0:
+            print('[OK] Git fetch 成功!')
+            success = True
+            break
+        else:
+            print(f'[FAIL] Git fetch 失败: {err}')
+            if attempt < 4:
+                print('等待 15 秒后重试...')
+                time.sleep(15)
+
+    if not success:
+        print('\n[WARN] Git fetch 失败，尝试使用 reset...')
+        # 如果 fetch 失败，尝试直接 reset（可能会有旧代码）
 
     print('执行 git stash...')
     cmd = f'cd {REMOTE_PATH} && git stash'
@@ -56,10 +68,31 @@ try:
         print('=== 错误 ===')
         print(err)
 
-    if exit_status == 0:
-        print('[OK] 同步成功!')
+    # 显示当前 commit
+    cmd = f'cd {REMOTE_PATH} && git log -1 --oneline'
+    exit_status, out, err = execute_ssh_command(ssh, cmd)
+    print('=== 当前 Commit ===')
+    print(out)
+
+    # 重启 Django
+    print('\n重启 Django 服务...')
+    cmd = f'pkill -f "manage.py runserver"'
+    execute_ssh_command(ssh, cmd)
+
+    time.sleep(2)
+
+    cmd = f'cd {REMOTE_PATH} && nohup sfw/bin/python manage.py runserver 0.0.0.0:8000 > logs/django.log 2>&1 &'
+    exit_status, out, err = execute_ssh_command(ssh, cmd)
+
+    time.sleep(3)
+
+    # 检查进程
+    cmd = f'pgrep -f "manage.py runserver"'
+    exit_status, out, err = execute_ssh_command(ssh, cmd)
+    if out.strip():
+        print(f'[OK] Django 已启动: PID {out.strip()}')
     else:
-        print(f'[FAIL] 同步失败，退出码: {exit_status}')
+        print('[FAIL] Django 未启动!')
 
     ssh.close()
     sys.exit(0)

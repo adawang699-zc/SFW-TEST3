@@ -1111,7 +1111,10 @@ def api_agents_keepalive(request):
 
 @require_http_methods(["GET"])
 def api_agents_my_rented(request):
-    """获取当前 IP 租用的 Agent 列表（用于其他页面选择 Agent）"""
+    """获取当前 IP 租用的 Agent 列表（用于其他页面选择 Agent）
+
+    返回所有租用的 Agent，实时查询状态，包括发送状态
+    """
     from .models import AgentLock, LocalAgent
 
     try:
@@ -1144,19 +1147,58 @@ def api_agents_my_rented(request):
                 'message': f'当前 IP ({client_ip}) 无租用记录，请在 Agent 管理页面租用 Agent'
             })
 
-        # 获取租用的 Agent 详情
+        # 获取租用的 Agent 详情（返回所有，不过滤状态）
         rented_agents = []
         for agent in lock.agents.all():
-            # 只返回运行中的 Agent
-            if agent.status == 'running' and agent.interface.ip_address:
-                rented_agents.append({
-                    'agent_id': agent.agent_id,
-                    'interface_name': agent.interface.name,
-                    'ip_address': agent.interface.ip_address,
-                    'mac_address': agent.interface.mac_address,
-                    'port': agent.port,
-                    'status': agent.status,
-                })
+            # 实时查询 Agent 状态
+            actual_status = agent.status
+            is_sending = False
+            send_rate = 0
+            send_total = 0
+
+            if agent.interface.ip_address:
+                try:
+                    # 查询 Agent 状态
+                    resp = requests.get(
+                        f"http://{agent.interface.ip_address}:{agent.port}/api/status",
+                        timeout=2
+                    )
+                    if resp.status_code == 200:
+                        status_data = resp.json()
+                        actual_status = 'running'
+                        # 同步数据库状态
+                        if agent.status != 'running':
+                            agent.status = 'running'
+                            agent.save()
+
+                        # 获取发送统计
+                        stats_resp = requests.get(
+                            f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
+                            timeout=2
+                        )
+                        if stats_resp.status_code == 200:
+                            stats = stats_resp.json().get('statistics', {})
+                            send_rate = stats.get('rate', 0)
+                            send_total = stats.get('total_sent', 0)
+                            is_sending = send_rate > 0
+                except:
+                    actual_status = 'stopped'
+                    if agent.status != 'stopped':
+                        agent.status = 'stopped'
+                        agent.save()
+
+            rented_agents.append({
+                'agent_id': agent.agent_id,
+                'interface_name': agent.interface.name,
+                'ip_address': agent.interface.ip_address or '',
+                'mac_address': agent.interface.mac_address,
+                'port': agent.port,
+                'status': actual_status,
+                'is_sending': is_sending,
+                'send_rate': send_rate,
+                'send_total': send_total,
+                'has_ip': bool(agent.interface.ip_address),
+            })
 
         # 更新活跃时间
         lock.update_activity()
