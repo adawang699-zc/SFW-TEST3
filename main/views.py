@@ -328,27 +328,63 @@ def api_interface_list(request):
 
 @require_http_methods(["GET"])
 def api_agent_list(request):
-    """获取 Agent 列表"""
+    """获取 Agent 列表（同步网卡实际状态）"""
+    import psutil
+    import socket
+
     agents = LocalAgent.objects.all()
+
+    # 先获取网卡实际状态
+    net_if_addrs = psutil.net_if_addrs()
+    net_if_stats = psutil.net_if_stats()
 
     data = []
     for agent in agents:
+        # 从系统获取网卡实际状态
+        interface_name = agent.interface.name
+        actual_ip = None
+        actual_is_up = False
+        actual_status = 'DOWN'
+
+        if interface_name in net_if_addrs:
+            addrs = net_if_addrs[interface_name]
+            for addr in addrs:
+                if addr.family == socket.AF_INET:
+                    actual_ip = addr.address
+
+        if interface_name in net_if_stats:
+            stats = net_if_stats[interface_name]
+            actual_is_up = stats.isup
+            actual_status = 'UP' if stats.isup else 'DOWN'
+
+        # 同步网卡 IP 和状态到数据库
+        if actual_ip and actual_ip != agent.interface.ip_address:
+            agent.interface.ip_address = actual_ip
+            agent.interface.save()
+            logger.info(f"同步网卡 {interface_name} IP: {actual_ip}")
+
+        if agent.interface.is_up != actual_is_up or agent.interface.status != actual_status:
+            agent.interface.is_up = actual_is_up
+            agent.interface.status = actual_status
+            agent.interface.save()
+
         # 查询 Agent 实际状态（通过 HTTP）
-        actual_status = agent.status
-        try:
-            resp = requests.get(
-                f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                timeout=2
-            )
-            if resp.status_code == 200:
-                actual_status = 'running'
-                agent.status = 'running'
-                agent.save()
-        except:
-            actual_status = 'stopped'
-            if agent.status != 'stopped':
-                agent.status = 'stopped'
-                agent.save()
+        actual_agent_status = agent.status
+        if agent.interface.ip_address:
+            try:
+                resp = requests.get(
+                    f"http://{agent.interface.ip_address}:{agent.port}/api/status",
+                    timeout=2
+                )
+                if resp.status_code == 200:
+                    actual_agent_status = 'running'
+                    agent.status = 'running'
+                    agent.save()
+            except:
+                actual_agent_status = 'stopped'
+                if agent.status != 'stopped':
+                    agent.status = 'stopped'
+                    agent.save()
 
         data.append({
             'id': agent.id,
@@ -357,7 +393,9 @@ def api_agent_list(request):
             'ip_address': agent.interface.ip_address,
             'mac_address': agent.interface.mac_address,
             'port': agent.port,
-            'status': actual_status,
+            'status': actual_agent_status,
+            'interface_status': agent.interface.status,  # 网卡连接状态 UP/DOWN
+            'interface_is_up': agent.interface.is_up,  # 网卡是否启动
             'auto_start': agent.auto_start,
             'last_start_time': agent.last_start_time.isoformat() if agent.last_start_time else None,
             'created_at': agent.created_at.isoformat(),

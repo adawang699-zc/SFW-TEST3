@@ -380,13 +380,18 @@ function renderAgents(agents) {
         });
     });
 
-    let html = '<table class="table"><thead><tr><th>Agent ID</th><th>网卡</th><th>IP</th><th>端口</th><th>运行状态</th><th>租用状态</th><th>操作</th></tr></thead><tbody>';
+    let html = '<table class="table"><thead><tr><th>Agent ID</th><th>网卡</th><th>网卡状态</th><th>IP</th><th>端口</th><th>Agent状态</th><th>租用状态</th><th>操作</th></tr></thead><tbody>';
 
     agents.forEach(agent => {
         const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
         const statusText = agent.status === 'running' ? '运行中' : '已停止';
         const isRunning = agent.status === 'running';
         const currentIp = agent.ip_address || '';
+
+        // 网卡连接状态
+        const interfaceUp = agent.interface_is_up || agent.interface_status === 'UP';
+        const interfaceStatusClass = interfaceUp ? 'status-running' : 'status-stopped';
+        const interfaceStatusText = interfaceUp ? 'UP' : 'DOWN';
 
         // 租用状态
         const isLocked = lockedAgentIds.has(agent.agent_id);
@@ -398,6 +403,7 @@ function renderAgents(agents) {
             <tr>
                 <td><span class="agent-id">${agent.agent_id}</span></td>
                 <td>${agent.interface_name}</td>
+                <td><span class="status-badge ${interfaceStatusClass}">${interfaceStatusText}</span></td>
                 <td>${agent.ip_address || '未配置'}</td>
                 <td>${agent.port}</td>
                 <td><span class="status-badge ${statusClass}">${statusText}</span></td>
