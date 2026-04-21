@@ -1015,7 +1015,7 @@ def api_agents_locks(request):
                 'client_ip': lock.client_ip,
                 'locked_agents': [a.agent_id for a in lock.agents.all()],
                 'locked_at': lock.locked_at.isoformat(),
-                'last_activity_at': lock.last_activity_at.isoformat(),
+                'last_activity_at': lock.last_activity_at.isoformat() if lock.last_activity_at else lock.locked_at.isoformat(),
                 'remaining_seconds': lock.get_remaining_time(),
                 'status': lock.status
             })
@@ -1061,7 +1061,7 @@ def api_agents_my_lock(request):
                 'client_ip': lock.client_ip,
                 'locked_agents': [a.agent_id for a in lock.agents.all()],
                 'locked_at': lock.locked_at.isoformat(),
-                'last_activity_at': lock.last_activity_at.isoformat(),
+                'last_activity_at': lock.last_activity_at.isoformat() if lock.last_activity_at else lock.locked_at.isoformat(),
                 'remaining_seconds': lock.get_remaining_time()
             }
         })
