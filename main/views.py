@@ -1158,10 +1158,10 @@ def api_agents_my_rented(request):
 
             if agent.interface.ip_address:
                 try:
-                    # 查询 Agent 状态
+                    # 查询 Agent 状态（增加 timeout）
                     resp = requests.get(
                         f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                        timeout=2
+                        timeout=5
                     )
                     if resp.status_code == 200:
                         status_data = resp.json()
@@ -1174,7 +1174,7 @@ def api_agents_my_rented(request):
                         # 获取发送统计
                         stats_resp = requests.get(
                             f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
-                            timeout=2
+                            timeout=5
                         )
                         if stats_resp.status_code == 200:
                             stats = stats_resp.json().get('statistics', {})
