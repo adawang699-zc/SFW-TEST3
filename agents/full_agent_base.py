@@ -985,7 +985,7 @@ def send_packets_worker(interface, packet_config, send_config):
                             from scapy.arch.linux import L2Socket
                             sock = L2Socket(iface=interface)
 
-                            while not stop_sending.is_set():
+                            while not stop_sending.is_set() and sent < total_to_send:
                                 # 批量发送：每次发送1000个包
                                 batch_size = 1000
                                 sent_batch = 0
