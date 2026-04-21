@@ -655,8 +655,29 @@ def send_packets_worker(interface, packet_config, send_config):
     interval = send_config.get('interval', 0) / 1000.0  # 转换为秒
     continuous = send_config.get('continuous', False)
 
+    # 重要：确保使用正确的网卡发送
+    # 如果 src_mac 为空，获取指定接口的 MAC 地址
+    src_mac = packet_config.get('src_mac', '')
+    if not src_mac:
+        try:
+            src_mac = get_if_hwaddr(interface)
+            packet_config['src_mac'] = src_mac
+            print(f"自动获取接口 {interface} 的 MAC: {src_mac}")
+        except Exception as e:
+            print(f"警告: 无法获取接口 {interface} 的 MAC: {e}")
+
+    # 如果 src_ip 为空，获取指定接口的 IP 地址
+    src_ip = packet_config.get('src_ip', '')
+    if not src_ip:
+        try:
+            src_ip = get_if_addr(interface)
+            packet_config['src_ip'] = src_ip
+            print(f"自动获取接口 {interface} 的 IP: {src_ip}")
+        except Exception as e:
+            print(f"警告: 无法获取接口 {interface} 的 IP: {e}")
+
     # 调试：打印配置信息
-    print(f"开始发送报文 - 接口: {interface}, 协议: {packet_config.get('protocol')}, 连续: {continuous}, 数量: {count}")
+    print(f"开始发送报文 - 接口: {interface}, 源MAC: {src_mac}, 源IP: {src_ip}, 协议: {packet_config.get('protocol')}, 连续: {continuous}, 数量: {count}")
 
     variations = packet_config.get('variations', {})
     # 检查是否有递增配置
@@ -680,6 +701,9 @@ def send_packets_worker(interface, packet_config, send_config):
     with stats_lock:
         statistics['start_time'] = start_time
         statistics['last_update'] = start_time
+        statistics['total_sent'] = 0  # 重置计数
+        statistics['rate'] = 0
+        statistics['bandwidth'] = 0
 
     try:
         while not stop_sending.is_set() and sent < total_to_send:

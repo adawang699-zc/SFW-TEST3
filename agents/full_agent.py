@@ -179,12 +179,26 @@ def api_send_packet():
 @app.route('/api/stop', methods=['POST'])
 def api_stop():
     """停止发送报文"""
-    from agents.full_agent_base import stop_sending
+    from agents.full_agent_base import stop_sending, statistics, stats_lock
     stop_sending.set()
-    logger.info("停止发送报文")
+
+    # 清除统计数据
+    with stats_lock:
+        statistics['total_sent'] = 0
+        statistics['rate'] = 0
+        statistics['bandwidth'] = 0
+        statistics['start_time'] = None
+        statistics['last_update'] = None
+
+    logger.info("停止发送报文，统计数据已清除")
     return jsonify({
         'success': True,
-        'message': '已停止发送'
+        'message': '已停止发送',
+        'statistics': {
+            'total_sent': 0,
+            'rate': 0,
+            'bandwidth': 0
+        }
     })
 
 @app.route('/api/statistics', methods=['GET'])

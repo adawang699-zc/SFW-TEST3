@@ -943,12 +943,25 @@ async function stopSend() {
 
         if (result.success) {
             showToast('已停止');
+
+            // 立即隐藏停止按钮
             document.getElementById('stop-btn').style.display = 'none';
+
+            // 停止统计更新
             if (statsInterval) {
                 clearInterval(statsInterval);
                 statsInterval = null;
             }
+
+            // 重置统计显示
+            document.getElementById('stat-sent').textContent = '0';
+            document.getElementById('stat-rate').textContent = '0';
+            document.getElementById('stat-bandwidth').textContent = '0';
+
             addLog('停止发送');
+
+            // 重新加载 Agent 列表以更新状态显示
+            setTimeout(() => loadAgents(), 500);
         } else {
             showToast('停止失败: ' + result.error, 'error');
         }

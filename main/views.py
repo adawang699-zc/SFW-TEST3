@@ -1116,6 +1116,7 @@ def api_agents_my_rented(request):
     返回所有租用的 Agent，实时查询状态，包括发送状态
     """
     from .models import AgentLock, LocalAgent
+    import concurrent.futures
 
     try:
         # 先检查并释放过期的租用
@@ -1147,10 +1148,8 @@ def api_agents_my_rented(request):
                 'message': f'当前 IP ({client_ip}) 无租用记录，请在 Agent 管理页面租用 Agent'
             })
 
-        # 获取租用的 Agent 详情（返回所有，不过滤状态）
-        rented_agents = []
-        for agent in lock.agents.all():
-            # 实时查询 Agent 状态
+        # 并行查询所有 Agent 状态
+        def query_agent_status(agent):
             actual_status = agent.status
             is_sending = False
             send_rate = 0
@@ -1158,23 +1157,18 @@ def api_agents_my_rented(request):
 
             if agent.interface.ip_address:
                 try:
-                    # 查询 Agent 状态（增加 timeout）
+                    # 查询 Agent 状态（timeout=3秒）
                     resp = requests.get(
                         f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                        timeout=5
+                        timeout=3
                     )
                     if resp.status_code == 200:
-                        status_data = resp.json()
                         actual_status = 'running'
-                        # 同步数据库状态
-                        if agent.status != 'running':
-                            agent.status = 'running'
-                            agent.save()
 
                         # 获取发送统计
                         stats_resp = requests.get(
                             f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
-                            timeout=5
+                            timeout=3
                         )
                         if stats_resp.status_code == 200:
                             stats = stats_resp.json().get('statistics', {})
@@ -1183,11 +1177,8 @@ def api_agents_my_rented(request):
                             is_sending = send_rate > 0
                 except:
                     actual_status = 'stopped'
-                    if agent.status != 'stopped':
-                        agent.status = 'stopped'
-                        agent.save()
 
-            rented_agents.append({
+            return {
                 'agent_id': agent.agent_id,
                 'interface_name': agent.interface.name,
                 'ip_address': agent.interface.ip_address or '',
@@ -1198,7 +1189,37 @@ def api_agents_my_rented(request):
                 'send_rate': send_rate,
                 'send_total': send_total,
                 'has_ip': bool(agent.interface.ip_address),
-            })
+            }
+
+        rented_agents = []
+        agents_list = list(lock.agents.all())
+
+        # 使用线程池并行查询（最多5个并行）
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = {executor.submit(query_agent_status, agent): agent for agent in agents_list}
+            for future in concurrent.futures.as_completed(futures, timeout=15):
+                try:
+                    result = future.result(timeout=5)
+                    rented_agents.append(result)
+                    # 同步数据库状态
+                    agent = futures[future]
+                    if agent.status != result['status']:
+                        agent.status = result['status']
+                        agent.save(update_fields=['status'])
+                except:
+                    agent = futures[future]
+                    rented_agents.append({
+                        'agent_id': agent.agent_id,
+                        'interface_name': agent.interface.name,
+                        'ip_address': agent.interface.ip_address or '',
+                        'mac_address': agent.interface.mac_address,
+                        'port': agent.port,
+                        'status': 'stopped',
+                        'is_sending': False,
+                        'send_rate': 0,
+                        'send_total': 0,
+                        'has_ip': bool(agent.interface.ip_address),
+                    })
 
         # 更新活跃时间
         lock.update_activity()
