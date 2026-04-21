@@ -95,7 +95,7 @@ class AgentLock(models.Model):
     Agent 租用锁定模型 - 多用户并发使用 Agent 的资源管理
 
     用户租用 Agent 组后锁定，防止其他用户同时使用
-    支持手动释放和超时自动释放
+    基于活跃时间自动释放：用户无活动超过指定时间后自动释放
     """
     LOCK_STATUS = [
         ('active', '活跃'),
@@ -116,9 +116,16 @@ class AgentLock(models.Model):
         auto_now_add=True,
         verbose_name="租用时间"
     )
+    last_activity_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="最后活跃时间",
+        help_text="用户最后一次访问 Agent 相关功能的时间"
+    )
     expire_at = models.DateTimeField(
+        null=True,
+        blank=True,
         verbose_name="过期时间",
-        help_text="默认租用时间 + 4小时"
+        help_text="仅用于显示，实际过期基于 last_activity_at"
     )
     status = models.CharField(
         max_length=20,
@@ -146,17 +153,27 @@ class AgentLock(models.Model):
         return f"{self.user_identifier} ({self.client_ip}) - {self.status}"
 
     def is_expired(self):
-        """检查是否已过期"""
+        """检查是否已过期（基于活跃时间）"""
         from django.utils import timezone
-        return timezone.now() > self.expire_at
+        INACTIVITY_TIMEOUT_HOURS = 2  # 无活动 2 小时后过期
+        timeout = timezone.timedelta(hours=INACTIVITY_TIMEOUT_HOURS)
+        return timezone.now() > self.last_activity_at + timeout
 
     def get_remaining_time(self):
-        """获取剩余租用时间（秒）"""
+        """获取剩余时间（基于活跃时间，秒）"""
         from django.utils import timezone
         if self.status != 'active':
             return 0
-        remaining = (self.expire_at - timezone.now()).total_seconds()
+        INACTIVITY_TIMEOUT_HOURS = 2
+        timeout = timezone.timedelta(hours=INACTIVITY_TIMEOUT_HOURS)
+        remaining = (self.last_activity_at + timeout - timezone.now()).total_seconds()
         return max(0, int(remaining))
+
+    def update_activity(self):
+        """更新活跃时间"""
+        from django.utils import timezone
+        self.last_activity_at = timezone.now()
+        self.save(update_fields=['last_activity_at'])
 
 
 class TestDevice(models.Model):

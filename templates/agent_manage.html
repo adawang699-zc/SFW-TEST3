@@ -39,7 +39,7 @@
                 <button class="btn btn-secondary" onclick="unlockAgents()">🔓 释放我的租用</button>
             </div>
             <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 8px;">
-                租用时长: 4 小时，到期后自动释放。请及时释放以便他人使用。
+                租用规则：使用中自动续期，无活动 2 小时后自动释放。请及时释放以便他人使用。
             </p>
         </div>
         <!-- 我的租用状态 -->
@@ -206,22 +206,59 @@ async function loadMyLock() {
         if (result.success) {
             if (result.lock) {
                 const remainingMinutes = Math.floor(result.lock.remaining_seconds / 60);
-                const expireTime = new Date(result.lock.expire_at).toLocaleString('zh-CN');
+                const lastActivityTime = new Date(result.lock.last_activity_at).toLocaleString('zh-CN');
                 container.innerHTML = `
                     <div style="color: var(--success);">
                         <strong>已租用 Agent:</strong> ${result.lock.locked_agents.join(', ')}<br>
                         <strong>租用时间:</strong> ${new Date(result.lock.locked_at).toLocaleString('zh-CN')}<br>
-                        <strong>到期时间:</strong> ${expireTime}<br>
-                        <strong>剩余时间:</strong> ${remainingMinutes} 分钟<br>
-                        <strong>客户端 IP:</strong> ${result.lock.client_ip}
+                        <strong>最后活跃:</strong> ${lastActivityTime}<br>
+                        <strong>剩余时间:</strong> <span id="remaining-time">${remainingMinutes} 分钟</span><br>
+                        <strong>客户端 IP:</strong> ${result.lock.client_ip}<br>
+                        <small style="color: var(--text-secondary);">使用中自动续期，无活动 2 小时后自动释放</small>
                     </div>
                 `;
+                // 启动心跳
+                startKeepalive(userIdentifier);
             } else {
                 container.innerHTML = '<p style="color: var(--text-secondary);">当前无租用记录</p>';
+                stopKeepalive();
             }
         }
     } catch (e) {
         console.error('加载我的租用失败:', e);
+    }
+}
+
+// 心跳定时器
+let keepaliveTimer = null;
+
+function startKeepalive(userIdentifier) {
+    if (keepaliveTimer) return;
+    // 每 5 分钟发送心跳
+    keepaliveTimer = setInterval(async () => {
+        try {
+            const result = await apiRequest('/api/agents/keepalive/', 'POST', {
+                user_identifier: userIdentifier
+            });
+            if (result.success) {
+                const remainingMinutes = Math.floor(result.remaining_seconds / 60);
+                const el = document.getElementById('remaining-time');
+                if (el) el.textContent = remainingMinutes + ' 分钟';
+            } else {
+                // 租用已过期
+                stopKeepalive();
+                loadMyLock();
+            }
+        } catch (e) {
+            console.error('心跳失败:', e);
+        }
+    }, 5 * 60 * 1000);
+}
+
+function stopKeepalive() {
+    if (keepaliveTimer) {
+        clearInterval(keepaliveTimer);
+        keepaliveTimer = null;
     }
 }
 
@@ -234,12 +271,12 @@ function renderLocks(locks) {
         return;
     }
 
-    let html = '<table class="table"><thead><tr><th>用户</th><th>客户端 IP</th><th>租用的 Agent</th><th>租用时间</th><th>到期时间</th><th>剩余时间</th></tr></thead><tbody>';
+    let html = '<table class="table"><thead><tr><th>用户</th><th>客户端 IP</th><th>租用的 Agent</th><th>租用时间</th><th>最后活跃</th><th>剩余时间</th></tr></thead><tbody>';
 
     locks.forEach(lock => {
         const remainingMinutes = Math.floor(lock.remaining_seconds / 60);
         const lockedTime = new Date(lock.locked_at).toLocaleString('zh-CN');
-        const expireTime = new Date(lock.expire_at).toLocaleString('zh-CN');
+        const lastActivityTime = new Date(lock.last_activity_at).toLocaleString('zh-CN');
 
         html += `
             <tr>
@@ -247,7 +284,7 @@ function renderLocks(locks) {
                 <td>${lock.client_ip}</td>
                 <td>${lock.locked_agents.join(', ')}</td>
                 <td>${lockedTime}</td>
-                <td>${expireTime}</td>
+                <td>${lastActivityTime}</td>
                 <td><span class="status-badge status-running">${remainingMinutes} 分钟</span></td>
             </tr>
         `;

@@ -38,6 +38,7 @@ urlpatterns = [
     path('api/agents/unlock/', views.api_agents_unlock, name='api_agents_unlock'),
     path('api/agents/locks/', views.api_agents_locks, name='api_agents_locks'),
     path('api/agents/my-lock/', views.api_agents_my_lock, name='api_agents_my_lock'),
+    path('api/agents/keepalive/', views.api_agents_keepalive, name='api_agents_keepalive'),
 
     # ========== 功能 API（代理到 Agent）==========
     path('api/send_packet/', views.api_send_packet, name='api_send_packet'),

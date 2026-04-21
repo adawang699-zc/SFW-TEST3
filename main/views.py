@@ -762,10 +762,39 @@ def api_agent_config_ip(request):
             agent.interface.status = 'UP'
             agent.interface.save()
 
-            logger.info(f"Agent {agent_id} 网卡 {interface_name} 配置 IP: {cidr}")
+            # 更新 systemd 服务配置文件中的 BIND_IP
+            service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
+            service_content = f"""[Unit]
+Description=Packet Agent {agent.agent_id} ({interface_name})
+After=network.target
+
+[Service]
+Type=simple
+Environment="AGENT_ID={agent.agent_id}"
+Environment="BIND_IP={ip_address}"
+Environment="BIND_INTERFACE={interface_name}"
+Environment="AGENT_PORT={agent.port}"
+WorkingDirectory={settings.AGENT_WORK_DIR}
+ExecStart={settings.AGENT_VENV_PYTHON} -m agents.full_agent
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+"""
+            subprocess.run(
+                ['sudo', 'tee', service_file],
+                input=service_content,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            subprocess.run(['sudo', 'systemctl', 'daemon-reload'], timeout=10, capture_output=True)
+
+            logger.info(f"Agent {agent_id} 网卡 {interface_name} 配置 IP: {cidr}, 已更新服务配置")
             return JsonResponse({
                 'success': True,
-                'message': f'网卡 {interface_name} 已配置 IP: {cidr}',
+                'message': f'网卡 {interface_name} 已配置 IP: {cidr}，服务配置已同步更新',
                 'ip_address': ip_address
             })
         else:
@@ -781,24 +810,39 @@ def api_agent_config_ip(request):
 
 # ========== Agent 租用管理 API ==========
 
-DEFAULT_LOCK_DURATION_HOURS = 4  # 默认租用时长 4 小时
+INACTIVITY_TIMEOUT_HOURS = 2  # 无活动 2 小时后自动释放
 
 
 def check_and_release_expired_locks():
-    """检查并释放过期的租用"""
+    """检查并释放过期的租用（基于活跃时间）"""
     from django.utils import timezone
     from .models import AgentLock
 
-    expired_locks = AgentLock.objects.filter(
-        status='active',
-        expire_at__lt=timezone.now()
-    )
+    # 查找所有活跃租用
+    active_locks = AgentLock.objects.filter(status='active')
 
-    for lock in expired_locks:
-        lock.status = 'expired'
-        lock.released_at = timezone.now()
-        lock.save()
-        logger.info(f"租用过期自动释放: {lock.user_identifier} ({lock.client_ip})")
+    for lock in active_locks:
+        if lock.is_expired():  # 使用模型的 is_expired 方法（基于 last_activity_at）
+            lock.status = 'expired'
+            lock.released_at = timezone.now()
+            lock.save()
+            logger.info(f"租用过期自动释放: {lock.user_identifier} ({lock.client_ip}), 无活动超过 {INACTIVITY_TIMEOUT_HOURS} 小时")
+
+
+def update_lock_activity(user_identifier):
+    """更新用户租用的活跃时间"""
+    from .models import AgentLock
+
+    try:
+        lock = AgentLock.objects.filter(
+            user_identifier=user_identifier,
+            status='active'
+        ).first()
+        if lock:
+            lock.update_activity()
+            logger.debug(f"更新租用活跃时间: {user_identifier}")
+    except Exception as e:
+        logger.warning(f"更新租用活跃时间失败: {e}")
 
 
 @require_http_methods(["POST"])
@@ -830,13 +874,15 @@ def api_agents_lock(request):
         ).first()
 
         if existing_lock:
+            # 如果已有租用，更新活跃时间并返回提示
+            existing_lock.update_activity()
             return JsonResponse({
                 'success': False,
-                'error': f'您已有租用记录，请先释放后再租用',
+                'error': f'您已有租用记录，使用中会自动续期',
                 'existing_lock': {
                     'lock_id': existing_lock.id,
                     'locked_agents': [a.agent_id for a in existing_lock.agents.all()],
-                    'expire_at': existing_lock.expire_at.isoformat(),
+                    'last_activity_at': existing_lock.last_activity_at.isoformat(),
                     'remaining_seconds': existing_lock.get_remaining_time()
                 }
             })
@@ -862,12 +908,10 @@ def api_agents_lock(request):
                 'error': f'以下 Agent 已被租用: {", ".join(locked_agent_ids)}'
             })
 
-        # 创建租用记录
-        expire_at = timezone.now() + timezone.timedelta(hours=DEFAULT_LOCK_DURATION_HOURS)
+        # 创建租用记录（基于活跃时间，无固定过期时间）
         lock = AgentLock.objects.create(
             user_identifier=user_identifier,
             client_ip=client_ip,
-            expire_at=expire_at,
             status='active'
         )
 
@@ -876,18 +920,18 @@ def api_agents_lock(request):
             agent = LocalAgent.objects.get(agent_id=agent_id)
             lock.agents.add(agent)
 
-        logger.info(f"租用成功: {user_identifier} ({client_ip}) 租用 Agent: {agent_ids}, 过期时间: {expire_at}")
+        logger.info(f"租用成功: {user_identifier} ({client_ip}) 租用 Agent: {agent_ids}, 无活动 {INACTIVITY_TIMEOUT_HOURS} 小时后自动释放")
 
         return JsonResponse({
             'success': True,
-            'message': f'租用成功，有效期至 {expire_at.strftime("%Y-%m-%d %H:%M:%S")}',
+            'message': f'租用成功，使用中自动续期，无活动 {INACTIVITY_TIMEOUT_HOURS} 小时后自动释放',
             'lock': {
                 'lock_id': lock.id,
                 'user_identifier': lock.user_identifier,
                 'client_ip': lock.client_ip,
                 'locked_agents': agent_ids,
                 'locked_at': lock.locked_at.isoformat(),
-                'expire_at': lock.expire_at.isoformat(),
+                'last_activity_at': lock.last_activity_at.isoformat(),
                 'remaining_seconds': lock.get_remaining_time()
             }
         })
@@ -969,7 +1013,7 @@ def api_agents_locks(request):
                 'client_ip': lock.client_ip,
                 'locked_agents': [a.agent_id for a in lock.agents.all()],
                 'locked_at': lock.locked_at.isoformat(),
-                'expire_at': lock.expire_at.isoformat(),
+                'last_activity_at': lock.last_activity_at.isoformat(),
                 'remaining_seconds': lock.get_remaining_time(),
                 'status': lock.status
             })
@@ -1015,13 +1059,51 @@ def api_agents_my_lock(request):
                 'client_ip': lock.client_ip,
                 'locked_agents': [a.agent_id for a in lock.agents.all()],
                 'locked_at': lock.locked_at.isoformat(),
-                'expire_at': lock.expire_at.isoformat(),
+                'last_activity_at': lock.last_activity_at.isoformat(),
                 'remaining_seconds': lock.get_remaining_time()
             }
         })
 
     except Exception as e:
         logger.exception(f"获取用户租用信息失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_agents_keepalive(request):
+    """更新租用活跃时间（心跳）"""
+    try:
+        data = json.loads(request.body)
+        user_identifier = data.get('user_identifier', '').strip()
+
+        if not user_identifier:
+            return JsonResponse({'success': False, 'error': '请输入用户标识符'})
+
+        # 检查并释放过期租用
+        check_and_release_expired_locks()
+
+        # 更新活跃时间
+        update_lock_activity(user_identifier)
+
+        # 返回更新后的状态
+        from .models import AgentLock
+        lock = AgentLock.objects.filter(
+            user_identifier=user_identifier,
+            status='active'
+        ).first()
+
+        if lock:
+            return JsonResponse({
+                'success': True,
+                'message': '活跃时间已更新',
+                'remaining_seconds': lock.get_remaining_time()
+            })
+        else:
+            return JsonResponse({'success': False, 'error': '没有活跃的租用记录'})
+
+    except Exception as e:
+        logger.exception(f"更新活跃时间失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
 
 
