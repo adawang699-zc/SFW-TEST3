@@ -230,10 +230,7 @@ select.form-input option, select option {
 {% block content %}
 <div class="card">
     <div class="card-header">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 1.1rem;">报文发送</span>
-            <button class="btn btn-secondary" onclick="loadAgents()">刷新Agent</button>
-        </div>
+        <span style="font-size: 1.1rem;">报文发送</span>
     </div>
 </div>
 
@@ -789,6 +786,7 @@ function updateIcmpType() {
         lengthInput.disabled = true;
     } else if (type === 'smurf') {
         hint.textContent = '(广播攻击)';
+        lengthInput.value = 64;
         lengthInput.disabled = false;
         // Smurf: 目的MAC广播, 目的IP广播地址
         document.getElementById('dst-mac').value = 'FF:FF:FF:FF:FF:FF';
@@ -988,14 +986,16 @@ async function updateStats() {
             document.getElementById('stat-rate').textContent = Math.round(stats.rate || 0);
             document.getElementById('stat-bandwidth').textContent = Math.round((stats.bandwidth || 0) / 1024);
 
-            // 如果发送速率变为 0，说明发送已停止，隐藏停止按钮
-            if (stats.rate === 0 && stats.total_sent > 0) {
+            // 如果发送状态变为 false 且发送数量大于0，说明发送已自动完成
+            if (stats.sending === false && stats.total_sent > 0) {
                 document.getElementById('stop-btn').style.display = 'none';
                 if (statsInterval) {
                     clearInterval(statsInterval);
                     statsInterval = null;
                 }
                 addLog('发送已完成，共发送 ' + stats.total_sent + ' 包');
+                // 重新加载 Agent 列表以更新状态显示
+                setTimeout(() => loadAgents(), 500);
             }
         }
     } catch (e) {}

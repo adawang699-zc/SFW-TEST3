@@ -72,7 +72,8 @@ statistics = {
     'start_time': None,
     'last_update': None,
     'rate': 0,
-    'bandwidth': 0
+    'bandwidth': 0,
+    'sending': False
 }
 stats_lock = threading.Lock()
 
@@ -704,6 +705,7 @@ def send_packets_worker(interface, packet_config, send_config):
         statistics['total_sent'] = 0  # 重置计数
         statistics['rate'] = 0
         statistics['bandwidth'] = 0
+        statistics['sending'] = True
 
     try:
         while not stop_sending.is_set() and sent < total_to_send:
@@ -1088,6 +1090,7 @@ def send_packets_worker(interface, packet_config, send_config):
         if sent >= total_to_send:
             with stats_lock:
                 statistics['total_sent'] = sent
+                statistics['sending'] = False
                 if start_time:
                     elapsed = time.time() - start_time
                     statistics['rate'] = int(sent / elapsed) if elapsed > 0 else 0

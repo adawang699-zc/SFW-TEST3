@@ -274,6 +274,13 @@ function renderLocks(locks) {
         return;
     }
 
+    // 按租用时间倒序排序（最新的在前）
+    locks.sort((a, b) => {
+        const timeA = new Date(a.locked_at).getTime();
+        const timeB = new Date(b.locked_at).getTime();
+        return timeB - timeA;  // 倒序
+    });
+
     let html = '<table class="table"><thead><tr><th>用户</th><th>客户端 IP</th><th>租用的 Agent</th><th>租用时间</th><th>最后活跃</th><th>剩余时间</th></tr></thead><tbody>';
 
     locks.forEach(lock => {
@@ -307,8 +314,13 @@ function updateLockAgentCheckboxes() {
         lock.locked_agents.forEach(agentId => lockedAgentIds.add(agentId));
     });
 
-    // 只显示运行中的 Agent
+    // 只显示运行中的 Agent，并按 eth 序号排序
     const runningAgents = allAgents.filter(a => a.status === 'running');
+    runningAgents.sort((a, b) => {
+        const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
+        const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
+        return numA - numB;
+    });
 
     if (runningAgents.length === 0) {
         container.innerHTML = '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
@@ -409,6 +421,13 @@ function renderAgents(agents) {
         container.innerHTML = '<p style="color: var(--text-secondary);">暂无 Agent，请先扫描网卡</p>';
         return;
     }
+
+    // 按 eth 序号排序（eth1, eth2, eth3...）
+    agents.sort((a, b) => {
+        const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
+        const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
+        return numA - numB;
+    });
 
     // 找出已被租用的 Agent
     const lockedAgentIds = new Set();
