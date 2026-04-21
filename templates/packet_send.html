@@ -519,6 +519,13 @@ async function loadAgents() {
         agents = result.agents || [];
 
         if (agents.length > 0) {
+            // 按 eth 序号排序（eth1, eth2, eth3...）
+            agents.sort((a, b) => {
+                const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
+                const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
+                return numA - numB;
+            });
+
             let html = '';
             agents.forEach(agent => {
                 // 根据状态显示不同样式

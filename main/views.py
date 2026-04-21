@@ -328,9 +328,10 @@ def api_interface_list(request):
 
 @require_http_methods(["GET"])
 def api_agent_list(request):
-    """获取 Agent 列表（同步网卡实际状态）"""
+    """获取 Agent 列表（并行查询状态，优化速度）"""
     import psutil
     import socket
+    import concurrent.futures
 
     agents = LocalAgent.objects.all()
 
@@ -338,9 +339,9 @@ def api_agent_list(request):
     net_if_addrs = psutil.net_if_addrs()
     net_if_stats = psutil.net_if_stats()
 
-    data = []
-    for agent in agents:
-        # 从系统获取网卡实际状态
+    # 并行查询 Agent 状态
+    def query_agent_status(agent):
+        """查询单个 Agent 状态"""
         interface_name = agent.interface.name
         actual_ip = None
         actual_is_up = False
@@ -357,24 +358,23 @@ def api_agent_list(request):
             actual_is_up = stats.isup
             actual_status = 'UP' if stats.isup else 'DOWN'
 
-        # 同步网卡 IP 和状态到数据库
+        # 同步网卡状态到数据库
         if actual_ip and actual_ip != agent.interface.ip_address:
             agent.interface.ip_address = actual_ip
             agent.interface.save()
-            logger.info(f"同步网卡 {interface_name} IP: {actual_ip}")
 
         if agent.interface.is_up != actual_is_up or agent.interface.status != actual_status:
             agent.interface.is_up = actual_is_up
             agent.interface.status = actual_status
             agent.interface.save()
 
-        # 查询 Agent 实际状态（通过 HTTP）
+        # 查询 Agent HTTP 状态
         actual_agent_status = agent.status
         if agent.interface.ip_address:
             try:
                 resp = requests.get(
                     f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                    timeout=2
+                    timeout=1  # 减少超时
                 )
                 if resp.status_code == 200:
                     actual_agent_status = 'running'
@@ -386,7 +386,7 @@ def api_agent_list(request):
                     agent.status = 'stopped'
                     agent.save()
 
-        data.append({
+        return {
             'id': agent.id,
             'agent_id': agent.agent_id,
             'interface_name': agent.interface.name,
@@ -394,12 +394,38 @@ def api_agent_list(request):
             'mac_address': agent.interface.mac_address,
             'port': agent.port,
             'status': actual_agent_status,
-            'interface_status': agent.interface.status,  # 网卡连接状态 UP/DOWN
-            'interface_is_up': agent.interface.is_up,  # 网卡是否启动
+            'interface_status': agent.interface.status,
+            'interface_is_up': agent.interface.is_up,
             'auto_start': agent.auto_start,
             'last_start_time': agent.last_start_time.isoformat() if agent.last_start_time else None,
             'created_at': agent.created_at.isoformat(),
-        })
+        }
+
+    data = []
+    # 使用线程池并行查询
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(query_agent_status, agent): agent for agent in agents}
+        for future in concurrent.futures.as_completed(futures, timeout=10):
+            try:
+                result = future.result(timeout=2)
+                data.append(result)
+            except:
+                agent = futures[future]
+                # 超时时使用数据库状态
+                data.append({
+                    'id': agent.id,
+                    'agent_id': agent.agent_id,
+                    'interface_name': agent.interface.name,
+                    'ip_address': agent.interface.ip_address,
+                    'mac_address': agent.interface.mac_address,
+                    'port': agent.port,
+                    'status': agent.status,
+                    'interface_status': agent.interface.status,
+                    'interface_is_up': agent.interface.is_up,
+                    'auto_start': agent.auto_start,
+                    'last_start_time': agent.last_start_time.isoformat() if agent.last_start_time else None,
+                    'created_at': agent.created_at.isoformat(),
+                })
 
     return JsonResponse({'agents': data})
 
