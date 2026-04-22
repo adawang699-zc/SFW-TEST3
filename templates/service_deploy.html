@@ -348,7 +348,7 @@
 
 /* 文件列表 */
 .file-list {
-    max-height: 200px;
+    max-height: 250px;
     overflow-y: auto;
 }
 
@@ -359,15 +359,48 @@
     margin: 4px 0;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid transparent;
+}
+
+.file-item:hover {
+    background: var(--bg-hover);
+    border-color: var(--primary-light);
+}
+
+.file-item.selected {
+    background: var(--primary-light);
+    border-color: var(--primary);
+}
+
+.file-item.is-dir {
+    font-weight: 500;
+}
+
+.file-icon {
+    margin-right: 8px;
+    font-size: 1.1em;
 }
 
 .file-name {
     color: var(--text-primary);
+    flex: 1;
+    display: flex;
+    align-items: center;
 }
 
 .file-size {
     color: var(--text-muted);
     font-size: 0.85rem;
+    margin-left: 10px;
+}
+
+.file-modified {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-left: 10px;
 }
 
 /* 响应式布局 */
@@ -718,14 +751,20 @@
                 <!-- FTP 文件操作 -->
                 <div class="config-row single" id="ftp-file-ops" style="display:none;">
                     <div class="config-group">
-                        <label>文件名</label>
-                        <input type="text" id="ftp-file-name" class="config-input" placeholder="test.txt">
+                        <label>选中文件</label>
+                        <input type="text" id="ftp-file-name" class="config-input" placeholder="点击文件列表选择" readonly>
+                    </div>
+                </div>
+                <div class="config-row single" id="ftp-upload-content" style="display:none;">
+                    <div class="config-group">
+                        <label>上传内容</label>
+                        <textarea id="ftp-upload-data" class="config-input" rows="3" placeholder="输入要上传的文本内容..."></textarea>
                     </div>
                 </div>
                 <div class="config-row single" id="ftp-dir-ops" style="display:none;">
                     <div class="config-group">
-                        <label>目录路径</label>
-                        <input type="text" id="ftp-dir-name" class="config-input" placeholder="/">
+                        <label>当前目录</label>
+                        <input type="text" id="ftp-dir-name" class="config-input" placeholder="/" readonly>
                     </div>
                 </div>
                 <!-- FTP 文件列表 -->
@@ -1788,6 +1827,7 @@ function showFtpConnectedButtons() {
     document.getElementById('ftp-download-btn').style.display = 'inline-block';
     document.getElementById('ftp-disconnect-btn').style.display = 'inline-block';
     document.getElementById('ftp-file-ops').style.display = 'block';
+    document.getElementById('ftp-upload-content').style.display = 'block';
     document.getElementById('ftp-dir-ops').style.display = 'block';
 }
 
@@ -1797,6 +1837,7 @@ function hideFtpConnectedButtons() {
     document.getElementById('ftp-download-btn').style.display = 'none';
     document.getElementById('ftp-disconnect-btn').style.display = 'none';
     document.getElementById('ftp-file-ops').style.display = 'none';
+    document.getElementById('ftp-upload-content').style.display = 'none';
     document.getElementById('ftp-dir-ops').style.display = 'none';
     document.getElementById('ftp-file-list').style.display = 'none';
 }
@@ -1817,13 +1858,38 @@ async function listFtpFiles() {
         if (result.success) {
             addClientLog('获取文件列表成功', 'info');
             document.getElementById('ftp-file-list').style.display = 'block';
+
+            // 更新当前目录
+            if (result.current_dir) {
+                document.getElementById('ftp-dir-name').value = result.current_dir;
+            }
+
             let filesHtml = '';
-            if (result.files) {
-                result.files.forEach(file => {
+            if (result.files && result.files.length > 0) {
+                // 添加返回上级目录选项（如果不在根目录）
+                const currentDir = result.current_dir || '/';
+                if (currentDir !== '/') {
                     filesHtml += `
-                        <div class="file-item">
-                            <span class="file-name">${file.name}</span>
-                            <span class="file-size">${file.size || '-'}</span>
+                        <div class="file-item is-dir" onclick="ftpCdDir('..')">
+                            <span class="file-name"><span class="file-icon">📁</span>..</span>
+                            <span class="file-size">返回上级</span>
+                        </div>
+                    `;
+                }
+
+                result.files.forEach(file => {
+                    const icon = file.is_dir ? '📁' : '📄';
+                    const sizeStr = file.is_dir ? '' : formatFileSize(file.size);
+                    const modifiedStr = file.modified || '';
+                    const classes = file.is_dir ? 'file-item is-dir' : 'file-item';
+
+                    filesHtml += `
+                        <div class="${classes}"
+                             onclick="selectFtpFile('${file.name}', ${file.is_dir})"
+                             ondblclick="${file.is_dir ? `ftpCdDir('${file.name}')` : `downloadFtpFileByName('${file.name}')`}">
+                            <span class="file-name"><span class="file-icon">${icon}</span>${file.name}</span>
+                            <span class="file-size">${sizeStr}</span>
+                            <span class="file-modified">${modifiedStr}</span>
                         </div>
                     `;
                 });
@@ -1837,12 +1903,72 @@ async function listFtpFiles() {
     }
 }
 
+function formatFileSize(size) {
+    if (size === null || size === undefined) return '-';
+    if (size < 1024) return size + ' B';
+    if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB';
+    if (size < 1024 * 1024 * 1024) return (size / 1024 / 1024).toFixed(1) + ' MB';
+    return (size / 1024 / 1024 / 1024).toFixed(1) + ' GB';
+}
+
+let selectedFtpFile = null;
+let selectedFtpIsDir = false;
+
+function selectFtpFile(name, isDir) {
+    selectedFtpFile = name;
+    selectedFtpIsDir = isDir;
+    document.getElementById('ftp-file-name').value = name;
+
+    // 更新选中样式
+    document.querySelectorAll('#ftp-files-content .file-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    event.currentTarget.classList.add('selected');
+}
+
+async function ftpCdDir(dirname) {
+    if (!clientAgent) return;
+
+    const config = {
+        agent_id: clientAgent.agent_id,
+        protocol: 'ftp',
+        action: 'cd',
+        config: { dirname: dirname }
+    };
+
+    addClientLog(`切换目录: ${dirname}...`);
+
+    try {
+        const result = await apiRequest('/api/services/client/', 'POST', config);
+        if (result.success) {
+            showToast('目录切换成功');
+            addClientLog(`已切换到: ${result.current_dir || dirname}`, 'info');
+            // 自动刷新文件列表
+            await listFtpFiles();
+        } else {
+            showToast('切换失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('切换失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        addClientLog('请求失败: ' + e.message, 'error');
+    }
+}
+
 async function uploadFtpFile() {
     if (!clientAgent) return;
 
-    const filename = document.getElementById('ftp-file-name').value;
-    if (!filename) {
-        showToast('请输入文件名', 'error');
+    // 获取上传文件名和内容
+    let filename = document.getElementById('ftp-file-name').value;
+    const content = document.getElementById('ftp-upload-data').value;
+
+    // 如果没有选中文件，让用户输入新文件名
+    if (!filename || selectedFtpIsDir) {
+        filename = prompt('请输入新文件名:', 'new_file.txt');
+        if (!filename) return;
+    }
+
+    if (!content) {
+        showToast('请输入上传内容', 'error');
         return;
     }
 
@@ -1852,7 +1978,7 @@ async function uploadFtpFile() {
         action: 'upload',
         config: {
             filename: filename,
-            content: 'Test content for ' + filename
+            content: content
         }
     };
 
@@ -1863,6 +1989,9 @@ async function uploadFtpFile() {
         if (result.success) {
             showToast('文件上传成功');
             addClientLog('文件上传成功: ' + filename, 'info');
+            // 清空上传内容
+            document.getElementById('ftp-upload-data').value = '';
+            // 自动刷新文件列表
             listFtpFiles();
         } else {
             showToast('上传失败: ' + (result.error || '未知错误'), 'error');
@@ -1878,9 +2007,20 @@ async function downloadFtpFile() {
 
     const filename = document.getElementById('ftp-file-name').value;
     if (!filename) {
-        showToast('请输入文件名', 'error');
+        showToast('请先选择文件', 'error');
         return;
     }
+
+    if (selectedFtpIsDir) {
+        showToast('不能下载文件夹，请双击进入', 'error');
+        return;
+    }
+
+    await downloadFtpFileByName(filename);
+}
+
+async function downloadFtpFileByName(filename) {
+    if (!clientAgent) return;
 
     const config = {
         agent_id: clientAgent.agent_id,
@@ -1897,10 +2037,15 @@ async function downloadFtpFile() {
         const result = await apiRequest('/api/services/client/', 'POST', config);
         if (result.success) {
             showToast('文件下载成功');
-            addClientLog(`下载成功: ${filename} (${result.file_size} bytes)`, 'info');
+            addClientLog(`下载成功: ${filename} (${result.file_size || '未知'} bytes)`, 'info');
         } else {
             showToast('下载失败: ' + (result.error || '未知错误'), 'error');
             addClientLog('下载失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (e) {
+        addClientLog('请求失败: ' + e.message, 'error');
+    }
+}
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
