@@ -1707,7 +1707,7 @@ async function toggleUdpSend() {
                 const startResult = await apiRequest('/api/services/client/', 'POST', startConfig);
                 if (!startResult.success) {
                     showToast('启动失败: ' + (startResult.error || '未知错误'), 'error');
-                    addClientLog('启动失败: ' + (startResult.error || '未知错误'), 'error';
+                    addClientLog('启动失败: ' + (startResult.error || '未知错误'), 'error');
                     sendBtn.disabled = false;
                     return;
                 }
@@ -1734,7 +1734,7 @@ async function toggleUdpSend() {
                 udpIsSending = true;
             } else {
                 showToast('发送失败: ' + (result.error || '未知错误'), 'error');
-                addClientLog('发送失败: ' + (result.error || '未知错误'), 'error';
+                addClientLog('发送失败: ' + (result.error || '未知错误'), 'error');
             }
         }
 
