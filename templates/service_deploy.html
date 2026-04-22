@@ -765,9 +765,9 @@
             <!-- Mail 客户端配置 -->
             <div class="config-section hidden" id="mail-client-config">
                 <div class="mail-tabs">
-                    <div class="mail-tab active" onclick="selectMailAction('send')">发送邮件</div>
-                    <div class="mail-tab" onclick="selectMailAction('receive')">接收邮件</div>
-                    <div class="mail-tab" onclick="selectMailAction('test')">测试连接</div>
+                    <div class="mail-tab active" onclick="selectMailAction('send', this)">发送邮件</div>
+                    <div class="mail-tab" onclick="selectMailAction('receive', this)">接收邮件</div>
+                    <div class="mail-tab" onclick="selectMailAction('test', this)">测试连接</div>
                 </div>
                 <!-- 发送邮件 -->
                 <div id="mail-send-config">
@@ -961,15 +961,18 @@ window.onload = function() {
 async function loadAgents() {
     try {
         const result = await apiRequest('/api/agents/my-rented/');
+        console.log('API返回:', result);  // 调试日志
         const clientIpInfo = result.client_ip || '未知';
+        console.log('客户端IP:', clientIpInfo, '是否有租用:', result.has_rental);
 
         if (!result.has_rental) {
-            document.getElementById('server-agent').innerHTML = '<option value="">无可用Agent</option>';
-            document.getElementById('client-agent').innerHTML = '<option value="">无可用Agent</option>';
+            document.getElementById('server-agent').innerHTML = '<option value="">无可用Agent - ' + (result.message || '请先租用Agent') + '</option>';
+            document.getElementById('client-agent').innerHTML = '<option value="">无可用Agent - ' + (result.message || '请先租用Agent') + '</option>';
             return;
         }
 
         agents = result.agents || [];
+        console.log('Agent数量:', agents.length);
         agents.sort((a, b) => {
             const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
             const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
@@ -981,11 +984,13 @@ async function loadAgents() {
         let clientOptions = '<option value="">-- 选择Agent --</option>';
 
         agents.forEach(agent => {
-            // 只需要有 IP 地址即可选择，不要求 HTTP 查询必须成功
-            if (agent.has_ip && agent.ip_address) {
+            console.log('Agent:', agent.agent_id, 'has_ip:', agent.has_ip, 'ip:', agent.ip_address);
+            // 只需要有 Agent ID 即可选择
+            if (agent.agent_id) {
                 const statusText = agent.status === 'running' ? '运行中' : '离线';
-                serverOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${agent.ip_address}:${agent.port}) [${statusText}]</option>`;
-                clientOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${agent.ip_address}:${agent.port}) [${statusText}]</option>`;
+                const ipText = agent.ip_address ? `${agent.ip_address}:${agent.port}` : '无IP';
+                serverOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${ipText}) [${statusText}]</option>`;
+                clientOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${ipText}) [${statusText}]</option>`;
             }
         });
 
@@ -993,8 +998,11 @@ async function loadAgents() {
         document.getElementById('client-agent').innerHTML = clientOptions;
 
     } catch (e) {
+        console.error('加载Agent失败:', e);
         addServerLog('加载Agent失败: ' + e.message, 'error');
         addClientLog('加载Agent失败: ' + e.message, 'error');
+        document.getElementById('server-agent').innerHTML = '<option value="">加载失败: ' + e.message + '</option>';
+        document.getElementById('client-agent').innerHTML = '<option value="">加载失败: ' + e.message + '</option>';
     }
 }
 
@@ -1096,12 +1104,12 @@ function selectClientProtocol(protocol, element) {
 }
 
 // Mail操作选择
-function selectMailAction(action) {
+function selectMailAction(action, element) {
     mailAction = action;
     document.querySelectorAll('.mail-tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    event.target.classList.add('active');
+    element.classList.add('active');
 
     document.getElementById('mail-send-config').style.display = action === 'send' ? 'block' : 'none';
     document.getElementById('mail-receive-config').style.display = action === 'receive' ? 'block' : 'none';
