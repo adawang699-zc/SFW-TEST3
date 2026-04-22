@@ -3127,6 +3127,7 @@ def api_services_listener(request):
     """监听服务下发API - 转发到指定Agent"""
     try:
         data = json.loads(request.body)
+        logger.info(f"收到服务下发请求: {data}")
         agent_id = data.get('agent_id')
 
         if not agent_id:
