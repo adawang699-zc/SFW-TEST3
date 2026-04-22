@@ -3192,6 +3192,7 @@ def api_services_status(request):
     """获取Agent服务状态"""
     try:
         agent_id = request.GET.get('agent_id')
+        detail = request.GET.get('detail', '')
 
         if not agent_id:
             return JsonResponse({'success': False, 'error': '缺少 agent_id'})
@@ -3208,8 +3209,23 @@ def api_services_status(request):
         # 转发请求到Agent
         agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/status"
         resp = requests.get(agent_url, timeout=5)
+        result = resp.json()
 
-        return JsonResponse(resp.json())
+        # 如果请求邮件用户详情，额外获取用户列表
+        if detail == 'mail_users' and result.get('success'):
+            try:
+                users_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/listener"
+                users_resp = requests.post(users_url, json={
+                    'protocol': 'mail',
+                    'action': 'list_users'
+                }, timeout=5)
+                users_result = users_resp.json()
+                if users_result.get('success'):
+                    result['mail_users'] = users_result.get('mail_users', [])
+            except:
+                pass  # 静默处理获取用户失败
+
+        return JsonResponse(result)
 
     except requests.exceptions.Timeout:
         return JsonResponse({'success': False, 'error': 'Agent响应超时'})

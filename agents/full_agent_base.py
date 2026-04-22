@@ -6741,6 +6741,44 @@ def api_services_listener():
             success, result = start_listener(protocol, host, port, **kwargs)
         elif action == 'stop':
             success, result = stop_listener(protocol)
+        elif action == 'disconnect_connection':
+            # 断开指定 TCP 连接
+            conn_id = data.get('connection_id')
+            if protocol == 'tcp':
+                success, message = disconnect_tcp_listener_connection(conn_id)
+                result = {'message': message}
+            else:
+                return jsonify({'success': False, 'error': '只有TCP支持断开单个连接'}), 400
+        elif action == 'create_user':
+            # 创建邮件用户
+            if protocol == 'mail':
+                username = data.get('username', '').strip()
+                password = data.get('password', '').strip()
+                if not username:
+                    return jsonify({'success': False, 'error': '用户名不能为空'}), 400
+                if not password or len(password) < 4:
+                    return jsonify({'success': False, 'error': '密码至少需要4位'}), 400
+                success, message = create_mail_user(username, password)
+                return jsonify({'success': success, 'message': message}), 200 if success else 400
+            else:
+                return jsonify({'success': False, 'error': '只有Mail支持用户管理'}), 400
+        elif action == 'delete_user':
+            # 删除邮件用户
+            if protocol == 'mail':
+                username = data.get('username', '').strip()
+                if not username:
+                    return jsonify({'success': False, 'error': '用户名不能为空'}), 400
+                success, message = delete_mail_user(username)
+                return jsonify({'success': success, 'message': message}), 200 if success else 400
+            else:
+                return jsonify({'success': False, 'error': '只有Mail支持用户管理'}), 400
+        elif action == 'list_users':
+            # 获取邮件用户列表
+            if protocol == 'mail':
+                users = list_mail_users()
+                return jsonify({'success': True, 'mail_users': users}), 200
+            else:
+                return jsonify({'success': False, 'error': '只有Mail支持用户管理'}), 400
         else:
             return jsonify({'success': False, 'error': '不支持的操作'}), 400
 
@@ -6858,6 +6896,164 @@ def api_mail_send_test():
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==================== 邮件用户管理辅助函数 ====================
+
+def create_mail_user(username, password):
+    """创建邮件用户"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        mail_storage_dir = os.path.join(script_dir, 'mail_storage')
+        accounts_file = os.path.join(mail_storage_dir, 'accounts.json')
+
+        # 确保目录存在
+        os.makedirs(mail_storage_dir, exist_ok=True)
+
+        # 读取现有账户
+        accounts = []
+        if os.path.exists(accounts_file):
+            with open(accounts_file, 'r') as f:
+                accounts = json.load(f)
+
+        # 检查用户是否已存在
+        for acc in accounts:
+            if acc.get('username') == username:
+                return False, '用户已存在'
+
+        # 添加新用户
+        with service_lock:
+            mail_state = listener_states.get('mail', {})
+        domain = mail_state.get('domain', 'autotest.com')
+
+        new_account = {
+            'username': username,
+            'password': password,
+            'email': f"{username}@{domain}"
+        }
+        accounts.append(new_account)
+
+        # 保存账户
+        with open(accounts_file, 'w') as f:
+            json.dump(accounts, f, indent=2)
+
+        # 如果邮件服务器正在运行，更新线程的账户列表
+        with service_lock:
+            mail_state = listener_states.get('mail', {})
+        if mail_state.get('running') and mail_state.get('thread'):
+            thread = mail_state['thread']
+            if hasattr(thread, 'accounts'):
+                thread.accounts = accounts
+
+        add_service_log('邮件服务器', f'用户 {username} 创建成功', 'info')
+        return True, f'用户 {username} 创建成功'
+
+    except Exception as e:
+        add_service_log('邮件服务器', f'创建用户失败: {str(e)}', 'error')
+        return False, str(e)
+
+
+def delete_mail_user(username):
+    """删除邮件用户"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        mail_storage_dir = os.path.join(script_dir, 'mail_storage')
+        accounts_file = os.path.join(mail_storage_dir, 'accounts.json')
+
+        if not os.path.exists(accounts_file):
+            return False, '账户文件不存在'
+
+        # 读取现有账户
+        with open(accounts_file, 'r') as f:
+            accounts = json.load(f)
+
+        # 查找并删除用户
+        found = False
+        new_accounts = []
+        for acc in accounts:
+            if acc.get('username') == username:
+                found = True
+            else:
+                new_accounts.append(acc)
+
+        if not found:
+            return False, '用户不存在'
+
+        # 保存账户
+        with open(accounts_file, 'w') as f:
+            json.dump(new_accounts, f, indent=2)
+
+        # 如果邮件服务器正在运行，更新线程的账户列表
+        with service_lock:
+            mail_state = listener_states.get('mail', {})
+        if mail_state.get('running') and mail_state.get('thread'):
+            thread = mail_state['thread']
+            if hasattr(thread, 'accounts'):
+                thread.accounts = new_accounts
+
+        add_service_log('邮件服务器', f'用户 {username} 已删除', 'info')
+        return True, f'用户 {username} 已删除'
+
+    except Exception as e:
+        add_service_log('邮件服务器', f'删除用户失败: {str(e)}', 'error')
+        return False, str(e)
+
+
+def list_mail_users():
+    """获取邮件用户列表"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        mail_storage_dir = os.path.join(script_dir, 'mail_storage')
+        accounts_file = os.path.join(mail_storage_dir, 'accounts.json')
+
+        users = []
+        if os.path.exists(accounts_file):
+            with open(accounts_file, 'r') as f:
+                accounts = json.load(f)
+            for acc in accounts:
+                users.append({
+                    'username': acc.get('username', ''),
+                    'email': acc.get('email', ''),
+                    'created': '-'
+                })
+
+        return users
+
+    except Exception as e:
+        add_service_log('邮件服务器', f'获取用户列表失败: {str(e)}', 'error')
+        return []
+
+
+def disconnect_tcp_listener_connection(conn_id):
+    """断开 TCP 监听器的指定连接"""
+    try:
+        with service_lock:
+            tcp_state = listener_states.get('tcp', {})
+
+        if not tcp_state.get('running'):
+            return False, 'TCP监听器未运行'
+
+        thread = tcp_state.get('thread')
+        if thread and hasattr(thread, 'connections'):
+            # 找到并断开指定连接
+            if conn_id in thread.connections:
+                conn = thread.connections[conn_id]
+                if conn:
+                    try:
+                        conn.close()
+                    except:
+                        pass
+                del thread.connections[conn_id]
+                add_service_log('TCP监听', f'连接 {conn_id} 已断开', 'info')
+                return True, f'连接 {conn_id} 已断开'
+            else:
+                return False, f'连接 {conn_id} 不存在'
+        else:
+            return False, '无法访问连接列表'
+
+    except Exception as e:
+        add_service_log('TCP监听', f'断开连接失败: {str(e)}', 'error')
+        return False, str(e)
 
 
 # ==================== 邮件用户管理 API ====================
