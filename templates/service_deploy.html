@@ -398,11 +398,11 @@
 
             <!-- 协议选择 -->
             <div class="protocol-tabs" id="server-protocols">
-                <div class="protocol-tab server active" onclick="selectServerProtocol('tcp')">TCP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('udp')">UDP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('ftp')">FTP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('http')">HTTP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('mail')">Mail</div>
+                <div class="protocol-tab server active" onclick="selectServerProtocol('tcp', this)">TCP</div>
+                <div class="protocol-tab server" onclick="selectServerProtocol('udp', this)">UDP</div>
+                <div class="protocol-tab server" onclick="selectServerProtocol('ftp', this)">FTP</div>
+                <div class="protocol-tab server" onclick="selectServerProtocol('http', this)">HTTP</div>
+                <div class="protocol-tab server" onclick="selectServerProtocol('mail', this)">Mail</div>
             </div>
 
             <!-- TCP 监听配置 -->
@@ -608,12 +608,12 @@
 
             <!-- 协议选择 -->
             <div class="protocol-tabs" id="client-protocols">
-                <div class="protocol-tab client active" onclick="selectClientProtocol('tcp')">TCP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('udp')">UDP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('ftp')">FTP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('http')">HTTP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('mail')">Mail</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('network')">Network</div>
+                <div class="protocol-tab client active" onclick="selectClientProtocol('tcp', this)">TCP</div>
+                <div class="protocol-tab client" onclick="selectClientProtocol('udp', this)">UDP</div>
+                <div class="protocol-tab client" onclick="selectClientProtocol('ftp', this)">FTP</div>
+                <div class="protocol-tab client" onclick="selectClientProtocol('http', this)">HTTP</div>
+                <div class="protocol-tab client" onclick="selectClientProtocol('mail', this)">Mail</div>
+                <div class="protocol-tab client" onclick="selectClientProtocol('network', this)">Network</div>
             </div>
 
             <!-- TCP 客户端配置 -->
@@ -981,9 +981,11 @@ async function loadAgents() {
         let clientOptions = '<option value="">-- 选择Agent --</option>';
 
         agents.forEach(agent => {
-            if (agent.status === 'running' && agent.has_ip) {
-                serverOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${agent.ip_address}:${agent.port})</option>`;
-                clientOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${agent.ip_address}:${agent.port})</option>`;
+            // 只需要有 IP 地址即可选择，不要求 HTTP 查询必须成功
+            if (agent.has_ip && agent.ip_address) {
+                const statusText = agent.status === 'running' ? '运行中' : '离线';
+                serverOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${agent.ip_address}:${agent.port}) [${statusText}]</option>`;
+                clientOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${agent.ip_address}:${agent.port}) [${statusText}]</option>`;
             }
         });
 
@@ -1054,12 +1056,12 @@ function syncServerInfo() {
 }
 
 // 协议选择
-function selectServerProtocol(protocol) {
+function selectServerProtocol(protocol, element) {
     serverProtocol = protocol;
     document.querySelectorAll('#server-protocols .protocol-tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    event.target.classList.add('active');
+    element.classList.add('active');
 
     // 显示对应配置
     document.querySelectorAll('.config-section').forEach(section => {
@@ -1070,12 +1072,12 @@ function selectServerProtocol(protocol) {
     document.getElementById(`${protocol}-server-config`).classList.remove('hidden');
 }
 
-function selectClientProtocol(protocol) {
+function selectClientProtocol(protocol, element) {
     clientProtocol = protocol;
     document.querySelectorAll('#client-protocols .protocol-tab').forEach(tab => {
         tab.classList.remove('active');
     });
-    event.target.classList.add('active');
+    element.classList.add('active');
 
     // 显示对应配置和操作按钮
     document.querySelectorAll('.config-section').forEach(section => {
