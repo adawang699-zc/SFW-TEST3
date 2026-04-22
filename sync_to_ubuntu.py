@@ -80,6 +80,19 @@ def step2_ubuntu_git_pull(ssh: paramiko.SSHClient) -> bool:
     """步骤2: Ubuntu git pull"""
     print("\n[步骤2] Ubuntu git pull...")
 
+    # 先检查并切换到 SSH remote（避免 HTTPS 连接问题）
+    cmd = f"cd {UBUNTU_PROJECT_PATH} && git remote get-url origin"
+    code, out, err = ssh_exec(ssh, cmd)
+    current_url = out.strip()
+
+    # 如果是 HTTPS，切换到 SSH
+    if current_url.startswith("https://github.com"):
+        ssh_url = "git@github.com:adawang699-zc/SFW-TEST3.git"
+        print(f"  切换 remote: {current_url} -> {ssh_url}")
+        cmd = f"cd {UBUNTU_PROJECT_PATH} && git remote set-url origin {ssh_url}"
+        ssh_exec(ssh, cmd)
+
+    # 执行 git pull
     cmd = f"cd {UBUNTU_PROJECT_PATH} && git pull origin main"
     code, out, err = ssh_exec(ssh, cmd)
 
