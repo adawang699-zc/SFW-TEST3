@@ -1830,6 +1830,7 @@ class TCPClientManager:
         self.connection_context = {}
         self.threads = []
         self.send_threads = []
+        self.packets_sent = 0  # 发送数据包计数
 
     def connect(self):
         """只建立连接，不发送数据"""
@@ -1952,6 +1953,7 @@ class TCPClientManager:
                 try:
                     sock.sendall(payload)
                     with service_lock:
+                        self.packets_sent += 1
                         if conn_id in self.state['connections']:
                             self.state['connections'][conn_id]['bytes_sent'] += len(payload)
                     time.sleep(self.interval)
@@ -4696,7 +4698,9 @@ def connect_tcp_client(config):
         return False, '服务器地址或端口无效'
     connections = max(1, int(config.get('connections', 1)))
     connect_rate = max(float(config.get('connect_rate', 1)), 0.1)
-    interval = max(float(config.get('send_interval', 1)), 0.1)
+    # 前端传入的是毫秒，转换为秒
+    interval_ms = float(config.get('send_interval', 100))
+    interval = max(interval_ms / 1000.0, 0.001)  # 最小1ms
     message = config.get('message', '')
     with service_lock:
         state = client_states.get('tcp')
@@ -4742,6 +4746,12 @@ def start_tcp_send(config):
     if 'message' in config:
         state['message'] = config['message']
         manager.message = config['message']
+    # 更新发送间隔（前端传入的是毫秒）
+    if 'interval' in config:
+        interval_ms = float(config.get('interval', 10))
+        interval = max(interval_ms / 1000.0, 0.001)
+        manager.interval = interval
+        state['send_interval'] = interval_ms
     success, message = manager.start_send()
     if success:
         return True, {'message': message}
@@ -7599,7 +7609,7 @@ def api_services_status():
                     'server_port': state.get('server_port', 0),
                     'connections': connections,
                     'message': state.get('message', ''),
-                    'send_interval': state.get('send_interval', 0)
+                    'send_interval': state.get('send_interval', 0) if state.get('send_interval', 0) > 1 else state.get('send_interval', 0) * 1000
                 }
 
                 # TCP 协议需要额外返回 sending 状态
@@ -7610,6 +7620,8 @@ def api_services_status():
                         # send_stop_event 未设置且有活跃发送线程 = 正在发送
                         is_sending = (not manager.send_stop_event.is_set()) and any(t.is_alive() for t in manager.send_threads)
                         clients_summary[protocol]['sending'] = is_sending
+                        if hasattr(manager, 'packets_sent'):
+                            clients_summary[protocol]['packets_sent'] = manager.packets_sent
                     else:
                         clients_summary[protocol]['sending'] = False
             else:

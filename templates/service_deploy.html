@@ -410,7 +410,7 @@
                 <div class="config-row">
                     <div class="config-group">
                         <label>监听地址</label>
-                        <input type="text" id="tcp-server-host" class="config-input" value="0.0.0.0">
+                        <input type="text" id="tcp-server-host" class="config-input" value="">
                     </div>
                     <div class="config-group">
                         <label>监听端口</label>
@@ -430,7 +430,7 @@
                 <div class="config-row">
                     <div class="config-group">
                         <label>监听地址</label>
-                        <input type="text" id="udp-server-host" class="config-input" value="0.0.0.0">
+                        <input type="text" id="udp-server-host" class="config-input" value="">
                     </div>
                     <div class="config-group">
                         <label>监听端口</label>
@@ -444,7 +444,7 @@
                 <div class="config-row">
                     <div class="config-group">
                         <label>监听地址</label>
-                        <input type="text" id="ftp-server-host" class="config-input" value="0.0.0.0">
+                        <input type="text" id="ftp-server-host" class="config-input" value="">
                     </div>
                     <div class="config-group">
                         <label>监听端口</label>
@@ -474,7 +474,7 @@
                 <div class="config-row">
                     <div class="config-group">
                         <label>监听地址</label>
-                        <input type="text" id="http-server-host" class="config-input" value="0.0.0.0">
+                        <input type="text" id="http-server-host" class="config-input" value="">
                     </div>
                     <div class="config-group">
                         <label>监听端口</label>
@@ -558,8 +558,7 @@
 
             <!-- 操作按钮 -->
             <div class="action-buttons">
-                <button class="btn-action btn-start" onclick="startServerService()">▶ 启动监听</button>
-                <button class="btn-action btn-stop" id="server-stop-btn" onclick="stopServerService()" style="display:none;">⏹ 停止监听</button>
+                <button class="btn-action btn-start" id="server-toggle-btn" onclick="toggleServerService()">▶ 启动监听</button>
                 <button class="btn-action btn-secondary" onclick="refreshServerStatus()">🔄 刷新状态</button>
             </div>
 
@@ -647,11 +646,11 @@
                 <div class="config-row">
                     <div class="config-group">
                         <label>发送间隔(ms)</label>
-                        <input type="number" id="tcp-client-interval" class="config-input" value="100">
+                        <input type="number" id="tcp-client-interval" class="config-input" value="10">
                     </div>
                     <div class="config-group">
-                        <label>发送次数</label>
-                        <input type="number" id="tcp-client-count" class="config-input" value="10">
+                        <label>发送次数(0=持续)</label>
+                        <input type="number" id="tcp-client-count" class="config-input" value="0" min="0">
                     </div>
                 </div>
                 <!-- TCP 客户端连接表格 -->
@@ -862,8 +861,8 @@
 
             <!-- 操作按钮 -->
             <div class="action-buttons" id="tcp-client-actions">
-                <button class="btn-action btn-connect" onclick="connectTcp()">🔗 连接</button>
-                <button class="btn-action btn-send" id="tcp-send-btn" onclick="sendTcpData()" style="display:none;">📤 发送</button>
+                <button class="btn-action btn-connect" id="tcp-connect-btn" onclick="connectTcp()">🔗 连接</button>
+                <button class="btn-action btn-send" id="tcp-send-toggle-btn" onclick="toggleTcpSend()" style="display:none;">📤 发送</button>
                 <button class="btn-action btn-disconnect" id="tcp-disconnect-btn" onclick="disconnectTcp()" style="display:none;">断开</button>
             </div>
             <div class="action-buttons" id="udp-client-actions" style="display:none;">
@@ -925,6 +924,8 @@ let clientProtocol = 'tcp';
 let mailAction = 'send';
 let serverStatusInterval = null;
 let clientStatusInterval = null;
+let serverIsStarting = false;
+let tcpIsSending = false;
 
 // 页面加载
 window.onload = function() {
@@ -1015,6 +1016,13 @@ function onServerAgentChange() {
         document.getElementById('server-agent-info').textContent =
             `IP: ${serverAgent.ip_address}, Port: ${serverAgent.port}`;
         addServerLog(`选择服务端Agent: ${serverAgent.agent_id}`);
+
+        // 自动填充监听地址为Agent的IP
+        document.getElementById('tcp-server-host').value = serverAgent.ip_address;
+        document.getElementById('udp-server-host').value = serverAgent.ip_address;
+        document.getElementById('ftp-server-host').value = serverAgent.ip_address;
+        document.getElementById('http-server-host').value = serverAgent.ip_address;
+
         refreshServerStatus();
         startServerStatusPoll();
     } else {
@@ -1117,61 +1125,70 @@ function selectMailAction(action, element) {
 
 // ========== 服务端操作 ==========
 
-async function startServerService() {
+async function toggleServerService() {
     if (!serverAgent) {
         showToast('请先选择服务端Agent', 'error');
         return;
     }
 
-    const config = getServerConfig();
-    config.agent_id = serverAgent.agent_id;
+    const toggleBtn = document.getElementById('server-toggle-btn');
 
-    console.log('发送到后端的完整请求:', JSON.stringify(config));
-
-    addServerLog(`启动 ${serverProtocol.toUpperCase()} 监听...`);
-
+    // 检查当前状态
     try {
-        const result = await apiRequest('/api/services/listener/', 'POST', config);
-        if (result.success) {
-            showToast('监听启动成功');
-            addServerLog(`${serverProtocol.toUpperCase()} 监听已启动`, 'info');
-            document.getElementById('server-stop-btn').style.display = 'inline-block';
-            refreshServerStatus();
-        } else {
-            showToast('启动失败: ' + result.error, 'error');
-            addServerLog('启动失败: ' + result.error, 'error');
+        const statusResult = await apiRequest(`/api/services/status/?agent_id=${serverAgent.agent_id}`);
+        let isRunning = false;
+        if (statusResult.success && statusResult.listeners && statusResult.listeners[serverProtocol]) {
+            isRunning = statusResult.listeners[serverProtocol].running;
         }
+
+        if (isRunning) {
+            // 停止监听
+            const config = {
+                agent_id: serverAgent.agent_id,
+                protocol: serverProtocol,
+                action: 'stop'
+            };
+
+            addServerLog(`停止 ${serverProtocol.toUpperCase()} 监听...`);
+            toggleBtn.disabled = true;
+            toggleBtn.textContent = '⏹ 正在停止...';
+
+            const result = await apiRequest('/api/services/listener/', 'POST', config);
+            if (result.success) {
+                showToast('监听已停止');
+                addServerLog(`${serverProtocol.toUpperCase()} 监听已停止`, 'info');
+                document.getElementById('server-connections-area').style.display = 'none';
+            } else {
+                showToast('停止失败: ' + result.error, 'error');
+                addServerLog('停止失败: ' + result.error, 'error');
+            }
+        } else {
+            // 启动监听
+            const config = getServerConfig();
+            config.agent_id = serverAgent.agent_id;
+
+            console.log('发送到后端的完整请求:', JSON.stringify(config));
+
+            addServerLog(`启动 ${serverProtocol.toUpperCase()} 监听...`);
+            toggleBtn.disabled = true;
+            toggleBtn.textContent = '▶ 正在启动...';
+
+            const result = await apiRequest('/api/services/listener/', 'POST', config);
+            if (result.success) {
+                showToast('监听启动成功');
+                addServerLog(`${serverProtocol.toUpperCase()} 监听已启动`, 'info');
+            } else {
+                showToast('启动失败: ' + result.error, 'error');
+                addServerLog('启动失败: ' + result.error, 'error');
+            }
+        }
+
+        refreshServerStatus();
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
         addServerLog('请求失败: ' + e.message, 'error');
-    }
-}
-
-async function stopServerService() {
-    if (!serverAgent) return;
-
-    const config = {
-        agent_id: serverAgent.agent_id,
-        protocol: serverProtocol,
-        action: 'stop'
-    };
-
-    addServerLog(`停止 ${serverProtocol.toUpperCase()} 监听...`);
-
-    try {
-        const result = await apiRequest('/api/services/listener/', 'POST', config);
-        if (result.success) {
-            showToast('监听已停止');
-            addServerLog(`${serverProtocol.toUpperCase()} 监听已停止`, 'info');
-            document.getElementById('server-stop-btn').style.display = 'none';
-            document.getElementById('server-connections-area').style.display = 'none';
-        } else {
-            showToast('停止失败: ' + result.error, 'error');
-            addServerLog('停止失败: ' + result.error, 'error');
-        }
-    } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
-        addServerLog('请求失败: ' + e.message, 'error');
+    } finally {
+        toggleBtn.disabled = false;
     }
 }
 
@@ -1236,7 +1253,9 @@ async function refreshServerStatus() {
                     </div>
                 `;
 
-                document.getElementById('server-stop-btn').style.display = 'inline-block';
+                const toggleBtn = document.getElementById('server-toggle-btn');
+                toggleBtn.textContent = '⏹ 停止监听';
+                toggleBtn.className = 'btn-action btn-stop';
 
                 // TCP 连接列表（增强版）
                 if (serverProtocol === 'tcp') {
@@ -1310,7 +1329,9 @@ async function refreshServerStatus() {
                     if (mailUserMgmt) mailUserMgmt.style.display = 'none';
                 }
             } else {
-                document.getElementById('server-stop-btn').style.display = 'none';
+                const toggleBtn = document.getElementById('server-toggle-btn');
+                toggleBtn.textContent = '▶ 启动监听';
+                toggleBtn.className = 'btn-action btn-start';
                 const connTable = document.getElementById('tcp-connections-table');
                 if (connTable) connTable.style.display = 'none';
                 const httpInfo = document.getElementById('http-server-info');
@@ -1490,9 +1511,10 @@ async function connectTcp() {
         if (result.success) {
             showToast('TCP连接成功');
             addClientLog('TCP连接成功', 'info');
-            document.getElementById('tcp-send-btn').style.display = 'inline-block';
+            document.getElementById('tcp-send-toggle-btn').style.display = 'inline-block';
             document.getElementById('tcp-disconnect-btn').style.display = 'inline-block';
             document.getElementById('tcp-client-table').style.display = 'block';
+            document.getElementById('tcp-connect-btn').style.display = 'none';
 
             // 显示客户端连接列表
             if (result.connections && result.connections.length > 0) {
@@ -1517,34 +1539,79 @@ async function connectTcp() {
     }
 }
 
-async function sendTcpData() {
+async function toggleTcpSend() {
     if (!clientAgent) return;
 
-    const config = {
-        agent_id: clientAgent.agent_id,
-        protocol: 'tcp',
-        action: 'start_send',
-        config: {
-            message: document.getElementById('tcp-client-data').value,
-            interval: parseInt(document.getElementById('tcp-client-interval').value),
-            count: parseInt(document.getElementById('tcp-client-count').value)
-        }
-    };
-
-    addClientLog(`发送TCP数据...`);
+    const sendBtn = document.getElementById('tcp-send-toggle-btn');
 
     try {
-        const result = await apiRequest('/api/services/client/', 'POST', config);
-        if (result.success) {
-            showToast('数据发送成功');
-            addClientLog('数据发送成功', 'info');
-        } else {
-            showToast('发送失败: ' + result.error, 'error');
-            addClientLog('发送失败: ' + result.error, 'error');
+        // 先检查当前状态
+        const statusResult = await apiRequest(`/api/services/status/?agent_id=${clientAgent.agent_id}`);
+        let isSending = false;
+        if (statusResult.success && statusResult.clients && statusResult.clients['tcp']) {
+            isSending = statusResult.clients['tcp'].sending || false;
         }
+
+        if (isSending || tcpIsSending) {
+            // 停止发送
+            const config = {
+                agent_id: clientAgent.agent_id,
+                protocol: 'tcp',
+                action: 'stop_send'
+            };
+
+            addClientLog(`停止发送TCP数据...`);
+            sendBtn.disabled = true;
+            sendBtn.textContent = '⏹ 正在停止...';
+
+            const result = await apiRequest('/api/services/client/', 'POST', config);
+            if (result.success) {
+                showToast('发送已停止');
+                addClientLog('发送已停止', 'info');
+                tcpIsSending = false;
+            } else {
+                showToast('停止失败: ' + result.error, 'error');
+                addClientLog('停止失败: ' + result.error, 'error');
+            }
+        } else {
+            // 开始发送
+            const config = {
+                agent_id: clientAgent.agent_id,
+                protocol: 'tcp',
+                action: 'start_send',
+                config: {
+                    message: document.getElementById('tcp-client-data').value,
+                    interval: parseInt(document.getElementById('tcp-client-interval').value),
+                    count: parseInt(document.getElementById('tcp-client-count').value)
+                }
+            };
+
+            addClientLog(`发送TCP数据...`);
+            sendBtn.disabled = true;
+            sendBtn.textContent = '📤 正在发送...';
+
+            const result = await apiRequest('/api/services/client/', 'POST', config);
+            if (result.success) {
+                showToast('数据发送成功');
+                addClientLog('数据发送成功', 'info');
+                tcpIsSending = true;
+            } else {
+                showToast('发送失败: ' + result.error, 'error');
+                addClientLog('发送失败: ' + result.error, 'error');
+            }
+        }
+
+        refreshClientStatus();
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
+    } finally {
+        sendBtn.disabled = false;
     }
+}
+
+async function sendTcpData() {
+    // 旧函数，保持兼容，调用新函数
+    await toggleTcpSend();
 }
 
 async function disconnectTcp() {
@@ -1563,10 +1630,12 @@ async function disconnectTcp() {
         if (result.success) {
             showToast('已断开连接');
             addClientLog('TCP已断开', 'info');
-            document.getElementById('tcp-send-btn').style.display = 'none';
+            tcpIsSending = false;
+            document.getElementById('tcp-send-toggle-btn').style.display = 'none';
             document.getElementById('tcp-disconnect-btn').style.display = 'none';
             document.getElementById('tcp-client-table').style.display = 'none';
             document.getElementById('tcp-client-connections-list').innerHTML = '';
+            document.getElementById('tcp-connect-btn').style.display = 'inline-block';
         } else {
             showToast('断开失败: ' + result.error, 'error');
         }
@@ -2229,6 +2298,20 @@ async function refreshClientStatus() {
             const clients = result.clients || {};
             const state = clients[clientProtocol] || {};
 
+            // 更新发送按钮状态
+            if (clientProtocol === 'tcp') {
+                const sendBtn = document.getElementById('tcp-send-toggle-btn');
+                if (sendBtn) {
+                    if (state.sending || tcpIsSending) {
+                        sendBtn.textContent = '⏹ 停止发送';
+                        sendBtn.className = 'btn-action btn-stop';
+                    } else {
+                        sendBtn.textContent = '📤 发送';
+                        sendBtn.className = 'btn-action btn-send';
+                    }
+                }
+            }
+
             let statusHtml = `
                 <div class="status-item">
                     <span class="status-label">状态</span>
@@ -2243,10 +2326,42 @@ async function refreshClientStatus() {
                         <span class="status-value">${state.server_ip}:${state.server_port}</span>
                     </div>
                     <div class="status-item">
-                        <span class="status-label">发送间隔</span>
-                        <span class="status-value">${state.send_interval || 0}ms</span>
+                        <span class="status-label">发送状态</span>
+                        <span class="status-value ${state.sending ? 'running' : ''}">${state.sending ? '正在发送' : '已停止'}</span>
                     </div>
                 `;
+                if (state.send_interval !== undefined) {
+                    statusHtml += `
+                        <div class="status-item">
+                            <span class="status-label">发送间隔</span>
+                            <span class="status-value">${state.send_interval}ms</span>
+                        </div>
+                    `;
+                }
+                if (state.packets_sent !== undefined) {
+                    statusHtml += `
+                        <div class="status-item">
+                            <span class="status-label">已发送</span>
+                            <span class="status-value">${state.packets_sent} 包</span>
+                        </div>
+                    `;
+                }
+            } else if (tcpIsSending) {
+                // 如果客户端状态显示未运行但我们认为正在发送，说明连接可能被服务端断开了
+                tcpIsSending = false;
+                addClientLog('检测到连接可能已断开', 'warning');
+
+                // 更新按钮状态
+                const sendBtn = document.getElementById('tcp-send-toggle-btn');
+                const disconnectBtn = document.getElementById('tcp-disconnect-btn');
+                const connectBtn = document.getElementById('tcp-connect-btn');
+                const clientTable = document.getElementById('tcp-client-table');
+                const connList = document.getElementById('tcp-client-connections-list');
+                if (sendBtn) sendBtn.style.display = 'none';
+                if (disconnectBtn) disconnectBtn.style.display = 'none';
+                if (connectBtn) connectBtn.style.display = 'inline-block';
+                if (clientTable) clientTable.style.display = 'none';
+                if (connList) connList.innerHTML = '';
             }
 
             document.getElementById('client-status-content').innerHTML = statusHtml;
