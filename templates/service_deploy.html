@@ -2046,11 +2046,6 @@ async function downloadFtpFileByName(filename) {
         addClientLog('请求失败: ' + e.message, 'error');
     }
 }
-        }
-    } catch (e) {
-        addClientLog('请求失败: ' + e.message, 'error');
-    }
-}
 
 async function disconnectFtp() {
     if (!clientAgent) return;
