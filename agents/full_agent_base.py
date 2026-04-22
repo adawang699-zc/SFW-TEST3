@@ -2039,50 +2039,114 @@ class UDPClientManager(threading.Thread):
         self.server_ip = config['server_ip']
         self.server_port = config['server_port']
         self.connection_target = config['connections']
-        self.interval = max(config.get('send_interval', 1), 0.1)
+        self.interval = max(config.get('send_interval', 100) / 1000.0, 0.001)  # ms转秒
         self.message = config.get('message', '').encode('utf-8')
         self.stop_event = threading.Event()
+        self.send_stop_event = threading.Event()
+        self.send_threads = []
+        self.connection_context = {}
+        self.sending = False
+        self.count = 0  # 0表示持续发送
+        self.packets_sent = 0
+        self.send_complete = False
 
     def run(self):
-        add_service_log('UDP客户端', f"开始发送到 {self.server_ip}:{self.server_port}")
-        threads = []
+        add_service_log('UDP客户端', f"准备连接 {self.server_ip}:{self.server_port}，连接数: {self.connection_target}")
+        self.send_stop_event.clear()
         for _ in range(self.connection_target):
+            if self.stop_event.is_set():
+                break
             conn_id = str(uuid.uuid4())
-            worker = threading.Thread(
-                target=self._sender_loop,
-                args=(conn_id,),
-                daemon=True
-            )
-            threads.append(worker)
+            self.connection_context[conn_id] = {
+                'socket': None,
+                'running': False
+            }
             with service_lock:
                 self.state['connections'][conn_id] = {
                     'id': conn_id,
                     'address': f"{self.server_ip}:{self.server_port}",
                     'bytes_sent': 0
                 }
-            worker.start()
-        for worker in threads:
+            thread = threading.Thread(
+                target=self._run_connection,
+                args=(conn_id,),
+                daemon=True
+            )
+            self.send_threads.append(thread)
+            thread.start()
+        for worker in self.send_threads:
             worker.join()
         with service_lock:
             self.state['running'] = False
+            self.state['sending'] = False
             self.state['connections'].clear()
         add_service_log('UDP客户端', '发送已结束')
 
-    def _sender_loop(self, conn_id):
+    def _run_connection(self, conn_id):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
+            self.connection_context[conn_id]['socket'] = sock
+            self.connection_context[conn_id]['running'] = True
+
+            # 如果没有消息，不发送，只是保持socket存在
+            if not self.message:
+                while not self.stop_event.is_set():
+                    time.sleep(0.1)
+                return
+
+            sent_count = 0
             while not self.stop_event.is_set():
-                if self.message:
+                if self.send_stop_event.is_set():
+                    time.sleep(0.1)
+                    continue
+
+                # 检查是否达到发送次数
+                if self.count > 0 and sent_count >= self.count:
+                    break
+
+                try:
                     sock.sendto(self.message, (self.server_ip, self.server_port))
+                    sent_count += 1
                     with service_lock:
+                        self.packets_sent += 1
+                        self.state['packets_sent'] = self.packets_sent
                         if conn_id in self.state['connections']:
                             self.state['connections'][conn_id]['bytes_sent'] += len(self.message)
+                except:
+                    pass
+
                 time.sleep(self.interval)
+
         finally:
             sock.close()
+            self.connection_context[conn_id]['running'] = False
+
+    def start_send(self):
+        """开始发送数据"""
+        if not self.connection_context:
+            return False, '请先启动UDP客户端'
+
+        self.send_stop_event.clear()
+        self.send_complete = False
+        self.sending = True
+        with service_lock:
+            self.state['sending'] = True
+
+        add_service_log('UDP客户端', f'开始发送数据，间隔: {self.interval * 1000}ms')
+        return True, '开始发送'
+
+    def stop_send(self):
+        """停止发送数据"""
+        self.send_stop_event.set()
+        self.sending = False
+        with service_lock:
+            self.state['sending'] = False
+        add_service_log('UDP客户端', '已停止发送数据')
+        return True, '已停止发送'
 
     def stop(self):
         self.stop_event.set()
+        self.send_stop_event.set()
 
 
 class FTPClientWorker:
@@ -4838,9 +4902,10 @@ def start_udp_client(config):
     server_port = int(config.get('server_port', 0))
     if not server_ip or server_port <= 0:
         return False, '服务器地址或端口无效'
-    connections = max(1, int(config.get('connections', 1)))
-    interval = max(float(config.get('send_interval', 1)), 0.1)
-    message = config.get('message', '')
+    connections = max(1, int(config.get('count', config.get('connections', 3))))
+    interval_ms = float(config.get('interval', config.get('send_interval', 100))))
+    interval = max(interval_ms / 1000.0, 0.001)
+    message = config.get('message', 'Hello World')  # 默认数据
     with service_lock:
         state = client_states.get('udp')
         if state and state.get('running'):
@@ -4851,20 +4916,82 @@ def start_udp_client(config):
             'server_port': server_port,
             'connections': {},
             'running': True,
+            'sending': False,
             'message': message,
-            'send_interval': interval
+            'send_interval': interval_ms,
+            'packets_sent': 0
         }
         client_states['udp'] = state
     manager = UDPClientManager(state, {
         'server_ip': server_ip,
         'server_port': server_port,
         'connections': connections,
-        'send_interval': interval,
+        'send_interval': interval_ms,
         'message': message
     })
     state['manager'] = manager
     manager.start()
     return True, {'message': 'UDP客户端已启动'}
+
+
+def start_udp_send(config):
+    """开始发送数据"""
+    with service_lock:
+        state = client_states.get('udp')
+    if not state or not state.get('running'):
+        return False, 'UDP客户端未运行'
+    manager = state.get('manager')
+    if not manager:
+        return False, '连接管理器不存在'
+
+    # 设置默认消息
+    message_data = config.get('message', '')
+    if not message_data:
+        message_data = 'Hello World'
+
+    # 更新发送内容
+    state['message'] = message_data
+    manager.message = message_data.encode('utf-8')
+
+    # 更新发送间隔（前端传入的是毫秒）
+    if 'interval' in config:
+        interval_ms = float(config.get('interval', 100))
+        interval = max(interval_ms / 1000.0, 0.001)
+        manager.interval = interval
+        state['send_interval'] = interval_ms
+
+    # 更新连接数
+    if 'count' in config:
+        count = int(config.get('count', 3))
+        # 连接数在start_udp_client时已经设置，这里可以忽略
+        pass
+
+    # 重置发送完成标志
+    manager.send_complete = False
+    manager.packets_sent = 0
+    state['packets_sent'] = 0
+
+    success, message = manager.start_send()
+    if success:
+        return True, {'message': message}
+    else:
+        return False, message
+
+
+def stop_udp_send():
+    """停止发送数据"""
+    with service_lock:
+        state = client_states.get('udp')
+    if not state or not state.get('running'):
+        return False, 'UDP客户端未运行'
+    manager = state.get('manager')
+    if not manager:
+        return False, '连接管理器不存在'
+    success, message = manager.stop_send()
+    if success:
+        return True, {'message': message}
+    else:
+        return False, message
 
 
 def stop_udp_client():
@@ -7347,6 +7474,10 @@ def api_services_client():
         elif protocol == 'udp':
             if action == 'start':
                 success, result = start_udp_client(config)
+            elif action == 'start_send':
+                success, result = start_udp_send(config)
+            elif action == 'stop_send':
+                success, result = stop_udp_send()
             elif action == 'stop':
                 success, result = stop_udp_client()
             else:
@@ -7646,16 +7777,24 @@ def api_services_status():
                     'send_interval': state.get('send_interval', 0)  # 前端传入的是毫秒，直接返回
                 }
 
-                # TCP 协议需要额外返回 sending 状态
+                # TCP 和 UDP 协议需要额外返回 sending 状态
                 # 用于前端控制"停止发送"按钮的可用状态
-                if protocol == 'tcp':
+                if protocol == 'tcp' or protocol == 'udp':
                     manager = state.get('manager')
-                    if manager and hasattr(manager, 'send_stop_event') and hasattr(manager, 'send_threads'):
-                        # send_stop_event 未设置且有活跃发送线程 = 正在发送
-                        is_sending = (not manager.send_stop_event.is_set()) and any(t.is_alive() for t in manager.send_threads)
+                    if manager:
+                        # 检查 sending 状态
+                        is_sending = False
+                        if hasattr(manager, 'sending'):
+                            is_sending = manager.sending
+                        elif hasattr(manager, 'send_stop_event') and hasattr(manager, 'send_threads'):
+                            # 兼容旧方式
+                            is_sending = (not manager.send_stop_event.is_set()) and any(t.is_alive() for t in manager.send_threads)
                         clients_summary[protocol]['sending'] = is_sending
+                        # 返回发送统计
                         if hasattr(manager, 'packets_sent'):
                             clients_summary[protocol]['packets_sent'] = manager.packets_sent
+                        elif state.get('packets_sent') is not None:
+                            clients_summary[protocol]['packets_sent'] = state.get('packets_sent', 0)
                     else:
                         clients_summary[protocol]['sending'] = False
             else:

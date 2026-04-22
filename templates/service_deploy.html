@@ -630,11 +630,11 @@
                 <div class="config-row">
                     <div class="config-group">
                         <label>连接数</label>
-                        <input type="number" id="tcp-client-connections" class="config-input" value="1" min="1" max="100">
+                        <input type="number" id="tcp-client-connections" class="config-input" value="3" min="1" max="100">
                     </div>
                     <div class="config-group">
                         <label>连接速率(个/秒)</label>
-                        <input type="number" id="tcp-client-rate" class="config-input" value="1" min="0.1" step="0.1">
+                        <input type="number" id="tcp-client-rate" class="config-input" value="10" min="0.1" step="0.1">
                     </div>
                 </div>
                 <div class="config-row single">
@@ -673,23 +673,22 @@
                         <input type="number" id="udp-client-port" class="config-input" value="8080">
                     </div>
                 </div>
-                <div class="config-row single">
-                    <div class="config-group">
-                        <label>发送数据</label>
-                        <input type="text" id="udp-client-data" class="config-input" placeholder="HEX或文本">
-                    </div>
-                </div>
                 <div class="config-row">
                     <div class="config-group">
-                        <label>发送间隔(秒)</label>
-                        <input type="number" id="udp-client-interval" class="config-input" value="1" step="0.1">
+                        <label>连接数</label>
+                        <input type="number" id="udp-client-connections" class="config-input" value="3" min="1" max="100">
                     </div>
+                </div>
+                <div class="config-row single">
                     <div class="config-group">
-                        <label>持续发送</label>
-                        <select id="udp-client-continuous" class="config-input">
-                            <option value="false">指定次数</option>
-                            <option value="true">持续发送</option>
-                        </select>
+                        <label>发送数据（HEX或文本）</label>
+                        <input type="text" id="udp-client-data" class="config-input" placeholder="如: Hello 或 48656C6C6F" value="Hello World">
+                    </div>
+                </div>
+                <div class="config-row single">
+                    <div class="config-group">
+                        <label>发送间隔(ms)</label>
+                        <input type="number" id="udp-client-interval" class="config-input" value="100">
                     </div>
                 </div>
             </div>
@@ -866,8 +865,7 @@
                 <button class="btn-action btn-disconnect" id="tcp-disconnect-btn" onclick="disconnectTcp()" style="display:none;">断开</button>
             </div>
             <div class="action-buttons" id="udp-client-actions" style="display:none;">
-                <button class="btn-action btn-start" onclick="startUdpClient()">▶ 开始</button>
-                <button class="btn-action btn-stop" id="udp-stop-btn" onclick="stopUdpClient()" style="display:none;">⏹ 停止</button>
+                <button class="btn-action btn-send" id="udp-send-toggle-btn" onclick="toggleUdpSend()">📤 发送</button>
             </div>
             <div class="action-buttons" id="ftp-client-actions" style="display:none;">
                 <button class="btn-action btn-connect" onclick="connectFtp()">🔗 连接</button>
@@ -1645,63 +1643,106 @@ async function disconnectTcp() {
 }
 
 // UDP客户端
-async function startUdpClient() {
+let udpIsSending = false;
+
+async function toggleUdpSend() {
     if (!clientAgent) {
         showToast('请先选择客户端Agent', 'error');
         return;
     }
 
-    const config = {
-        agent_id: clientAgent.agent_id,
-        protocol: 'udp',
-        action: 'start',
-        config: {
-            server_ip: document.getElementById('udp-client-ip').value,
-            server_port: parseInt(document.getElementById('udp-client-port').value),
-            message: document.getElementById('udp-client-data').value,
-            interval: parseFloat(document.getElementById('udp-client-interval').value)
-        }
-    };
-
-    addClientLog(`启动UDP客户端 ${config.config.server_ip}:${config.config.server_port}...`);
+    const sendBtn = document.getElementById('udp-send-toggle-btn');
 
     try {
-        const result = await apiRequest('/api/services/client/', 'POST', config);
-        if (result.success) {
-            showToast('UDP客户端启动成功');
-            addClientLog('UDP客户端已启动', 'info');
-            document.getElementById('udp-stop-btn').style.display = 'inline-block';
-        } else {
-            showToast('启动失败: ' + (result.error || '未知错误'), 'error');
-            addClientLog('启动失败: ' + (result.error || '未知错误'), 'error');
+        // 先检查当前状态
+        const statusResult = await apiRequest(`/api/services/status/?agent_id=${clientAgent.agent_id}`);
+        let isSending = false;
+        let isRunning = false;
+        if (statusResult.success && statusResult.clients && statusResult.clients['udp']) {
+            isSending = statusResult.clients['udp'].sending || false;
+            isRunning = statusResult.clients['udp'].running || false;
         }
+
+        if (isSending || udpIsSending) {
+            // 停止发送
+            const config = {
+                agent_id: clientAgent.agent_id,
+                protocol: 'udp',
+                action: 'stop_send'
+            };
+
+            addClientLog(`停止发送UDP数据...`);
+            sendBtn.disabled = true;
+            sendBtn.textContent = '⏹ 正在停止...';
+
+            const result = await apiRequest('/api/services/client/', 'POST', config);
+            if (result.success) {
+                showToast('发送已停止');
+                addClientLog('发送已停止', 'info');
+                udpIsSending = false;
+            } else {
+                showToast('停止失败: ' + (result.error || '未知错误'), 'error');
+                addClientLog('停止失败: ' + (result.error || '未知错误'), 'error');
+            }
+        } else {
+            // 开始发送
+            addClientLog(`发送UDP数据...`);
+            sendBtn.disabled = true;
+            sendBtn.textContent = '📤 正在发送...';
+
+            // 如果UDP客户端未运行，先启动
+            if (!isRunning) {
+                const startConfig = {
+                    agent_id: clientAgent.agent_id,
+                    protocol: 'udp',
+                    action: 'start',
+                    config: {
+                        server_ip: document.getElementById('udp-client-ip').value,
+                        server_port: parseInt(document.getElementById('udp-client-port').value),
+                        message: document.getElementById('udp-client-data').value,
+                        interval: parseInt(document.getElementById('udp-client-interval').value),
+                        count: parseInt(document.getElementById('udp-client-connections').value)
+                    }
+                };
+                const startResult = await apiRequest('/api/services/client/', 'POST', startConfig);
+                if (!startResult.success) {
+                    showToast('启动失败: ' + (startResult.error || '未知错误'), 'error');
+                    addClientLog('启动失败: ' + (startResult.error || '未知错误'), 'error';
+                    sendBtn.disabled = false;
+                    return;
+                }
+                // 等待一下确保客户端启动
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // 现在开始发送
+            const config = {
+                agent_id: clientAgent.agent_id,
+                protocol: 'udp',
+                action: 'start_send',
+                config: {
+                    message: document.getElementById('udp-client-data').value,
+                    interval: parseInt(document.getElementById('udp-client-interval').value),
+                    count: parseInt(document.getElementById('udp-client-connections').value)
+                }
+            };
+
+            const result = await apiRequest('/api/services/client/', 'POST', config);
+            if (result.success) {
+                showToast('数据发送成功');
+                addClientLog('数据发送成功', 'info');
+                udpIsSending = true;
+            } else {
+                showToast('发送失败: ' + (result.error || '未知错误'), 'error');
+                addClientLog('发送失败: ' + (result.error || '未知错误'), 'error';
+            }
+        }
+
+        refreshClientStatus();
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
-    }
-}
-
-async function stopUdpClient() {
-    if (!clientAgent) return;
-
-    const config = {
-        agent_id: clientAgent.agent_id,
-        protocol: 'udp',
-        action: 'stop'
-    };
-
-    addClientLog('停止UDP客户端...');
-
-    try {
-        const result = await apiRequest('/api/services/client/', 'POST', config);
-        if (result.success) {
-            showToast('UDP客户端已停止');
-            addClientLog('UDP客户端已停止', 'info');
-            document.getElementById('udp-stop-btn').style.display = 'none';
-        } else {
-            showToast('停止失败: ' + (result.error || '未知错误'), 'error');
-        }
-    } catch (e) {
-        addClientLog('请求失败: ' + e.message, 'error');
+    } finally {
+        sendBtn.disabled = false;
     }
 }
 
@@ -2310,6 +2351,17 @@ async function refreshClientStatus() {
                         sendBtn.className = 'btn-action btn-send';
                     }
                 }
+            } else if (clientProtocol === 'udp') {
+                const sendBtn = document.getElementById('udp-send-toggle-btn');
+                if (sendBtn) {
+                    if (state.sending || udpIsSending) {
+                        sendBtn.textContent = '⏹ 停止发送';
+                        sendBtn.className = 'btn-action btn-stop';
+                    } else {
+                        sendBtn.textContent = '📤 发送';
+                        sendBtn.className = 'btn-action btn-send';
+                    }
+                }
             }
 
             let statusHtml = `
@@ -2353,6 +2405,12 @@ async function refreshClientStatus() {
                 // 检查是否还有活跃的发送线程
                 if (!state.sending) {
                     tcpIsSending = false;
+                    addClientLog('发送已完成', 'info');
+                }
+            }
+            if (clientProtocol === 'udp' && udpIsSending && !state.sending) {
+                if (!state.sending) {
+                    udpIsSending = false;
                     addClientLog('发送已完成', 'info');
                 }
             }
