@@ -4903,7 +4903,7 @@ def start_udp_client(config):
     if not server_ip or server_port <= 0:
         return False, '服务器地址或端口无效'
     connections = max(1, int(config.get('count', config.get('connections', 3))))
-    interval_ms = float(config.get('interval', config.get('send_interval', 100))))
+    interval_ms = float(config.get('interval', config.get('send_interval', 100)))
     interval = max(interval_ms / 1000.0, 0.001)
     message = config.get('message', 'Hello World')  # 默认数据
     with service_lock:
