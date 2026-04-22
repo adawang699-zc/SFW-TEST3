@@ -1308,10 +1308,14 @@ async function refreshServerStatus() {
                 }
             } else {
                 document.getElementById('server-stop-btn').style.display = 'none';
-                document.getElementById('tcp-connections-table')?.style.display = 'none';
-                document.getElementById('http-server-info')?.style.display = 'none';
-                document.getElementById('mail-server-info')?.style.display = 'none';
-                document.getElementById('mail-user-management')?.style.display = 'none';
+                const connTable = document.getElementById('tcp-connections-table');
+                if (connTable) connTable.style.display = 'none';
+                const httpInfo = document.getElementById('http-server-info');
+                if (httpInfo) httpInfo.style.display = 'none';
+                const mailInfo = document.getElementById('mail-server-info');
+                if (mailInfo) mailInfo.style.display = 'none';
+                const mailUserMgmt = document.getElementById('mail-user-management');
+                if (mailUserMgmt) mailUserMgmt.style.display = 'none';
             }
 
             document.getElementById('server-status-content').innerHTML = statusHtml;
