@@ -1174,6 +1174,7 @@ async function stopServerService() {
 }
 
 function getServerConfig() {
+    console.log('getServerConfig - serverProtocol:', serverProtocol);
     const config = {
         protocol: serverProtocol,
         action: 'start'
