@@ -1126,6 +1126,8 @@ async function startServerService() {
     const config = getServerConfig();
     config.agent_id = serverAgent.agent_id;
 
+    console.log('发送到后端的完整请求:', JSON.stringify(config));
+
     addServerLog(`启动 ${serverProtocol.toUpperCase()} 监听...`);
 
     try {
