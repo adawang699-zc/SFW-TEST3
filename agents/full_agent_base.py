@@ -1819,6 +1819,7 @@ class TCPClientManager:
         self.connect_rate = max(config.get('connect_rate', 1), 0.1)
         self.message = config.get('message', '')
         self.interval = max(config.get('send_interval', 1), 0.1)
+        self.count = config.get('count', 0)  # 0表示持续发送
         # MAC地址配置（用于日志记录，实际socket连接不使用）
         self.src_mac = config.get('src_mac', '')
         self.dst_mac = config.get('dst_mac', '')
@@ -1831,6 +1832,7 @@ class TCPClientManager:
         self.threads = []
         self.send_threads = []
         self.packets_sent = 0  # 发送数据包计数
+        self.send_complete = False  # 发送完成标志
 
     def connect(self):
         """只建立连接，不发送数据"""
@@ -1866,11 +1868,17 @@ class TCPClientManager:
         """开始发送数据（需要先连接）"""
         if not self.connection_context:
             return False, '请先建立连接'
+
         self.send_stop_event.clear()
+        self.send_complete = False
+
+        # 设置默认消息
         payload = self.message.encode('utf-8')
         if not payload:
-            return False, '发送内容为空'
-        add_service_log('TCP客户端', '开始发送数据')
+            payload = b'Hello World'
+
+        add_service_log('TCP客户端', f'开始发送数据，间隔: {self.interval}s，次数: {"持续" if self.count == 0 else self.count}')
+
         for conn_id, context in self.connection_context.items():
             if context.get('connected') and context.get('socket'):
                 thread = threading.Thread(
@@ -1948,14 +1956,25 @@ class TCPClientManager:
         if not context or not context.get('socket'):
             return
         sock = context['socket']
+
+        # 计算总共需要发送的包数（0表示持续）
+        remaining = self.count if self.count > 0 else float('inf')
+
         try:
-            while not self.send_stop_event.is_set() and not self.stop_event.is_set():
+            while not self.send_stop_event.is_set() and not self.stop_event.is_set() and remaining > 0:
                 try:
                     sock.sendall(payload)
                     with service_lock:
                         self.packets_sent += 1
                         if conn_id in self.state['connections']:
                             self.state['connections'][conn_id]['bytes_sent'] += len(payload)
+
+                    # 递减计数
+                    if self.count > 0:
+                        remaining -= 1
+                        if remaining <= 0:
+                            break
+
                     time.sleep(self.interval)
                 except (socket.error, OSError) as e:
                     add_service_log('TCP客户端', f'发送数据异常: {e}', 'error')
@@ -4742,16 +4761,31 @@ def start_tcp_send(config):
     manager = state.get('manager')
     if not manager:
         return False, '连接管理器不存在'
+
+    # 设置默认消息
+    message_data = config.get('message', '')
+    if not message_data:
+        message_data = 'Hello World'  # 默认发送数据
+
     # 更新发送内容
-    if 'message' in config:
-        state['message'] = config['message']
-        manager.message = config['message']
+    state['message'] = message_data
+    manager.message = message_data
+
     # 更新发送间隔（前端传入的是毫秒）
     if 'interval' in config:
         interval_ms = float(config.get('interval', 10))
         interval = max(interval_ms / 1000.0, 0.001)
         manager.interval = interval
         state['send_interval'] = interval_ms
+
+    # 更新发送次数（0表示持续发送）
+    if 'count' in config:
+        count = int(config.get('count', 0))
+        manager.count = count
+
+    # 重置发送完成标志
+    manager.send_complete = False
+
     success, message = manager.start_send()
     if success:
         return True, {'message': message}
@@ -7609,7 +7643,7 @@ def api_services_status():
                     'server_port': state.get('server_port', 0),
                     'connections': connections,
                     'message': state.get('message', ''),
-                    'send_interval': state.get('send_interval', 0) if state.get('send_interval', 0) > 1 else state.get('send_interval', 0) * 1000
+                    'send_interval': state.get('send_interval', 0)  # 前端传入的是毫秒，直接返回
                 }
 
                 # TCP 协议需要额外返回 sending 状态

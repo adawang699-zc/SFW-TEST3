@@ -640,7 +640,7 @@
                 <div class="config-row single">
                     <div class="config-group">
                         <label>发送数据（HEX或文本）</label>
-                        <input type="text" id="tcp-client-data" class="config-input" placeholder="如: Hello 或 48656C6C6F">
+                        <input type="text" id="tcp-client-data" class="config-input" placeholder="如: Hello 或 48656C6C6F" value="Hello World">
                     </div>
                 </div>
                 <div class="config-row">
@@ -1159,8 +1159,8 @@ async function toggleServerService() {
                 addServerLog(`${serverProtocol.toUpperCase()} 监听已停止`, 'info');
                 document.getElementById('server-connections-area').style.display = 'none';
             } else {
-                showToast('停止失败: ' + result.error, 'error');
-                addServerLog('停止失败: ' + result.error, 'error');
+                showToast('停止失败: ' + (result.error || '未知错误'), 'error');
+                addServerLog('停止失败: ' + (result.error || '未知错误'), 'error');
             }
         } else {
             // 启动监听
@@ -1178,8 +1178,8 @@ async function toggleServerService() {
                 showToast('监听启动成功');
                 addServerLog(`${serverProtocol.toUpperCase()} 监听已启动`, 'info');
             } else {
-                showToast('启动失败: ' + result.error, 'error');
-                addServerLog('启动失败: ' + result.error, 'error');
+                showToast('启动失败: ' + (result.error || '未知错误'), 'error');
+                addServerLog('启动失败: ' + (result.error || '未知错误'), 'error');
             }
         }
 
@@ -1369,7 +1369,7 @@ async function disconnectTcpConnection(connId) {
             addServerLog(`连接 ${connId} 已断开`, 'info');
             refreshServerStatus();
         } else {
-            showToast('断开失败: ' + result.error, 'error');
+            showToast('断开失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addServerLog('请求失败: ' + e.message, 'error');
@@ -1445,8 +1445,8 @@ async function createMailUser() {
             document.getElementById('mail-new-pass').value = '';
             loadMailUsers();
         } else {
-            showToast('创建失败: ' + result.error, 'error');
-            addServerLog('创建失败: ' + result.error, 'error');
+            showToast('创建失败: ' + (result.error || '未知错误'), 'error');
+            addServerLog('创建失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
@@ -1477,7 +1477,7 @@ async function deleteMailUser(username) {
             addServerLog(`用户 ${username} 已删除`, 'info');
             loadMailUsers();
         } else {
-            showToast('删除失败: ' + result.error, 'error');
+            showToast('删除失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addServerLog('请求失败: ' + e.message, 'error');
@@ -1530,8 +1530,8 @@ async function connectTcp() {
                 document.getElementById('tcp-client-connections-list').innerHTML = connHtml;
             }
         } else {
-            showToast('连接失败: ' + result.error, 'error');
-            addClientLog('连接失败: ' + result.error, 'error');
+            showToast('连接失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('连接失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
@@ -1570,8 +1570,8 @@ async function toggleTcpSend() {
                 addClientLog('发送已停止', 'info');
                 tcpIsSending = false;
             } else {
-                showToast('停止失败: ' + result.error, 'error');
-                addClientLog('停止失败: ' + result.error, 'error');
+                showToast('停止失败: ' + (result.error || '未知错误'), 'error');
+                addClientLog('停止失败: ' + (result.error || '未知错误'), 'error');
             }
         } else {
             // 开始发送
@@ -1596,8 +1596,8 @@ async function toggleTcpSend() {
                 addClientLog('数据发送成功', 'info');
                 tcpIsSending = true;
             } else {
-                showToast('发送失败: ' + result.error, 'error');
-                addClientLog('发送失败: ' + result.error, 'error');
+                showToast('发送失败: ' + (result.error || '未知错误'), 'error');
+                addClientLog('发送失败: ' + (result.error || '未知错误'), 'error');
             }
         }
 
@@ -1637,7 +1637,7 @@ async function disconnectTcp() {
             document.getElementById('tcp-client-connections-list').innerHTML = '';
             document.getElementById('tcp-connect-btn').style.display = 'inline-block';
         } else {
-            showToast('断开失败: ' + result.error, 'error');
+            showToast('断开失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1672,8 +1672,8 @@ async function startUdpClient() {
             addClientLog('UDP客户端已启动', 'info');
             document.getElementById('udp-stop-btn').style.display = 'inline-block';
         } else {
-            showToast('启动失败: ' + result.error, 'error');
-            addClientLog('启动失败: ' + result.error, 'error');
+            showToast('启动失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('启动失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1698,7 +1698,7 @@ async function stopUdpClient() {
             addClientLog('UDP客户端已停止', 'info');
             document.getElementById('udp-stop-btn').style.display = 'none';
         } else {
-            showToast('停止失败: ' + result.error, 'error');
+            showToast('停止失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1733,8 +1733,8 @@ async function connectFtp() {
             addClientLog('FTP连接成功', 'info');
             showFtpConnectedButtons();
         } else {
-            showToast('连接失败: ' + result.error, 'error');
-            addClientLog('连接失败: ' + result.error, 'error');
+            showToast('连接失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('连接失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1789,7 +1789,7 @@ async function listFtpFiles() {
             }
             document.getElementById('ftp-files-content').innerHTML = filesHtml || '<div style="color:var(--text-muted)">无文件</div>';
         } else {
-            addClientLog('获取失败: ' + result.error, 'error');
+            addClientLog('获取失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1824,8 +1824,8 @@ async function uploadFtpFile() {
             addClientLog('文件上传成功: ' + filename, 'info');
             listFtpFiles();
         } else {
-            showToast('上传失败: ' + result.error, 'error');
-            addClientLog('上传失败: ' + result.error, 'error');
+            showToast('上传失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('上传失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1858,8 +1858,8 @@ async function downloadFtpFile() {
             showToast('文件下载成功');
             addClientLog(`下载成功: ${filename} (${result.file_size} bytes)`, 'info');
         } else {
-            showToast('下载失败: ' + result.error, 'error');
-            addClientLog('下载失败: ' + result.error, 'error');
+            showToast('下载失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('下载失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1884,7 +1884,7 @@ async function disconnectFtp() {
             addClientLog('FTP已断开', 'info');
             hideFtpConnectedButtons();
         } else {
-            showToast('断开失败: ' + result.error, 'error');
+            showToast('断开失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1917,8 +1917,8 @@ async function connectHttp() {
             addClientLog('HTTP连接成功', 'info');
             showHttpConnectedButtons();
         } else {
-            showToast('连接失败: ' + result.error, 'error');
-            addClientLog('连接失败: ' + result.error, 'error');
+            showToast('连接失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('连接失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1964,7 +1964,7 @@ async function listHttpFiles() {
             }
             document.getElementById('http-files-content').innerHTML = filesHtml || '<div style="color:var(--text-muted)">无文件</div>';
         } else {
-            addClientLog('获取失败: ' + result.error, 'error');
+            addClientLog('获取失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -1997,7 +1997,7 @@ async function downloadHttpFile() {
             showToast('文件下载成功');
             addClientLog(`下载成功: ${filename}`, 'info');
         } else {
-            showToast('下载失败: ' + result.error, 'error');
+            showToast('下载失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2022,7 +2022,7 @@ async function disconnectHttp() {
             addClientLog('HTTP已断开', 'info');
             hideHttpConnectedButtons();
         } else {
-            showToast('断开失败: ' + result.error, 'error');
+            showToast('断开失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2113,8 +2113,8 @@ async function sendMail() {
             document.getElementById('mail-attachment').value = '';
             document.getElementById('mail-attachment-preview').style.display = 'none';
         } else {
-            showToast('发送失败: ' + result.error, 'error');
-            addClientLog('发送失败: ' + result.error, 'error');
+            showToast('发送失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('发送失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2156,7 +2156,7 @@ async function receiveMails() {
             }
             document.getElementById('mail-list-content').innerHTML = mailsHtml || '<div style="color:var(--text-muted)">无邮件</div>';
         } else {
-            addClientLog('获取失败: ' + result.error, 'error');
+            addClientLog('获取失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2185,8 +2185,8 @@ async function testMailConnection() {
             showToast('连接测试成功');
             addClientLog('邮件连接测试成功', 'info');
         } else {
-            showToast('连接测试失败: ' + result.error, 'error');
-            addClientLog('连接测试失败: ' + result.error, 'error');
+            showToast('连接测试失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('连接测试失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2221,8 +2221,8 @@ async function testNetworkPing() {
             showToast('Ping测试成功');
             addClientLog('Ping测试成功', 'info');
         } else {
-            showToast('Ping测试失败: ' + result.error, 'error');
-            addClientLog('Ping测试失败: ' + result.error, 'error');
+            showToast('Ping测试失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('Ping测试失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2256,8 +2256,8 @@ async function testNetworkConnect() {
             showToast('连通性测试成功');
             addClientLog('连通性测试成功', 'info');
         } else {
-            showToast('连通性测试失败: ' + result.error, 'error');
-            addClientLog('连通性测试失败: ' + result.error, 'error');
+            showToast('连通性测试失败: ' + (result.error || '未知错误'), 'error');
+            addClientLog('连通性测试失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
@@ -2346,8 +2346,19 @@ async function refreshClientStatus() {
                         </div>
                     `;
                 }
-            } else if (tcpIsSending) {
-                // 如果客户端状态显示未运行但我们认为正在发送，说明连接可能被服务端断开了
+            }
+
+            // 检查是否发送已完成（从发送状态变成非发送状态，但不是手动停止的）
+            if (clientProtocol === 'tcp' && tcpIsSending && !state.sending) {
+                // 检查是否还有活跃的发送线程
+                if (!state.sending) {
+                    tcpIsSending = false;
+                    addClientLog('发送已完成', 'info');
+                }
+            }
+
+            // 如果服务端停止监听，客户端应该检测到
+            if (clientProtocol === 'tcp' && tcpIsSending && !state.running) {
                 tcpIsSending = false;
                 addClientLog('检测到连接可能已断开', 'warning');
 
