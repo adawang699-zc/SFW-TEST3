@@ -93,7 +93,23 @@ from agents.modules.port_scanner import port_scan
 from agents.modules.packet_replay import start_replay, stop_replay, get_replay_status
 from agents.services.listeners import start_tcp_listener, stop_tcp_listener, start_udp_listener, stop_udp_listener
 # 导入完整监听功能（支持 FTP/HTTP/Mail）
-from agents.full_agent_base import start_listener, stop_listener, listener_states, service_lock
+from agents.full_agent_base import (
+    start_listener, stop_listener, listener_states, service_lock,
+    # TCP 客户端
+    start_tcp_client, connect_tcp_client, start_tcp_send, stop_tcp_send,
+    stop_tcp_client, disconnect_tcp_connection,
+    # UDP 客户端
+    start_udp_client, start_udp_send, stop_udp_send, stop_udp_client,
+    # FTP 客户端
+    start_ftp_client, connect_ftp_client, disconnect_ftp_client,
+    list_ftp_files, upload_ftp_file, download_ftp_file,
+    # HTTP 客户端
+    connect_http_client, disconnect_http_client, upload_http_file,
+    # 日志
+    add_service_log, service_logs,
+    # 状态
+    client_states
+)
 
 # ========== 通用 API ==========
 
@@ -399,6 +415,137 @@ def api_services_status():
         'clients': clients_summary,
         'agent_id': AGENT_ID
     })
+
+
+# ========== 客户端服务 API ==========
+
+@app.route('/api/services/client', methods=['POST'])
+def api_services_client():
+    """客户端服务管理"""
+    try:
+        data = request.json or {}
+        protocol = (data.get('protocol') or 'tcp').lower()
+        action = (data.get('action') or 'start').lower()
+        config = data.get('config', data)
+
+        add_service_log('API', f'收到客户端请求: protocol={protocol}, action={action}', 'info')
+
+        # TCP 客户端
+        if protocol == 'tcp':
+            if action == 'start':
+                success, result = start_tcp_client(config)
+            elif action == 'connect':
+                success, result = connect_tcp_client(config)
+            elif action == 'start_send':
+                success, result = start_tcp_send(config)
+            elif action == 'stop_send':
+                success, result = stop_tcp_send()
+            elif action == 'stop':
+                success, result = stop_tcp_client()
+            elif action == 'disconnect':
+                conn_id = config.get('connection_id')
+                success, message = disconnect_tcp_connection(conn_id)
+                result = {'message': message}
+            else:
+                return jsonify({'success': False, 'error': '不支持的操作'}), 400
+
+        # UDP 客户端
+        elif protocol == 'udp':
+            if action == 'start':
+                success, result = start_udp_client(config)
+            elif action == 'start_send':
+                success, result = start_udp_send(config)
+            elif action == 'stop_send':
+                success, result = stop_udp_send()
+            elif action == 'stop':
+                success, result = stop_udp_client()
+            else:
+                return jsonify({'success': False, 'error': '不支持的操作'}), 400
+
+        # FTP 客户端
+        elif protocol == 'ftp':
+            if action == 'start':
+                success, result = start_ftp_client(config)
+            elif action == 'connect':
+                success, result = connect_ftp_client(config)
+                if not success and isinstance(result, str):
+                    result = {'error': result}
+            elif action == 'disconnect':
+                success, result = disconnect_ftp_client()
+            elif action == 'list':
+                success, result = list_ftp_files()
+            elif action == 'upload':
+                filename = config.get('filename', '')
+                content = config.get('content', '')
+                local_file_path = config.get('local_file_path', '')
+                success, result = upload_ftp_file(filename, content, local_file_path)
+                if success:
+                    result = {'message': result}
+                else:
+                    result = {'error': result}
+            elif action == 'download':
+                filename = config.get('filename', '')
+                if not filename:
+                    return jsonify({'success': False, 'error': '缺少文件名参数'}), 400
+                success, result = download_ftp_file(filename)
+            elif action == 'stop':
+                success, result = disconnect_ftp_client()
+            else:
+                return jsonify({'success': False, 'error': '不支持的操作'}), 400
+
+        # HTTP 客户端
+        elif protocol == 'http':
+            if action == 'connect':
+                success, result = connect_http_client(config)
+            elif action == 'disconnect' or action == 'stop':
+                success, result = disconnect_http_client()
+            elif action == 'upload':
+                filename = config.get('filename', '')
+                content = config.get('content', '')
+                local_file_path = config.get('local_file_path', '')
+                success, result = upload_http_file(filename, content, local_file_path)
+                if success:
+                    result = {'message': '上传成功'}
+                else:
+                    result = {'error': result if isinstance(result, str) else '上传失败'}
+            else:
+                return jsonify({'success': False, 'error': '不支持的操作'}), 400
+
+        # Mail 客户端 - 暂不支持客户端连接
+        elif protocol == 'mail':
+            return jsonify({'success': False, 'error': 'Mail 客户端功能暂未实现'}), 400
+
+        else:
+            return jsonify({'success': False, 'error': f'不支持的协议: {protocol}'}), 400
+
+        # 返回结果
+        if success:
+            if isinstance(result, dict):
+                return jsonify({'success': True, **result})
+            else:
+                return jsonify({'success': True, 'message': result})
+        else:
+            if isinstance(result, dict):
+                return jsonify({'success': False, **result}), 400
+            else:
+                return jsonify({'success': False, 'error': result}), 400
+
+    except Exception as e:
+        logger.exception(f'客户端服务请求失败: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/services/logs', methods=['GET'])
+def api_services_logs():
+    """获取服务日志"""
+    try:
+        limit = int(request.args.get('limit', 100))
+        with service_lock:
+            logs = list(service_logs)[:limit]
+        return jsonify({'success': True, 'logs': logs})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # ========== 工控协议功能 ==========
 
