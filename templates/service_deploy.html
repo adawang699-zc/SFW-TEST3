@@ -53,6 +53,105 @@
     display: block;
 }
 
+/* Agent 卡片选择 */
+.agent-selector {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.agent-card {
+    padding: 12px 16px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    min-width: 160px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: var(--bg-card);
+}
+
+.agent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.agent-card.selected {
+    border-color: var(--primary) !important;
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.1), rgba(255, 107, 53, 0.05));
+    box-shadow: 0 4px 16px rgba(255, 107, 53, 0.3);
+}
+
+.agent-card.server-selected {
+    border-color: #2196F3 !important;
+    background: linear-gradient(135deg, rgba(33, 150, 243, 0.1), rgba(33, 150, 243, 0.05));
+    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3);
+}
+
+.agent-card.client-selected {
+    border-color: #FF9800 !important;
+    background: linear-gradient(135deg, rgba(255, 152, 0, 0.1), rgba(255, 152, 0, 0.05));
+    box-shadow: 0 4px 16px rgba(255, 152, 0, 0.3);
+}
+
+.agent-card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.agent-card-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.agent-card-info {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.agent-card-status {
+    font-size: 0.8rem;
+    margin-top: 4px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: var(--bg-secondary);
+}
+
+/* 上传下载行 */
+.upload-download-row {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+}
+
+.upload-group, .download-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.upload-group label, .download-group label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    min-width: 40px;
+}
+
+.upload-group input[type="file"] {
+    flex: 1;
+}
+
+.download-group input[type="text"] {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-card);
+}
+
 /* 协议标签 */
 .protocol-tabs {
     display: flex;
@@ -422,10 +521,10 @@
         <div class="panel-content">
             <!-- Agent 选择 -->
             <div class="agent-select-area">
-                <label>选择服务端 Agent</label>
-                <select id="server-agent" class="config-input" onchange="onServerAgentChange()">
-                    <option value="">-- 请先租用 Agent --</option>
-                </select>
+                <label>选择服务端 Agent（点击选择）</label>
+                <div id="server-agent-selector" class="agent-selector">
+                    <!-- 动态生成 Agent 卡片 -->
+                </div>
                 <div id="server-agent-info" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);"></div>
             </div>
 
@@ -630,10 +729,10 @@
         <div class="panel-content">
             <!-- Agent 选择 -->
             <div class="agent-select-area">
-                <label>选择客户端 Agent</label>
-                <select id="client-agent" class="config-input" onchange="onClientAgentChange()">
-                    <option value="">-- 请先租用 Agent --</option>
-                </select>
+                <label>选择客户端 Agent（点击选择）</label>
+                <div id="client-agent-selector" class="agent-selector">
+                    <!-- 动态生成 Agent 卡片 -->
+                </div>
                 <div id="client-agent-info" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);"></div>
                 <button class="btn-xs btn-secondary" onclick="syncServerInfo()" style="margin-top: 8px;">⬇ 同步服务端信息</button>
             </div>
@@ -748,17 +847,25 @@
                         <input type="text" id="ftp-client-pass" class="config-input" value="tdhx@2017">
                     </div>
                 </div>
-                <!-- FTP 文件操作 -->
-                <div class="config-row single" id="ftp-file-ops" style="display:none;">
-                    <div class="config-group">
-                        <label>上传文件</label>
-                        <input type="file" id="ftp-upload-file" class="config-input">
-                    </div>
-                </div>
                 <!-- FTP 文件列表 -->
                 <div id="ftp-file-list" style="display:none;">
-                    <div class="status-header">📁 文件列表</div>
+                    <div class="status-header">📁 文件列表（点击选中，双击进入目录或下载）</div>
                     <div class="file-list" id="ftp-files-content"></div>
+                </div>
+                <!-- FTP 上传下载操作 -->
+                <div id="ftp-file-ops" style="display:none;">
+                    <div class="upload-download-row">
+                        <div class="upload-group">
+                            <label>上传</label>
+                            <input type="file" id="ftp-upload-file">
+                            <button class="btn-xs btn-secondary" onclick="uploadFtpFile()">⬆ 上传</button>
+                        </div>
+                        <div class="download-group">
+                            <label>下载</label>
+                            <input type="text" id="ftp-download-file" readonly placeholder="选中文件后显示">
+                            <button class="btn-xs btn-secondary" onclick="downloadFtpFile()">⬇ 下载</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -774,17 +881,25 @@
                         <input type="number" id="http-client-port" class="config-input" value="80">
                     </div>
                 </div>
-                <!-- HTTP 文件操作 -->
-                <div class="config-row single" id="http-file-ops" style="display:none;">
-                    <div class="config-group">
-                        <label>上传文件</label>
-                        <input type="file" id="http-upload-file" class="config-input">
-                    </div>
-                </div>
                 <!-- HTTP 文件列表 -->
                 <div id="http-file-list" style="display:none;">
-                    <div class="status-header">📁 文件列表</div>
+                    <div class="status-header">📁 文件列表（点击选中，双击进入目录或下载）</div>
                     <div class="file-list" id="http-files-content"></div>
+                </div>
+                <!-- HTTP 上传下载操作 -->
+                <div id="http-file-ops" style="display:none;">
+                    <div class="upload-download-row">
+                        <div class="upload-group">
+                            <label>上传</label>
+                            <input type="file" id="http-upload-file">
+                            <button class="btn-xs btn-secondary" onclick="uploadHttpFile()">⬆ 上传</button>
+                        </div>
+                        <div class="download-group">
+                            <label>下载</label>
+                            <input type="text" id="http-download-file" readonly placeholder="选中文件后显示">
+                            <button class="btn-xs btn-secondary" onclick="downloadHttpFile()">⬇ 下载</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -898,16 +1013,10 @@
             <div class="action-buttons" id="ftp-client-actions" style="display:none;">
                 <button class="btn-action btn-connect" onclick="connectFtp()">🔗 连接</button>
                 <button class="btn-action btn-disconnect" id="ftp-disconnect-btn" onclick="disconnectFtp()" style="display:none;">断开连接</button>
-                <button class="btn-action btn-secondary" id="ftp-list-btn" onclick="listFtpFiles()" style="display:none;">📁 列表</button>
-                <button class="btn-action btn-secondary" id="ftp-upload-btn" onclick="uploadFtpFile()" style="display:none;">⬆ 上传</button>
-                <button class="btn-action btn-secondary" id="ftp-download-btn" onclick="downloadFtpFile()" style="display:none;">⬇ 下载</button>
             </div>
             <div class="action-buttons" id="http-client-actions" style="display:none;">
                 <button class="btn-action btn-connect" onclick="connectHttp()">🔗 连接</button>
                 <button class="btn-action btn-disconnect" id="http-disconnect-btn" onclick="disconnectHttp()" style="display:none;">断开连接</button>
-                <button class="btn-action btn-secondary" id="http-list-btn" onclick="listHttpFiles()" style="display:none;">📁 列表</button>
-                <button class="btn-action btn-secondary" id="http-upload-btn" onclick="uploadHttpFile()" style="display:none;">⬆ 上传</button>
-                <button class="btn-action btn-secondary" id="http-download-btn" onclick="downloadHttpFile()" style="display:none;">⬇ 下载</button>
             </div>
             <div class="action-buttons" id="mail-client-actions" style="display:none;">
                 <button class="btn-action btn-send" onclick="sendMail()">📤 发送邮件</button>
@@ -989,59 +1098,88 @@ window.onload = function() {
 async function loadAgents() {
     try {
         const result = await apiRequest('/api/agents/my-rented/');
-        console.log('API返回:', result);  // 调试日志
+        console.log('API返回:', result);
         const clientIpInfo = result.client_ip || '未知';
-        console.log('客户端IP:', clientIpInfo, '是否有租用:', result.has_rental);
 
         if (!result.has_rental) {
-            document.getElementById('server-agent').innerHTML = '<option value="">无可用Agent - ' + (result.message || '请先租用Agent') + '</option>';
-            document.getElementById('client-agent').innerHTML = '<option value="">无可用Agent - ' + (result.message || '请先租用Agent') + '</option>';
+            document.getElementById('server-agent-selector').innerHTML = '<div style="color: var(--text-muted);">无可用Agent - ' + (result.message || '请先租用Agent') + '</div>';
+            document.getElementById('client-agent-selector').innerHTML = '<div style="color: var(--text-muted);">无可用Agent - ' + (result.message || '请先租用Agent') + '</div>';
             return;
         }
 
         agents = result.agents || [];
-        console.log('Agent数量:', agents.length);
         agents.sort((a, b) => {
             const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
             const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
             return numA - numB;
         });
 
-        // 填充下拉框
-        let serverOptions = '<option value="">-- 选择Agent --</option>';
-        let clientOptions = '<option value="">-- 选择Agent --</option>';
+        // 生成服务端和客户端卡片
+        let serverCards = '';
+        let clientCards = '';
 
         agents.forEach(agent => {
-            console.log('Agent:', agent.agent_id, 'has_ip:', agent.has_ip, 'ip:', agent.ip_address);
-            // 只需要有 Agent ID 即可选择
             if (agent.agent_id) {
-                const statusText = agent.status === 'running' ? '运行中' : '离线';
+                const isRunning = agent.status === 'running';
+                const hasIp = agent.has_ip && agent.ip_address;
                 const ipText = agent.ip_address ? `${agent.ip_address}:${agent.port}` : '无IP';
-                serverOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${ipText}) [${statusText}]</option>`;
-                clientOptions += `<option value="${agent.agent_id}">${agent.agent_id} (${ipText}) [${statusText}]</option>`;
+                const statusText = isRunning ? '运行中' : '离线';
+                const statusColor = isRunning ? 'var(--success)' : 'var(--danger)';
+                const canUse = isRunning && hasIp;
+                const opacityStyle = canUse ? '' : 'opacity: 0.5;';
+                const cursorStyle = canUse ? 'cursor: pointer;' : 'cursor: not-allowed;';
+
+                // 服务端卡片
+                serverCards += `
+                    <div class="agent-card ${canUse ? '' : 'disabled'}"
+                         onclick="${canUse ? `selectServerAgent('${agent.agent_id}')` : ''}"
+                         data-agent-id="${agent.agent_id}"
+                         style="${opacityStyle} ${cursorStyle}">
+                        <div class="agent-card-name">${agent.agent_id}</div>
+                        <div class="agent-card-info">${ipText}</div>
+                        <div class="agent-card-status" style="color: ${statusColor};">${statusText}</div>
+                    </div>
+                `;
+
+                // 客户端卡片
+                clientCards += `
+                    <div class="agent-card ${canUse ? '' : 'disabled'}"
+                         onclick="${canUse ? `selectClientAgent('${agent.agent_id}')` : ''}"
+                         data-agent-id="${agent.agent_id}"
+                         style="${opacityStyle} ${cursorStyle}">
+                        <div class="agent-card-name">${agent.agent_id}</div>
+                        <div class="agent-card-info">${ipText}</div>
+                        <div class="agent-card-status" style="color: ${statusColor};">${statusText}</div>
+                    </div>
+                `;
             }
         });
 
-        document.getElementById('server-agent').innerHTML = serverOptions;
-        document.getElementById('client-agent').innerHTML = clientOptions;
+        document.getElementById('server-agent-selector').innerHTML = serverCards || '<div style="color: var(--text-muted);">无可用Agent</div>';
+        document.getElementById('client-agent-selector').innerHTML = clientCards || '<div style="color: var(--text-muted);">无可用Agent</div>';
 
     } catch (e) {
         console.error('加载Agent失败:', e);
-        addServerLog('加载Agent失败: ' + e.message, 'error');
-        addClientLog('加载Agent失败: ' + e.message, 'error');
-        document.getElementById('server-agent').innerHTML = '<option value="">加载失败: ' + e.message + '</option>';
-        document.getElementById('client-agent').innerHTML = '<option value="">加载失败: ' + e.message + '</option>';
+        document.getElementById('server-agent-selector').innerHTML = '<div style="color: var(--danger);">加载失败: ' + e.message + '</div>';
+        document.getElementById('client-agent-selector').innerHTML = '<div style="color: var(--danger);">加载失败: ' + e.message + '</div>';
     }
 }
 
-// 服务端Agent选择
-function onServerAgentChange() {
-    const agentId = document.getElementById('server-agent').value;
+// 服务端Agent选择（卡片点击）
+function selectServerAgent(agentId) {
     serverAgent = agents.find(a => a.agent_id === agentId);
+
+    // 更新选中样式
+    document.querySelectorAll('#server-agent-selector .agent-card').forEach(card => {
+        card.classList.remove('selected', 'server-selected');
+        if (card.dataset.agentId === agentId) {
+            card.classList.add('selected', 'server-selected');
+        }
+    });
 
     if (serverAgent) {
         document.getElementById('server-agent-info').textContent =
-            `IP: ${serverAgent.ip_address}, Port: ${serverAgent.port}`;
+            `已选择: ${serverAgent.agent_id} (${serverAgent.ip_address}:${serverAgent.port})`;
         addServerLog(`选择服务端Agent: ${serverAgent.agent_id}`);
 
         // 自动填充监听地址为Agent的IP
@@ -1058,14 +1196,21 @@ function onServerAgentChange() {
     }
 }
 
-// 客户端Agent选择
-function onClientAgentChange() {
-    const agentId = document.getElementById('client-agent').value;
+// 客户端Agent选择（卡片点击）
+function selectClientAgent(agentId) {
     clientAgent = agents.find(a => a.agent_id === agentId);
+
+    // 更新选中样式
+    document.querySelectorAll('#client-agent-selector .agent-card').forEach(card => {
+        card.classList.remove('selected', 'client-selected');
+        if (card.dataset.agentId === agentId) {
+            card.classList.add('selected', 'client-selected');
+        }
+    });
 
     if (clientAgent) {
         document.getElementById('client-agent-info').textContent =
-            `IP: ${clientAgent.ip_address}, Port: ${clientAgent.port}`;
+            `已选择: ${clientAgent.agent_id} (${clientAgent.ip_address}:${clientAgent.port})`;
         addClientLog(`选择客户端Agent: ${clientAgent.agent_id}`);
         refreshClientStatus();
         startClientStatusPoll();
@@ -1094,8 +1239,15 @@ function syncServerInfo() {
     document.getElementById('smtp-server').value = serverAgent.ip_address;
     document.getElementById('imap-server').value = serverAgent.ip_address;
 
+    // 邮件默认值填充
+    const domain = document.getElementById('mail-domain')?.value || 'autotest.com';
+    document.getElementById('mail-from').value = `sender@${domain}`;
+    document.getElementById('mail-to').value = `receiver@${domain}`;
+    document.getElementById('mail-user').value = `sender@${domain}`;
+    document.getElementById('mail-password').value = 'test123';
+
     addClientLog('同步服务端信息: ' + serverAgent.ip_address);
-    showToast('服务端信息已同步');
+    showToast('服务端信息已同步（包含邮件默认账号）');
 }
 
 // 协议选择
@@ -1813,17 +1965,14 @@ async function connectFtp() {
 
 function showFtpConnectedButtons() {
     document.getElementById('ftp-disconnect-btn').style.display = 'inline-block';
-    document.getElementById('ftp-list-btn').style.display = 'inline-block';
-    document.getElementById('ftp-upload-btn').style.display = 'inline-block';
-    document.getElementById('ftp-download-btn').style.display = 'inline-block';
+    document.getElementById('ftp-file-list').style.display = 'block';
     document.getElementById('ftp-file-ops').style.display = 'block';
+    // 连接成功后自动获取文件列表
+    listFtpFiles();
 }
 
 function hideFtpConnectedButtons() {
     document.getElementById('ftp-disconnect-btn').style.display = 'none';
-    document.getElementById('ftp-list-btn').style.display = 'none';
-    document.getElementById('ftp-upload-btn').style.display = 'none';
-    document.getElementById('ftp-download-btn').style.display = 'none';
     document.getElementById('ftp-file-ops').style.display = 'none';
     document.getElementById('ftp-file-list').style.display = 'none';
 }
@@ -1901,6 +2050,11 @@ function selectFtpFile(name, isDir) {
         item.classList.remove('selected');
     });
     event.currentTarget.classList.add('selected');
+
+    // 如果是文件，填充下载输入框
+    if (!isDir) {
+        document.getElementById('ftp-download-file').value = name;
+    }
 }
 
 async function ftpCdDir(dirname) {
@@ -1989,17 +2143,14 @@ async function uploadFtpFile() {
 async function downloadFtpFile() {
     if (!clientAgent) return;
 
-    if (!selectedFtpFile) {
+    // 从输入框获取文件名
+    const filename = document.getElementById('ftp-download-file').value;
+    if (!filename) {
         showToast('请先在文件列表中选择文件', 'error');
         return;
     }
 
-    if (selectedFtpIsDir) {
-        showToast('不能下载文件夹，请双击进入目录', 'error');
-        return;
-    }
-
-    await downloadFtpFileByName(selectedFtpFile);
+    await downloadFtpFileByName(filename);
 }
 
 async function downloadFtpFileByName(filename) {
@@ -2091,17 +2242,14 @@ async function connectHttp() {
 
 function showHttpConnectedButtons() {
     document.getElementById('http-disconnect-btn').style.display = 'inline-block';
-    document.getElementById('http-list-btn').style.display = 'inline-block';
-    document.getElementById('http-upload-btn').style.display = 'inline-block';
-    document.getElementById('http-download-btn').style.display = 'inline-block';
+    document.getElementById('http-file-list').style.display = 'block';
     document.getElementById('http-file-ops').style.display = 'block';
+    // 连接成功后自动获取文件列表
+    listHttpFiles();
 }
 
 function hideHttpConnectedButtons() {
     document.getElementById('http-disconnect-btn').style.display = 'none';
-    document.getElementById('http-list-btn').style.display = 'none';
-    document.getElementById('http-upload-btn').style.display = 'none';
-    document.getElementById('http-download-btn').style.display = 'none';
     document.getElementById('http-file-ops').style.display = 'none';
     document.getElementById('http-file-list').style.display = 'none';
 }
@@ -2183,6 +2331,11 @@ function selectHttpFile(name, isDir) {
         item.classList.remove('selected');
     });
     event.currentTarget.classList.add('selected');
+
+    // 如果是文件，填充下载输入框
+    if (!isDir) {
+        document.getElementById('http-download-file').value = name;
+    }
 }
 
 async function httpCdDir(dirname) {
@@ -2271,17 +2424,14 @@ async function uploadHttpFile() {
 async function downloadHttpFile() {
     if (!clientAgent) return;
 
-    if (!selectedHttpFile) {
+    // 从输入框获取文件名
+    const filename = document.getElementById('http-download-file').value;
+    if (!filename) {
         showToast('请先在文件列表中选择文件', 'error');
         return;
     }
 
-    if (selectedHttpIsDir) {
-        showToast('不能下载文件夹，请双击进入目录', 'error');
-        return;
-    }
-
-    await downloadHttpFileByName(selectedHttpFile);
+    await downloadHttpFileByName(filename);
 }
 
 async function downloadHttpFileByName(filename) {
