@@ -106,6 +106,8 @@ from agents.full_agent_base import (
     # HTTP 客户端
     connect_http_client, disconnect_http_client, upload_http_file,
     list_http_files, download_http_file,
+    # Mail 客户端
+    send_mail_via_smtp, get_inbox_mails, test_mail_connection,
     # 日志
     add_service_log, service_logs,
     # 状态
@@ -519,9 +521,50 @@ def api_services_client():
             else:
                 return jsonify({'success': False, 'error': '不支持的操作'}), 400
 
-        # Mail 客户端 - 暂不支持客户端连接
+        # Mail 客户端
         elif protocol == 'mail':
-            return jsonify({'success': False, 'error': 'Mail 客户端功能暂未实现'}), 400
+            if action == 'test_connection':
+                test_type = data.get('type', 'smtp')
+                mail_config = {
+                    'server': config.get('server', ''),
+                    'port': int(config.get('port', 25)),
+                    'ssl': config.get('ssl', False)
+                }
+                success, result = test_mail_connection(test_type, mail_config)
+            elif action == 'send':
+                smtp_config = {
+                    'server': config.get('smtp_server', ''),
+                    'port': int(config.get('smtp_port', 25)),
+                    'ssl': config.get('smtp_ssl', False),
+                    'email': config.get('from', ''),
+                    'password': config.get('password', ''),
+                    'no_auth': config.get('no_auth', False)
+                }
+                mail_data = {
+                    'from': config.get('from', ''),
+                    'to': config.get('to', ''),
+                    'subject': config.get('subject', ''),
+                    'content': config.get('content', ''),
+                    'content_type': config.get('content_type', 'plain'),
+                    'cc': config.get('cc', ''),
+                    'attachments': config.get('attachments', [])
+                }
+                source_ip = BIND_IP if BIND_IP != '0.0.0.0' else ''
+                success, result = send_mail_via_smtp(smtp_config, mail_data, source_ip)
+            elif action == 'receive':
+                receive_config = {
+                    'server': config.get('imap_server', ''),
+                    'port': int(config.get('imap_port', 143)),
+                    'ssl': config.get('imap_ssl', False),
+                    'user': config.get('user', ''),
+                    'password': config.get('password', '')
+                }
+                source_ip = BIND_IP if BIND_IP != '0.0.0.0' else ''
+                success, result = get_inbox_mails(receive_config, source_ip)
+                if success and isinstance(result, list):
+                    result = {'mails': result, 'count': len(result)}
+            else:
+                return jsonify({'success': False, 'error': '不支持的操作'}), 400
 
         else:
             return jsonify({'success': False, 'error': f'不支持的协议: {protocol}'}), 400
