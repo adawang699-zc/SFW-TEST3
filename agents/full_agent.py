@@ -105,6 +105,7 @@ from agents.full_agent_base import (
     list_ftp_files, upload_ftp_file, download_ftp_file,
     # HTTP 客户端
     connect_http_client, disconnect_http_client, upload_http_file,
+    list_http_files, download_http_file,
     # 日志
     add_service_log, service_logs,
     # 状态
@@ -499,6 +500,8 @@ def api_services_client():
                 success, result = connect_http_client(config)
             elif action == 'disconnect' or action == 'stop':
                 success, result = disconnect_http_client()
+            elif action == 'list':
+                success, result = list_http_files()
             elif action == 'upload':
                 filename = config.get('filename', '')
                 content = config.get('content', '')
@@ -508,6 +511,11 @@ def api_services_client():
                     result = {'message': '上传成功'}
                 else:
                     result = {'error': result if isinstance(result, str) else '上传失败'}
+            elif action == 'download':
+                filename = config.get('filename', '')
+                if not filename:
+                    return jsonify({'success': False, 'error': '缺少文件名参数'}), 400
+                success, result = download_http_file(filename)
             else:
                 return jsonify({'success': False, 'error': '不支持的操作'}), 400
 

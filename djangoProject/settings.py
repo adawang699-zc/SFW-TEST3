@@ -102,6 +102,14 @@ AGENT_WORK_DIR = os.environ.get('AGENT_WORK_DIR', '/opt/SFW-TEST3')
 # Agent Python 虚拟环境路径
 AGENT_VENV_PYTHON = os.environ.get('AGENT_VENV_PYTHON', '/opt/SFW-TEST3/sfw/bin/python')
 
+# ========== 文件上传配置 ==========
+
+# 最大请求体大小 (100MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
+
+# 最大内存大小 (100MB)
+FILE_UPLOAD_MAX_MEMORY_SIZE = 100 * 1024 * 1024
+
 # ========== 日志配置 ==========
 
 LOG_DIR = BASE_DIR / 'logs'

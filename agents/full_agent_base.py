@@ -5526,6 +5526,30 @@ def upload_http_file(filename, content=None, local_file_path=None):
     return worker.upload_file(filename, content)
 
 
+def list_http_files():
+    """获取HTTP服务器文件列表"""
+    with service_lock:
+        state = client_states.get('http')
+    if not state or not state.get('running'):
+        return False, 'HTTP客户端未连接'
+    worker = state.get('worker')
+    if not worker:
+        return False, 'HTTP客户端工作器不存在'
+    return worker.list_files()
+
+
+def download_http_file(filename):
+    """从HTTP服务器下载文件"""
+    with service_lock:
+        state = client_states.get('http')
+    if not state or not state.get('running'):
+        return False, 'HTTP客户端未连接'
+    worker = state.get('worker')
+    if not worker:
+        return False, 'HTTP客户端工作器不存在'
+    return worker.download_file(filename)
+
+
 def send_mail_via_smtp(smtp_config, mail_data, source_ip=''):
     """通过SMTP发送邮件"""
     print("*** send_mail_via_smtp 函数被调用！***")
