@@ -359,10 +359,44 @@ def api_service_listener():
 @app.route('/api/services/status', methods=['GET'])
 def api_services_status():
     """服务状态"""
-    from agents.services.listeners import listener_states
+    # 返回所有协议的监听和客户端状态
+    listeners_summary = {}
+    clients_summary = {}
+
+    for protocol in ['tcp', 'udp', 'ftp', 'http', 'mail']:
+        state = listener_states.get(protocol, {'running': False})
+        is_running = state.get('running', False)
+        if is_running:
+            connections = list(state.get('connections', {}).values()) if isinstance(state.get('connections'), dict) else []
+            listeners_summary[protocol] = {
+                'running': True,
+                'host': state.get('host', '0.0.0.0'),
+                'port': state.get('port', 0),
+                'connections': connections,
+                'packets': state.get('packets', 0)
+            }
+            if protocol == 'mail':
+                thread = state.get('thread')
+                if thread:
+                    listeners_summary[protocol]['smtp_port'] = getattr(thread, 'smtp_port', 25)
+                    listeners_summary[protocol]['imap_port'] = getattr(thread, 'imap_port', 143)
+                    listeners_summary[protocol]['pop3_port'] = getattr(thread, 'pop3_port', 110)
+                    listeners_summary[protocol]['domain'] = getattr(thread, 'domain', 'autotest.com')
+        else:
+            listeners_summary[protocol] = {'running': False}
+
+        # 客户端状态
+        from agents.services.clients import client_states
+        client_state = client_states.get(protocol, {'running': False})
+        clients_summary[protocol] = {
+            'running': client_state.get('running', False),
+            'connected': client_state.get('connected', False)
+        }
+
     return jsonify({
-        'tcp': listener_states['tcp'],
-        'udp': listener_states['udp'],
+        'success': True,
+        'listeners': listeners_summary,
+        'clients': clients_summary,
         'agent_id': AGENT_ID
     })
 
