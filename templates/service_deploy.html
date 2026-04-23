@@ -117,39 +117,67 @@
     background: var(--bg-secondary);
 }
 
-/* 上传下载行 */
-.upload-download-row {
-    display: flex;
-    gap: 16px;
+/* 上传下载操作区域 */
+.upload-download-area {
     margin-top: 12px;
-    padding: 12px;
-    background: var(--bg-secondary);
-    border-radius: 6px;
 }
 
-.upload-group, .download-group {
+.upload-row, .download-row {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.upload-row label, .download-row label {
+    color: var(--text-primary);
+    font-weight: 500;
+    min-width: 50px;
+}
+
+.upload-row input[type="file"] {
     flex: 1;
 }
 
-.upload-group label, .download-group label {
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    min-width: 40px;
-}
-
-.upload-group input[type="file"] {
+.download-row input[type="text"] {
     flex: 1;
-}
-
-.download-group input[type="text"] {
-    flex: 1;
-    padding: 6px 10px;
+    padding: 8px 12px;
     border: 1px solid var(--border);
     border-radius: 4px;
     background: var(--bg-card);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.btn-upload {
+    padding: 8px 16px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-upload:hover {
+    background: #388E3C;
+}
+
+.btn-download {
+    padding: 8px 16px;
+    background: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.btn-download:hover {
+    background: #1976D2;
 }
 
 /* 协议标签 */
@@ -847,24 +875,27 @@
                         <input type="text" id="ftp-client-pass" class="config-input" value="tdhx@2017">
                     </div>
                 </div>
+                <!-- FTP 连接按钮 -->
+                <div class="action-buttons" id="ftp-conn-buttons">
+                    <button class="btn-action btn-connect" onclick="connectFtp()">🔗 连接</button>
+                    <button class="btn-action btn-disconnect" id="ftp-disconnect-btn" onclick="disconnectFtp()" style="display:none;">断开连接</button>
+                </div>
                 <!-- FTP 文件列表 -->
                 <div id="ftp-file-list" style="display:none;">
                     <div class="status-header">📁 文件列表（点击选中，双击进入目录或下载）</div>
                     <div class="file-list" id="ftp-files-content"></div>
                 </div>
                 <!-- FTP 上传下载操作 -->
-                <div id="ftp-file-ops" style="display:none;">
-                    <div class="upload-download-row">
-                        <div class="upload-group">
-                            <label>上传</label>
-                            <input type="file" id="ftp-upload-file">
-                            <button class="btn-xs btn-secondary" onclick="uploadFtpFile()">⬆ 上传</button>
-                        </div>
-                        <div class="download-group">
-                            <label>下载</label>
-                            <input type="text" id="ftp-download-file" readonly placeholder="选中文件后显示">
-                            <button class="btn-xs btn-secondary" onclick="downloadFtpFile()">⬇ 下载</button>
-                        </div>
+                <div id="ftp-file-ops" style="display:none;" class="upload-download-area">
+                    <div class="upload-row">
+                        <label>上传</label>
+                        <input type="file" id="ftp-upload-file">
+                        <button class="btn-upload" onclick="uploadFtpFile()">⬆ 上传</button>
+                    </div>
+                    <div class="download-row">
+                        <label>下载</label>
+                        <input type="text" id="ftp-download-file" readonly placeholder="选中文件后显示文件名">
+                        <button class="btn-download" onclick="downloadFtpFile()">⬇ 下载</button>
                     </div>
                 </div>
             </div>
@@ -881,24 +912,27 @@
                         <input type="number" id="http-client-port" class="config-input" value="80">
                     </div>
                 </div>
+                <!-- HTTP 连接按钮 -->
+                <div class="action-buttons" id="http-conn-buttons">
+                    <button class="btn-action btn-connect" onclick="connectHttp()">🔗 连接</button>
+                    <button class="btn-action btn-disconnect" id="http-disconnect-btn" onclick="disconnectHttp()" style="display:none;">断开连接</button>
+                </div>
                 <!-- HTTP 文件列表 -->
                 <div id="http-file-list" style="display:none;">
                     <div class="status-header">📁 文件列表（点击选中，双击进入目录或下载）</div>
                     <div class="file-list" id="http-files-content"></div>
                 </div>
                 <!-- HTTP 上传下载操作 -->
-                <div id="http-file-ops" style="display:none;">
-                    <div class="upload-download-row">
-                        <div class="upload-group">
-                            <label>上传</label>
-                            <input type="file" id="http-upload-file">
-                            <button class="btn-xs btn-secondary" onclick="uploadHttpFile()">⬆ 上传</button>
-                        </div>
-                        <div class="download-group">
-                            <label>下载</label>
-                            <input type="text" id="http-download-file" readonly placeholder="选中文件后显示">
-                            <button class="btn-xs btn-secondary" onclick="downloadHttpFile()">⬇ 下载</button>
-                        </div>
+                <div id="http-file-ops" style="display:none;" class="upload-download-area">
+                    <div class="upload-row">
+                        <label>上传</label>
+                        <input type="file" id="http-upload-file">
+                        <button class="btn-upload" onclick="uploadHttpFile()">⬆ 上传</button>
+                    </div>
+                    <div class="download-row">
+                        <label>下载</label>
+                        <input type="text" id="http-download-file" readonly placeholder="选中文件后显示文件名">
+                        <button class="btn-download" onclick="downloadHttpFile()">⬇ 下载</button>
                     </div>
                 </div>
             </div>
@@ -1010,14 +1044,6 @@
             <div class="action-buttons" id="udp-client-actions" style="display:none;">
                 <button class="btn-action btn-send" id="udp-send-toggle-btn" onclick="toggleUdpSend()">📤 发送</button>
             </div>
-            <div class="action-buttons" id="ftp-client-actions" style="display:none;">
-                <button class="btn-action btn-connect" onclick="connectFtp()">🔗 连接</button>
-                <button class="btn-action btn-disconnect" id="ftp-disconnect-btn" onclick="disconnectFtp()" style="display:none;">断开连接</button>
-            </div>
-            <div class="action-buttons" id="http-client-actions" style="display:none;">
-                <button class="btn-action btn-connect" onclick="connectHttp()">🔗 连接</button>
-                <button class="btn-action btn-disconnect" id="http-disconnect-btn" onclick="disconnectHttp()" style="display:none;">断开连接</button>
-            </div>
             <div class="action-buttons" id="mail-client-actions" style="display:none;">
                 <button class="btn-action btn-send" onclick="sendMail()">📤 发送邮件</button>
                 <button class="btn-action btn-secondary" id="mail-receive-btn" onclick="receiveMails()" style="display:none;">📬 获取邮件</button>
@@ -1026,14 +1052,6 @@
             <div class="action-buttons" id="network-client-actions" style="display:none;">
                 <button class="btn-action btn-secondary" onclick="testNetworkPing()">📡 Ping测试</button>
                 <button class="btn-action btn-secondary" onclick="testNetworkConnect()">🔗 连通性测试</button>
-            </div>
-
-            <!-- 客户端状态 -->
-            <div class="status-area" id="client-status-area">
-                <div class="status-header">📊 客户端状态</div>
-                <div id="client-status-content">
-                    <div style="color: var(--text-muted);">请先选择 Agent</div>
-                </div>
             </div>
 
             <!-- 客户端日志 -->
@@ -1274,20 +1292,25 @@ function selectClientProtocol(protocol, element) {
     });
     element.classList.add('active');
 
-    // 显示对应配置和操作按钮
+    // 显示对应配置
     document.querySelectorAll('.config-section').forEach(section => {
         if (section.id.endsWith('-client-config')) {
             section.classList.add('hidden');
         }
     });
+    document.getElementById(`${protocol}-client-config`).classList.remove('hidden');
+
+    // 显示底部操作按钮（TCP/UDP/Mail/Network 需要，FTP/HTTP 不需要）
     document.querySelectorAll('.action-buttons').forEach(btns => {
         if (btns.id.endsWith('-client-actions')) {
             btns.style.display = 'none';
         }
     });
-
-    document.getElementById(`${protocol}-client-config`).classList.remove('hidden');
-    document.getElementById(`${protocol}-client-actions`).style.display = 'flex';
+    // 只有 TCP/UDP/Mail/Network 有底部按钮
+    if (['tcp', 'udp', 'mail', 'network'].includes(protocol)) {
+        const actionsEl = document.getElementById(`${protocol}-client-actions`);
+        if (actionsEl) actionsEl.style.display = 'flex';
+    }
 }
 
 // Mail操作选择
