@@ -5228,30 +5228,36 @@ class HTTPClientWorker:
         try:
             import urllib.request
             import urllib.error
-            import json
+            import re
             url = f'http://{self.server_ip}:{self.server_port}/'
             req = urllib.request.Request(url)
             req.add_header('User-Agent', 'HTTPClient/1.0')
             with urllib.request.urlopen(req, timeout=10) as response:
                 html = response.read().decode('utf-8', errors='ignore')
-                # 解析HTML文件列表
-                import re
                 files = []
-                # 匹配文件列表项
-                pattern = r'<tr>.*?<td>.*?<a[^>]*href="([^"]+)"[^>]*>([^<]+)</a>.*?</td>.*?<td>([^<]+)</td>.*?<td>([^<]+)</td>.*?</tr>'
-                matches = re.finditer(pattern, html, re.DOTALL)
+
+                # 匹配服务端返回的 HTML 格式（3列：名称、类型、大小）
+                # 格式：<tr><td><a href="/name">name</a></td><td>目录</td><td>-</td></tr>
+                pattern = r'<tr><td><a[^>]*href="([^"]+)"[^>]*>([^<]+)</a></td><td>([^<]+)</td><td>([^<]+)</td></tr>'
+                matches = re.finditer(pattern, html)
+
                 for match in matches:
                     href = match.group(1)
                     name = match.group(2).strip()
                     file_type = match.group(3).strip()
                     size = match.group(4).strip()
+
                     if name and name != '/':
                         # 移除路径开头的/
                         if name.startswith('/'):
                             name = name[1:]
                         if name.endswith('/'):
                             name = name[:-1]
-                        # 解析文件大小（支持 "25.34 KB", "1.2 MB", "100 B" 等格式）
+
+                        # 判断是否为目录
+                        is_dir = file_type == '目录' or name.endswith('/') or href.endswith('/')
+
+                        # 解析文件大小
                         size_bytes = 0
                         if size and size != '-':
                             size_parts = size.split()
@@ -5269,15 +5275,17 @@ class HTTPClientWorker:
                                         size_bytes = int(size_value * 1024 * 1024 * 1024)
                                 except (ValueError, IndexError):
                                     size_bytes = 0
+
                         files.append({
                             'name': name,
-                            'is_dir': file_type == '目录',
+                            'is_dir': is_dir,
                             'size': size_bytes
                         })
+
                 with service_lock:
                     self.state['file_list'] = files
                 add_service_log('HTTP客户端', f'获取文件列表成功: {len(files)} 项')
-                return True, files
+                return True, {'files': files, 'current_dir': '/'}
         except Exception as e:
             add_service_log('HTTP客户端', f'获取文件列表失败: {e}', 'error')
             return False, str(e)
