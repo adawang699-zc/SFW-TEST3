@@ -92,6 +92,8 @@ from agents.modules.packet_sender import send_tcp_packet, send_udp_packet
 from agents.modules.port_scanner import port_scan
 from agents.modules.packet_replay import start_replay, stop_replay, get_replay_status
 from agents.services.listeners import start_tcp_listener, stop_tcp_listener, start_udp_listener, stop_udp_listener
+# 导入完整监听功能（支持 FTP/HTTP/Mail）
+from agents.full_agent_base import start_listener, stop_listener, listener_states, service_lock
 
 # ========== 通用 API ==========
 
@@ -274,29 +276,82 @@ def api_replay_status():
 def api_service_listener():
     """服务监听管理"""
     data = request.get_json()
-    action = data.get('action')  # start/stop
-    service_type = data.get('type')  # tcp/udp/ftp/http/mail
-    port = data.get('port', 8888)
+    action = data.get('action')  # start/stop/disconnect_connection/create_user/delete_user/list_users
+
+    # 同时支持 protocol 和 type 字段（前端使用 protocol）
+    protocol = data.get('protocol') or data.get('type') or 'tcp'
+    protocol = protocol.lower()
+
+    host = data.get('host', BIND_IP)
+    port = int(data.get('port', 0) or 0)
 
     if action == 'start':
-        if service_type == 'tcp':
-            success, message = start_tcp_listener(port, BIND_IP)
-        elif service_type == 'udp':
-            success, message = start_udp_listener(port, BIND_IP)
-        else:
-            return jsonify({'success': False, 'error': f'不支持的服务类型: {service_type}'}), 400
+        # 不同协议的特殊参数
+        kwargs = {}
+        if protocol == 'ftp':
+            kwargs['username'] = data.get('username', 'tdhx')
+            kwargs['password'] = data.get('password', 'tdhx@2017')
+            kwargs['directory'] = data.get('directory', '')
+        elif protocol == 'http':
+            kwargs['directory'] = data.get('directory', '')
+        elif protocol == 'mail':
+            kwargs['smtp_port'] = data.get('smtp_port', 25)
+            kwargs['imap_port'] = data.get('imap_port', 143)
+            kwargs['pop3_port'] = data.get('pop3_port', 110)
+            kwargs['domain'] = data.get('domain', 'autotest.com')
+            kwargs['ssl_enabled'] = data.get('ssl_enabled', False)
+            accounts_data = data.get('accounts', [])
+            kwargs['accounts'] = accounts_data
 
-        return jsonify({'success': success, 'message': message})
+        success, result = start_listener(protocol, host, port, **kwargs)
+        return jsonify({'success': success, 'message': result if isinstance(result, str) else result.get('message', '启动成功')})
 
     elif action == 'stop':
-        if service_type == 'tcp':
-            success, message = stop_tcp_listener(port)
-        elif service_type == 'udp':
-            success, message = stop_udp_listener(port)
-        else:
-            return jsonify({'success': False, 'error': f'不支持的服务类型: {service_type}'}), 400
+        success, result = stop_listener(protocol)
+        return jsonify({'success': success, 'message': result if isinstance(result, str) else '已停止'})
 
-        return jsonify({'success': success, 'message': message})
+    elif action == 'disconnect_connection':
+        conn_id = data.get('connection_id')
+        if protocol == 'tcp':
+            # 断开指定 TCP 连接
+            from agents.full_agent_base import disconnect_tcp_listener_connection
+            success, message = disconnect_tcp_listener_connection(conn_id)
+            return jsonify({'success': success, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': '只有TCP支持断开单个连接'}), 400
+
+    elif action == 'create_user':
+        if protocol == 'mail':
+            username = data.get('username', '').strip()
+            password = data.get('password', '').strip()
+            if not username:
+                return jsonify({'success': False, 'error': '用户名不能为空'}), 400
+            if not password or len(password) < 4:
+                return jsonify({'success': False, 'error': '密码至少需要4位'}), 400
+            from agents.full_agent_base import create_mail_user
+            success, message = create_mail_user(username, password)
+            return jsonify({'success': success, 'message': message}), 200 if success else 400
+        else:
+            return jsonify({'success': False, 'error': '只有Mail协议支持创建用户'}), 400
+
+    elif action == 'delete_user':
+        if protocol == 'mail':
+            username = data.get('username', '').strip()
+            if not username:
+                return jsonify({'success': False, 'error': '用户名不能为空'}), 400
+            from agents.full_agent_base import delete_mail_user
+            success, message = delete_mail_user(username)
+            return jsonify({'success': success, 'message': message}), 200 if success else 400
+        else:
+            return jsonify({'success': False, 'error': '只有Mail协议支持删除用户'}), 400
+
+    elif action == 'list_users':
+        if protocol == 'mail':
+            from agents.full_agent_base import get_mail_users
+            users = get_mail_users()
+            return jsonify({'success': True, 'mail_users': users})
+        else:
+            return jsonify({'success': False, 'error': '只有Mail协议支持列出用户'}), 400
 
     else:
         return jsonify({'success': False, 'error': '无效的 action'}), 400
