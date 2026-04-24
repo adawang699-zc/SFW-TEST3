@@ -5940,6 +5940,7 @@ def format_email_date(date_str):
 
 def get_inbox_mails(receive_config, source_ip=''):
     """获取收件箱邮件"""
+    print(f"[DEBUG] get_inbox_mails入口: receive_config={receive_config}, source_ip='{source_ip}'")
     try:
         protocol = receive_config.get('protocol', 'imap').lower()
         server = receive_config.get('server', '').strip()
@@ -5947,77 +5948,92 @@ def get_inbox_mails(receive_config, source_ip=''):
         ssl = receive_config.get('ssl', False)
         email = receive_config.get('email', '').strip()
         password = receive_config.get('password', '').strip()
-        
+
+        print(f"[DEBUG] 解析配置: protocol={protocol}, server={server}, port={port}, ssl={ssl}, email={email}, password_len={len(password)}")
+        add_service_log('邮件客户端', f'[DEBUG] 解析配置: protocol={protocol}, server={server}, port={port}, email={email}', 'info')
+
         # 验证配置
         if not server or port <= 0 or not email or not password:
-            return False, '接收服务器配置不完整'
-        
-        add_service_log('邮件客户端', f'连接{protocol.upper()}服务器: {server}:{port}', 'info')
-        
+            error_msg = f'接收服务器配置不完整: server={server}, port={port}, email={email}, password_len={len(password)}'
+            print(f"[DEBUG] 配置验证失败: {error_msg}")
+            add_service_log('邮件客户端', f'[DEBUG] 配置验证失败: {error_msg}', 'error')
+            return False, error_msg
+
+        add_service_log('邮件客户端', f'[DEBUG] 配置验证通过，准备连接 {protocol.upper()} 服务器: {server}:{port}', 'info')
+
         # 检查是否应该使用本地邮件存储
         # 只有明确勾选了"使用本地存储"才使用本地存储，否则都走真实的网络连接
         use_local_storage = receive_config.get('use_local_storage', False)
-        
-        print(f"*** 接收服务器检测: server='{server}', protocol='{protocol}', use_local_storage={use_local_storage}, source_ip='{source_ip}' ***")
-        add_service_log('邮件客户端', f'*** 接收服务器检测: server="{server}", protocol="{protocol}", use_local_storage={use_local_storage}, source_ip="{source_ip}" ***', 'info')
-        
+
+        print(f"[DEBUG] use_local_storage={use_local_storage}")
+        add_service_log('邮件客户端', f'[DEBUG] use_local_storage={use_local_storage}', 'info')
+
         if use_local_storage and protocol == 'imap':
             # 直接从本地存储读取邮件
-            add_service_log('邮件客户端', '*** 使用本地邮件存储 ***', 'info')
+            add_service_log('邮件客户端', '[DEBUG] 使用本地邮件存储', 'info')
             return get_local_inbox_mails(email)
-        
+
         mails = []
-        
+
         if protocol == 'imap':
             # IMAP协议获取邮件
             import imaplib
-            
+
+            print(f"[DEBUG] 开始IMAP连接...")
+            add_service_log('邮件客户端', '[DEBUG] 开始IMAP连接...', 'info')
+
             try:
                 # 连接IMAP服务器
-                if source_ip:
-                    print(f"*** IMAP使用源IP地址: {source_ip} ***")
-                    add_service_log('邮件客户端', f'IMAP绑定源地址: {source_ip}', 'info')
-                    
-                    # 暂时使用标准连接，后续优化源地址绑定
-                    # TODO: 实现IMAP的源地址绑定
-                    if ssl:
-                        mail_server = imaplib.IMAP4_SSL(server, port)
-                    else:
-                        mail_server = imaplib.IMAP4(server, port)
-                    
-                    add_service_log('邮件客户端', f'IMAP连接已建立（源地址绑定待实现）', 'info')
+                mail_server = None
+                if ssl:
+                    print(f"[DEBUG] 使用IMAP4_SSL连接: {server}:{port}")
+                    add_service_log('邮件客户端', f'[DEBUG] 使用SSL连接: {server}:{port}', 'info')
+                    mail_server = imaplib.IMAP4_SSL(server, port)
                 else:
-                    # 使用标准连接方法
-                    if ssl:
-                        mail_server = imaplib.IMAP4_SSL(server, port)
-                    else:
-                        mail_server = imaplib.IMAP4(server, port)
-                
+                    print(f"[DEBUG] 使用IMAP4连接: {server}:{port}")
+                    add_service_log('邮件客户端', f'[DEBUG] 使用普通连接: {server}:{port}', 'info')
+                    mail_server = imaplib.IMAP4(server, port)
+
+                print(f"[DEBUG] IMAP连接成功")
+                add_service_log('邮件客户端', '[DEBUG] IMAP连接成功', 'info')
+
                 # 登录
+                print(f"[DEBUG] IMAP登录: email={email}, password={password}")
+                add_service_log('邮件客户端', f'[DEBUG] IMAP登录: email={email}', 'info')
                 mail_server.login(email, password)
-                add_service_log('邮件客户端', f'IMAP登录成功: {email}', 'info')
-                
+                print(f"[DEBUG] IMAP登录成功")
+                add_service_log('邮件客户端', '[DEBUG] IMAP登录成功', 'info')
+
                 # 选择收件箱
+                print(f"[DEBUG] 选择INBOX")
                 mail_server.select('INBOX')
-                
+                print(f"[DEBUG] INBOX选择成功")
+                add_service_log('邮件客户端', '[DEBUG] INBOX选择成功', 'info')
+
                 # 搜索邮件（按日期排序，最新的在前）
+                print(f"[DEBUG] 搜索所有邮件")
                 typ, data = mail_server.search(None, 'ALL')
+                print(f"[DEBUG] 搜索结果: typ={typ}, data_len={len(data[0]) if data else 0}")
+                add_service_log('邮件客户端', f'[DEBUG] 搜索结果: typ={typ}', 'info')
+
                 if typ == 'OK':
                     mail_ids = data[0].split()
-                    
+
                     # 获取邮件总数
                     total_count = len(mail_ids)
-                    print(f"*** IMAP收件箱中共有 {total_count} 封邮件 ***")
-                    
-                    # 获取最近的10封邮件（mail_ids已经是按时间顺序的，最后的是最新的）
-                    # 取最后10个，然后反转，确保最新的在前面
+                    print(f"[DEBUG] IMAP收件箱中共有 {total_count} 封邮件")
+                    add_service_log('邮件客户端', f'[DEBUG] 收件箱邮件数量: {total_count}', 'info')
+
+                    # 获取最近的10封邮件
                     if total_count > 0:
                         recent_ids = mail_ids[-10:] if total_count > 10 else mail_ids
-                        # 反转顺序，确保最新的邮件在前面
                         recent_ids = list(reversed(recent_ids))
-                        print(f"*** 将获取最新的 {len(recent_ids)} 封邮件 ***")
+                        print(f"[DEBUG] 将获取最新的 {len(recent_ids)} 封邮件")
+                        add_service_log('邮件客户端', f'[DEBUG] 获取最新 {len(recent_ids)} 封邮件', 'info')
                     else:
                         recent_ids = []
+                        print(f"[DEBUG] 收件箱为空")
+                        add_service_log('邮件客户端', '[DEBUG] 收件箱为空', 'info')
                         print(f"*** 收件箱为空 ***")
                     
                     for mail_id in recent_ids:
