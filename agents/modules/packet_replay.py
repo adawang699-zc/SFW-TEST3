@@ -133,7 +133,7 @@ def get_pcap_info(pcap_file: str) -> Dict:
         文件信息：报文数量、大小、时长等
     """
     try:
-        cmd = ['capinfos', '-T', pcap_file]  # -T 输出表格格式，更易解析
+        cmd = ['capinfos', pcap_file]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
         info = {
@@ -143,37 +143,25 @@ def get_pcap_info(pcap_file: str) -> Dict:
             'duration': 0
         }
 
-        # 解析 capinfos 表格输出
-        # 格式：Number of packets	100
+        # 解析 capinfos 输出（处理带逗号的数字，如 3,150）
         for line in result.stdout.split('\n'):
-            parts = line.split('\t')
-            if len(parts) >= 2:
-                key = parts[0].strip()
-                value = parts[1].strip()
-
-                if 'Number of packets' in key:
-                    try:
-                        info['packets'] = int(value)
-                    except:
-                        pass
-                elif 'File size' in key:
-                    try:
-                        info['bytes'] = int(value)
-                    except:
-                        pass
-                elif 'Capture duration' in key:
-                    try:
-                        info['duration'] = float(value)
-                    except:
-                        pass
-
-        # 如果表格格式解析失败，尝试传统格式
-        if info['packets'] == 0:
-            for line in result.stdout.split('\n'):
-                # 匹配 "Number of packets: 100" 格式
-                match = re.search(r'Number of packets[:\s]+(\d+)', line)
+            if 'Number of packets:' in line:
+                # 匹配数字（可能带逗号）
+                match = re.search(r'(\d[\d,]*)\s*(packets|$)', line.split(':')[1])
                 if match:
-                    info['packets'] = int(match.group(1))
+                    # 移除逗号
+                    num_str = match.group(1).replace(',', '')
+                    info['packets'] = int(num_str)
+            elif 'File size:' in line:
+                # 匹配数字（可能带逗号或单位如 kB）
+                match = re.search(r'(\d[\d,]*)\s*(bytes|kB|MB|$)', line.split(':')[1])
+                if match:
+                    num_str = match.group(1).replace(',', '')
+                    info['bytes'] = int(num_str)
+            elif 'Capture duration:' in line:
+                match = re.search(r'(\d+\.?\d*)', line.split(':')[1])
+                if match:
+                    info['duration'] = float(match.group(1))
 
         return {'success': True, 'info': info}
 
