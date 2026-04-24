@@ -3177,19 +3177,14 @@ def api_services_client(request):
         from .models import LocalAgent
         agent = LocalAgent.objects.filter(agent_id=agent_id).first()
         if not agent:
-            logger.warning(f'Agent不存在: agent_id={agent_id}')
             return JsonResponse({'success': False, 'error': 'Agent不存在'})
-
-        logger.info(f'Agent配置: agent_id={agent.agent_id}, interface={agent.interface.name}, ip={agent.interface.ip_address}, port={agent.port}')
 
         if not agent.interface.ip_address:
             return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
 
         # 转发请求到Agent
         agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/client"
-        logger.info(f'转发请求到Agent: {agent_url}, data={data}')
         resp = requests.post(agent_url, json=data, timeout=10)
-        logger.info(f'Agent响应: status={resp.status_code}, response={resp.text[:200]}')
 
         return JsonResponse(resp.json())
 
