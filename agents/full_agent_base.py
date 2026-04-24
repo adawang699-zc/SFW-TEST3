@@ -78,7 +78,7 @@ statistics = {
 stats_lock = threading.Lock()
 
 service_logs = deque(maxlen=500)
-service_lock = threading.Lock()
+service_lock = threading.RLock()  # 使用可重入锁，避免嵌套调用时死锁
 
 # 报文回放相关全局变量
 replay_thread = None
@@ -92,7 +92,7 @@ replay_statistics = {
     'total_files': 0,
     'current_file_index': 0
 }
-replay_lock = threading.Lock()
+replay_lock = threading.RLock()  # 使用可重入锁
 
 listener_states = {
     'tcp': {'running': False},
@@ -5012,8 +5012,11 @@ def connect_ftp_client(config):
             # 检查是否真正连接有效
             worker = state.get('worker')
             if worker and worker.connected and worker.ftp:
-                # 尝试发送 noop 命令验证连接是否真正有效
+                # 尝试发送 noop 命令验证连接是否真正有效（设置短超时）
                 try:
+                    # 设置短超时避免阻塞
+                    if worker.ftp.sock:
+                        worker.ftp.sock.settimeout(3)
                     worker.ftp.voidcmd('NOOP')
                     # 连接有效，拒绝重复连接
                     return False, 'FTP客户端已连接'
