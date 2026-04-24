@@ -56,8 +56,8 @@
     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
         <div class="form-group">
             <label class="form-label">回放次数</label>
-            <input type="number" id="loop-count" class="form-input" value="1" min="1" max="1000">
-            <small style="color: var(--text-muted);">每个文件回放的次数</small>
+            <input type="number" id="loop-count" class="form-input" value="1" min="0" max="1000">
+            <small style="color: var(--text-muted);">0 = 无限循环，1 = 回放一次</small>
         </div>
 
         <div class="form-group">
@@ -306,7 +306,10 @@ function clearSelection() {
 }
 
 function updateSelectedCount() {
-    document.getElementById('selected-count').textContent = selectedFiles.length;
+    const el = document.getElementById('selected-count');
+    if (el) {
+        el.textContent = selectedFiles.length;
+    }
 }
 
 function searchFiles() {
@@ -427,13 +430,28 @@ async function updateReplayStats() {
 
         if (result) {
             document.getElementById('sent-count').textContent = result.packets_sent || 0;
-            document.getElementById('total-count').textContent = result.packets_total || 0;
+
+            // 无限循环时显示 "∞"
+            const totalEl = document.getElementById('total-count');
+            if (result.is_infinite_loop) {
+                totalEl.textContent = '∞';
+            } else {
+                totalEl.textContent = result.packets_total || 0;
+            }
+
             document.getElementById('rate-pps').textContent = (result.rate_pps || 0).toFixed(0);
             document.getElementById('rate-mbps').textContent = (result.rate_mbps || 0).toFixed(2);
 
             const progress = result.progress || 0;
-            document.getElementById('progress-percent').textContent = progress.toFixed(1) + '%';
-            document.getElementById('progress-bar').style.width = progress + '%';
+            // 无限循环时不显示进度百分比
+            const progressEl = document.getElementById('progress-percent');
+            if (result.is_infinite_loop) {
+                progressEl.textContent = '∞';
+                document.getElementById('progress-bar').style.width = '100%';
+            } else {
+                progressEl.textContent = progress.toFixed(1) + '%';
+                document.getElementById('progress-bar').style.width = progress + '%';
+            }
 
             // 当前文件
             if (result.current_file) {
@@ -450,8 +468,8 @@ async function updateReplayStats() {
                     mins > 0 ? `${mins} 分 ${secs} 秒` : `${secs} 秒`;
             }
 
-            // 回放完成
-            if (!result.running && progress >= 100) {
+            // 回放完成（非无限循环且进度100%）
+            if (!result.running && !result.is_infinite_loop && progress >= 100) {
                 clearInterval(replayInterval);
                 document.getElementById('start-btn').style.display = 'inline-block';
                 document.getElementById('stop-btn').style.display = 'none';

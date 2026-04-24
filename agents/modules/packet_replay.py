@@ -213,7 +213,11 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
             total_packets += info['info'].get('packets', 0)
 
     with replay_lock:
-        replay_state['packets_total'] = total_packets * loop if loop > 0 else total_packets
+        # loop=0 表示无限循环，total 设为 0 表示无法计算进度
+        if loop == 0:
+            replay_state['packets_total'] = 0  # 无限循环，无法预知总数
+        else:
+            replay_state['packets_total'] = total_packets * loop
 
     def replay_thread_func():
         for file_idx, pcap_file in enumerate(pcap_files):
@@ -363,6 +367,12 @@ def get_replay_status() -> Dict:
         if replay_state['start_time']:
             duration = time.time() - replay_state['start_time']
 
+        # 计算进度（无限循环时为 0）
+        if replay_state['packets_total'] > 0:
+            progress = min(100, (replay_state['packets_sent'] / replay_state['packets_total'] * 100))
+        else:
+            progress = 0  # 无限循环，无进度百分比
+
         return {
             'running': replay_state['running'],
             'packets_sent': replay_state['packets_sent'],
@@ -373,7 +383,8 @@ def get_replay_status() -> Dict:
             'rate_mbps': replay_state['bps'] / 1000000 if replay_state['bps'] else 0,
             'duration': round(duration, 2),
             'error': replay_state['error'],
-            'progress': (replay_state['packets_sent'] / replay_state['packets_total'] * 100) if replay_state['packets_total'] > 0 else 0
+            'progress': round(progress, 2),
+            'is_infinite_loop': replay_state['packets_total'] == 0  # 标记是否无限循环
         }
 
 
