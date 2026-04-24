@@ -525,9 +525,6 @@ def api_services_client():
         elif protocol == 'mail':
             if action == 'test_connection':
                 test_type = data.get('type', 'smtp')
-                # DEBUG: 打印实际接收的数据
-                add_service_log('邮件API', f'DEBUG: data={data}', 'info')
-                add_service_log('邮件API', f'DEBUG: config={config}', 'info')
                 mail_config = {
                     'server': config.get('server', ''),
                     'port': int(config.get('port', 25)),
@@ -536,7 +533,6 @@ def api_services_client():
                     'password': config.get('password', ''),
                     'no_auth': config.get('no_auth', False)
                 }
-                add_service_log('邮件API', f'DEBUG: mail_config={mail_config}', 'info')
                 success, result = test_mail_connection(test_type, mail_config)
             elif action == 'send':
                 smtp_config = {
