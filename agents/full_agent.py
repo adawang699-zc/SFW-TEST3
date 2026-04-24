@@ -557,7 +557,11 @@ def api_services_client():
             elif action == 'receive' or action == 'get_inbox':
                 # 支持两种action名称，兼容原项目
                 receive_config = data.get('receive_config', config)
+                # DEBUG: 打印接收到的 receive_config
+                print(f"[DEBUG] receive_config from request: {receive_config}")
+                add_service_log('邮件客户端', f'[DEBUG] receive_config: {receive_config}', 'info')
                 protocol_type = receive_config.get('protocol', 'imap').lower()  # imap 或 pop3
+                print(f"[DEBUG] protocol_type extracted: {protocol_type}")
                 server = receive_config.get('server', '') or receive_config.get('imap_server', '')
                 port = int(receive_config.get('port', 143 if protocol_type == 'imap' else 110) or receive_config.get('imap_port', 143))
                 email = receive_config.get('email', '') or receive_config.get('user', '')
