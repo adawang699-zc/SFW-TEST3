@@ -1261,7 +1261,7 @@ function syncServerInfo() {
     const domain = document.getElementById('mail-domain')?.value || 'autotest.com';
     document.getElementById('mail-from').value = `sender@${domain}`;
     document.getElementById('mail-to').value = `receiver@${domain}`;
-    document.getElementById('mail-user').value = `sender@${domain}`;
+    document.getElementById('mail-user').value = `receiver@${domain}`;  // 默认使用收件人账户，方便查看发送的邮件
     document.getElementById('mail-password').value = 'test123';
 
     addClientLog('同步服务端信息: ' + serverAgent.ip_address);
@@ -2613,6 +2613,9 @@ async function sendMail() {
             // 清空附件选择
             document.getElementById('mail-attachment').value = '';
             document.getElementById('mail-attachment-preview').style.display = 'none';
+            // 发送成功后自动将接收用户名更新为收件人，方便查看刚发送的邮件
+            document.getElementById('mail-user').value = mailData.to;
+            addClientLog(`提示：已自动切换到收件人账户 ${mailData.to}，可点击获取邮件查看`, 'info');
         } else {
             showToast('发送失败: ' + (result.error || '未知错误'), 'error');
             addClientLog('发送失败: ' + (result.error || '未知错误'), 'error');
