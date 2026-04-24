@@ -2637,12 +2637,13 @@ async function receiveMails() {
     const config = {
         agent_id: clientAgent.agent_id,
         protocol: 'mail',
-        action: 'receive',
-        config: {
-            imap_server: document.getElementById('imap-server').value,
-            imap_port: parseInt(document.getElementById('imap-server-port').value),
-            imap_ssl: false,
-            user: document.getElementById('mail-user').value,
+        action: 'get_inbox',
+        receive_config: {
+            protocol: 'imap',
+            server: document.getElementById('imap-server').value,
+            port: parseInt(document.getElementById('imap-server-port').value),
+            ssl: false,
+            email: document.getElementById('mail-user').value,
             password: document.getElementById('mail-password').value
         }
     };

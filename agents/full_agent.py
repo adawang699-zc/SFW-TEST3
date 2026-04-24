@@ -554,16 +554,23 @@ def api_services_client():
                 }
                 source_ip = BIND_IP if BIND_IP != '0.0.0.0' else ''
                 success, result = send_mail_via_smtp(smtp_config, mail_data, source_ip)
-            elif action == 'receive':
-                receive_config = {
-                    'server': config.get('imap_server', ''),
-                    'port': int(config.get('imap_port', 143)),
-                    'ssl': config.get('imap_ssl', False),
-                    'email': config.get('user', ''),  # user字段映射到email
-                    'password': config.get('password', '')
+            elif action == 'receive' or action == 'get_inbox':
+                # 支持两种action名称，兼容原项目
+                # 原项目使用 get_inbox + receive_config，当前项目使用 receive + config
+                receive_config = data.get('receive_config', config)
+                server = receive_config.get('server', '') or receive_config.get('imap_server', '')
+                port = int(receive_config.get('port', 143) or receive_config.get('imap_port', 143))
+                email = receive_config.get('email', '') or receive_config.get('user', '')
+                password = receive_config.get('password', '')
+                final_config = {
+                    'server': server,
+                    'port': port,
+                    'ssl': receive_config.get('ssl', False) or receive_config.get('imap_ssl', False),
+                    'email': email,
+                    'password': password
                 }
                 source_ip = BIND_IP if BIND_IP != '0.0.0.0' else ''
-                success, result = get_inbox_mails(receive_config, source_ip)
+                success, result = get_inbox_mails(final_config, source_ip)
                 if success and isinstance(result, list):
                     result = {'mails': result, 'count': len(result)}
             else:
