@@ -1262,6 +1262,18 @@ def api_agents_my_rented(request):
         # 更新活跃时间
         lock.update_activity()
 
+        # 按 interface_name 排序（eth1, eth2, eth3...）
+        def sort_by_interface(agent):
+            name = agent.get('interface_name', '')
+            # 提取数字部分进行排序
+            import re
+            match = re.search(r'eth(\d+)', name)
+            if match:
+                return int(match.group(1))
+            return 999  # 没有 eth 的排在后面
+
+        rented_agents.sort(key=sort_by_interface)
+
         return JsonResponse({
             'success': True,
             'agents': rented_agents,
@@ -1550,6 +1562,32 @@ def api_list_pcap_files(request):
         resp = requests.get(
             f"http://{agent.interface.ip_address}:{agent.port}/api/list_pcap_files",
             timeout=5
+        )
+
+        return JsonResponse(resp.json())
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_pcap_files(request):
+    """获取 PCAP 文件列表（新版，支持目录浏览）"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+        directory = data.get('directory', '/opt/pcap')
+        search = data.get('search', '')
+
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        resp = requests.post(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/pcap_files/",
+            json={'directory': directory, 'search': search},
+            timeout=10
         )
 
         return JsonResponse(resp.json())

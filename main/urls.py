@@ -51,6 +51,7 @@ urlpatterns = [
     path('api/scan_progress/', views.api_scan_progress, name='api_scan_progress'),
     path('api/scan_results/', views.api_scan_results, name='api_scan_results'),
     path('api/list_pcap_files/', views.api_list_pcap_files, name='api_list_pcap_files'),
+    path('api/pcap_files/', views.api_pcap_files, name='api_pcap_files'),
     path('api/start_replay/', views.api_start_replay, name='api_start_replay'),
     path('api/stop_replay/', views.api_stop_replay, name='api_stop_replay'),
     path('api/replay_stats/', views.api_replay_stats, name='api_replay_stats'),
