@@ -313,6 +313,23 @@ def get_scan_results() -> Dict:
     }
 
 
+def port_scan(target_ip: str, ports: str = '1-1000', scan_type: str = 'S',
+              timeout: int = 120) -> Tuple[bool, Dict]:
+    """
+    端口扫描（同步接口，兼容旧代码）
+
+    Args:
+        target_ip: 目标 IP
+        ports: 端口范围
+        scan_type: 扫描类型
+        timeout: 超时时间
+
+    Returns:
+        (成功标志，扫描结果)
+    """
+    return nmap_async_scan(target_ip, ports, scan_type, timeout)
+
+
 def scan_common_ports(target_ip: str) -> Tuple[bool, Dict]:
     """扫描常见端口"""
     common_port_list = ','.join(map(str, COMMON_PORTS.keys()))
