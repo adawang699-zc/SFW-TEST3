@@ -1535,6 +1535,12 @@ async function refreshServerStatus() {
                     document.getElementById('mail-imap-url').textContent = `imap://${displayHost}:${state.imap_port || 143}`;
                     document.getElementById('mail-pop3-url').textContent = `pop3://${displayHost}:${state.pop3_port || 110}`;
 
+                    // 自动同步邮件服务器地址到客户端配置（使用实际运行的邮件服务器地址）
+                    document.getElementById('smtp-server').value = displayHost;
+                    document.getElementById('imap-server').value = displayHost;
+                    document.getElementById('smtp-server-port').value = state.smtp_port || 25;
+                    document.getElementById('imap-server-port').value = state.imap_port || 143;
+
                     // 加载邮件用户列表
                     loadMailUsers();
                 } else {
