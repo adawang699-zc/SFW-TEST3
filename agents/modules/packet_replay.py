@@ -232,8 +232,10 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
             # 构建 tcpreplay 命令
             cmd = ['sudo', 'tcpreplay', '-i', interface]
 
-            # 回放次数
-            if loop > 0:
+            # 回放次数（0 表示无限循环）
+            if loop == 0:
+                cmd.extend(['--loop', '0'])
+            elif loop > 1:
                 cmd.extend(['--loop', str(loop)])
 
             # 速率控制
