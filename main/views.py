@@ -1850,7 +1850,7 @@ def api_syslog_control(request):
     try:
         data = json.loads(request.body)
         action = data.get('action')
-        port = data.get('port', 5140)  # 默认使用非特权端口
+        port = data.get('port', 514)
 
         if action == 'start':
             success, message = start_syslog_server(port)

@@ -8,11 +8,10 @@
         UDP Syslog 服务器，接收网络设备的日志报文
     </p>
 
-    <div class="form-group" style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 12px; align-items: end;">
+    <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
         <div>
             <label class="form-label">监听端口</label>
-            <input type="number" id="syslog-port" class="form-input" value="5140" min="1" max="65535">
-            <small style="color: var(--text-muted);">特权端口(如514)需要root权限</small>
+            <input type="number" id="syslog-port" class="form-input" value="514" min="1" max="65535">
         </div>
         <div>
             <label class="form-label">IP 过滤（可选）</label>
