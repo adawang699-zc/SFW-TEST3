@@ -5017,13 +5017,28 @@ def connect_ftp_client(config):
     with service_lock:
         state = client_states.get('ftp')
         if state and state.get('running'):
-            # 检查是否真正连接
+            # 检查是否真正连接有效
             worker = state.get('worker')
-            if worker and worker.connected:
-                return False, 'FTP客户端已连接'
-            # 状态不一致，清理旧状态
-            add_service_log('FTP客户端', '清理无效连接状态')
-            client_states['ftp'] = {'running': False}
+            if worker and worker.connected and worker.ftp:
+                # 尝试发送 noop 命令验证连接是否真正有效
+                try:
+                    worker.ftp.voidcmd('NOOP')
+                    # 连接有效，拒绝重复连接
+                    return False, 'FTP客户端已连接'
+                except Exception as e:
+                    # 连接已失效，清理旧状态
+                    add_service_log('FTP客户端', f'检测到无效连接，清理状态: {e}')
+                    try:
+                        worker.ftp.close()
+                    except:
+                        pass
+                    worker.connected = False
+                    worker.ftp = None
+                    client_states['ftp'] = {'running': False}
+            else:
+                # worker 不存在或未连接，清理状态
+                add_service_log('FTP客户端', '清理无效连接状态')
+                client_states['ftp'] = {'running': False}
         state = {
             'protocol': 'ftp',
             'server_ip': server_ip,
@@ -5450,12 +5465,12 @@ def connect_http_client(config):
     with service_lock:
         state = client_states.get('http')
         if state and state.get('running'):
-            # 检查是否真正连接
+            # HTTP是无状态协议，如果状态显示running但需要重连，清理状态
             worker = state.get('worker')
             if worker and worker.connected:
-                return False, 'HTTP客户端已连接'
-            # 状态不一致，清理旧状态
-            add_service_log('HTTP客户端', '清理无效连接状态')
+                # HTTP是短连接，可以强制重连
+                add_service_log('HTTP客户端', '清理旧连接状态，允许重连')
+                worker.connected = False
             client_states['http'] = {'running': False}
         state = {
             'protocol': 'http',
