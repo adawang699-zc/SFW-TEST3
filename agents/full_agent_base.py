@@ -2264,16 +2264,8 @@ class FTPClientWorker:
             return True, {'files': parsed_files, 'current_dir': current_dir}
         except Exception as e:
             add_service_log('FTP客户端', f'获取文件列表失败: {e}', 'error')
-            # 如果获取文件列表失败，检查连接是否仍然有效
-            try:
-                if self.ftp and self.ftp.sock:
-                    # 尝试发送NOOP命令测试连接
-                    self.ftp.voidcmd('NOOP')
-            except:
-                # 连接可能已断开，标记为未连接
-                self.connected = False
-                with service_lock:
-                    self.state['running'] = False
+            # 获取文件列表失败不改变连接状态，连接可能仍然有效
+            # 只有在用户主动断开或连接明显失效时才设置 running=False
             return False, str(e)
 
     def _parse_ftp_list(self, lines):

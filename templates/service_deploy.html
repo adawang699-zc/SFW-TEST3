@@ -2806,19 +2806,17 @@ async function refreshClientStatus() {
                     }
                 }
             } else if (clientProtocol === 'ftp') {
-                // FTP 协议状态恢复
+                // FTP 协议状态恢复 - 只恢复显示，不主动隐藏
                 if (state.running) {
                     showFtpConnectedButtons();
-                } else {
-                    hideFtpConnectedButtons();
                 }
+                // 不主动隐藏，避免用户刚连接成功就被隐藏
             } else if (clientProtocol === 'http') {
-                // HTTP 协议状态恢复
+                // HTTP 协议状态恢复 - 只恢复显示，不主动隐藏
                 if (state.running) {
                     showHttpConnectedButtons();
-                } else {
-                    hideHttpConnectedButtons();
                 }
+                // 不主动隐藏，避免用户刚连接成功就被隐藏
             }
 
             let statusHtml = `
