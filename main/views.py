@@ -3167,6 +3167,11 @@ def api_services_client(request):
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
+        # DEBUG: 记录请求参数
+        logger.info(f'[DEBUG] 客户端服务请求: agent_id={agent_id}, protocol={data.get("protocol")}, action={data.get("action")}')
+        if data.get('protocol') == 'mail':
+            logger.info(f'[DEBUG] 邮件请求详情: {data}')
+
         if not agent_id:
             return JsonResponse({'success': False, 'error': '缺少 agent_id'})
 
@@ -3174,6 +3179,7 @@ def api_services_client(request):
         from .models import LocalAgent
         agent = LocalAgent.objects.filter(agent_id=agent_id).first()
         if not agent:
+            logger.warning(f'[DEBUG] Agent不存在: agent_id={agent_id}')
             return JsonResponse({'success': False, 'error': 'Agent不存在'})
 
         if not agent.interface.ip_address:
@@ -3181,7 +3187,9 @@ def api_services_client(request):
 
         # 转发请求到Agent
         agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/client"
+        logger.info(f'[DEBUG] 转发请求到Agent: {agent_url}')
         resp = requests.post(agent_url, json=data, timeout=10)
+        logger.info(f'[DEBUG] Agent响应: status={resp.status_code}, success={resp.json().get("success")}')
 
         return JsonResponse(resp.json())
 
