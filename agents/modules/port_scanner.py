@@ -93,8 +93,14 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
     scan_info = SCAN_TYPES.get(scan_type, SCAN_TYPES['S'])
     nmap_flag = scan_info['nmap_flag']
 
-    # 构建命令
-    cmd = ['nmap', nmap_flag, '-p', ports, '-T4', '--open', '-Pn', target_ip]
+    # 需要 root 权限的扫描类型
+    needs_root = scan_type in ['S', 'U', 'N', 'F', 'X', 'A', 'W', 'M']
+
+    # 构建命令 - 需要 root 权限时使用 sudo
+    if needs_root:
+        cmd = ['sudo', 'nmap', nmap_flag, '-p', ports, '-T4', '--open', '-Pn', target_ip]
+    else:
+        cmd = ['nmap', nmap_flag, '-p', ports, '-T4', '--open', '-Pn', target_ip]
 
     try:
         # 启动 nmap 进程

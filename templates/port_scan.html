@@ -117,15 +117,18 @@ async function loadAgents() {
         const result = await apiRequest('/api/agents/my-rented/');
         const container = document.getElementById('agent-selector');
 
-        if (result.success && result.rented_agents && result.rented_agents.length > 0) {
+        // API 返回 agents 字段
+        const agents = result.agents || result.rented_agents || [];
+
+        if (result.success && agents.length > 0) {
             let html = '';
-            result.rented_agents.forEach(agent => {
+            agents.forEach(agent => {
                 const status = agent.status === 'running' ? '运行中' : '已停止';
                 const statusColor = agent.status === 'running' ? 'var(--success)' : 'var(--danger)';
                 html += `
                     <div class="agent-card ${agent.status}" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
                         <div class="agent-id" style="font-weight: bold;">${agent.agent_id}</div>
-                        <div style="color: var(--text-secondary);">${agent.interface || 'N/A'} - ${agent.ip_address || 'N/A'}</div>
+                        <div style="color: var(--text-secondary);">${agent.interface_name || 'N/A'} - ${agent.ip_address || 'N/A'}</div>
                         <div class="status-badge" style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${status}</div>
                     </div>
                 `;
