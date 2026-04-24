@@ -3168,9 +3168,7 @@ def api_services_client(request):
         agent_id = data.get('agent_id')
 
         # DEBUG: 记录请求参数
-        logger.info(f'[DEBUG] 客户端服务请求: agent_id={agent_id}, protocol={data.get("protocol")}, action={data.get("action")}')
-        if data.get('protocol') == 'mail':
-            logger.info(f'[DEBUG] 邮件请求详情: {data}')
+        logger.info(f'客户端服务请求: agent_id={agent_id}, protocol={data.get("protocol")}, action={data.get("action")}')
 
         if not agent_id:
             return JsonResponse({'success': False, 'error': '缺少 agent_id'})

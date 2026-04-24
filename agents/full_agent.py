@@ -556,21 +556,13 @@ def api_services_client():
                 success, result = send_mail_via_smtp(smtp_config, mail_data, source_ip)
             elif action == 'receive' or action == 'get_inbox':
                 # 支持两种action名称，兼容原项目
-                # 原项目使用 get_inbox + receive_config，当前项目使用 receive + config
-                logger.info(f'[DEBUG] 邮件获取请求: action={action}, data={data}')
-                add_service_log('邮件客户端', f'[DEBUG] 邮件获取请求: action={action}', 'info')
-
                 receive_config = data.get('receive_config', config)
-                logger.info(f'[DEBUG] receive_config={receive_config}, config={config}')
-                add_service_log('邮件客户端', f'[DEBUG] receive_config={receive_config}', 'info')
-
                 server = receive_config.get('server', '') or receive_config.get('imap_server', '')
                 port = int(receive_config.get('port', 143) or receive_config.get('imap_port', 143))
                 email = receive_config.get('email', '') or receive_config.get('user', '')
                 password = receive_config.get('password', '')
 
-                logger.info(f'[DEBUG] 解析后参数: server={server}, port={port}, email={email}, password={password}')
-                add_service_log('邮件客户端', f'[DEBUG] 解析参数: server={server}, port={port}, email={email}', 'info')
+                add_service_log('邮件客户端', f'获取收件箱: {email}@{server}:{port}', 'info')
 
                 final_config = {
                     'server': server,
@@ -581,13 +573,9 @@ def api_services_client():
                 }
                 source_ip = BIND_IP if BIND_IP != '0.0.0.0' else ''
 
-                logger.info(f'[DEBUG] final_config={final_config}, source_ip={source_ip}')
-                add_service_log('邮件客户端', f'[DEBUG] 调用get_inbox_mails: {final_config}', 'info')
-
                 success, result = get_inbox_mails(final_config, source_ip)
 
-                logger.info(f'[DEBUG] get_inbox_mails结果: success={success}, result_type={type(result)}, result_len={len(result) if isinstance(result, list) else "N/A"}')
-                add_service_log('邮件客户端', f'[DEBUG] 获取结果: success={success}, mails={len(result) if isinstance(result, list) else 0}', 'info')
+                add_service_log('邮件客户端', f'获取结果: {len(result) if isinstance(result, list) else 0}封邮件', 'info')
 
                 if success and isinstance(result, list):
                     result = {'mails': result, 'count': len(result)}
