@@ -26,7 +26,7 @@
 
     <div class="form-group">
         <label class="form-label">端口范围</label>
-        <input type="text" id="port-range" class="form-input" value="1-1000" placeholder="例如: 1-1000 或 22,80,443">
+        <input type="text" id="port-range" class="form-input" value="1-10000" placeholder="例如: 1-10000 或 22,80,443">
         <small style="color: var(--text-secondary);">支持范围 (1-1000) 和列表 (22,80,443)</small>
     </div>
 
@@ -110,32 +110,32 @@ let scanInterval = null;
 let currentTarget = null;
 
 // 常见端口列表
-const COMMON_PORTS = [21,22,23,25,53,80,110,143,443,445,993,995,3306,5432,6379,8080,8443,27017];
+const COMMON_PORTS = [21,22,23,25,53,80,110,143,443,445,993,995,1433,3306,3389,5432,5900,6379,8000,8080,8443,8888,27017];
 
 async function loadAgents() {
     try {
-        const result = await apiRequest('/api/agents/list/');
+        const result = await apiRequest('/api/agents/my-rented/');
         const container = document.getElementById('agent-selector');
 
-        if (result.agents && result.agents.length > 0) {
+        if (result.success && result.rented_agents && result.rented_agents.length > 0) {
             let html = '';
-            result.agents.forEach(agent => {
-                if (agent.status === 'running') {
-                    html += `
-                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
-                            <div class="agent-id" style="font-weight: bold;">${agent.agent_id}</div>
-                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address || 'N/A'}</div>
-                            <div class="status-badge" style="background: var(--success); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">运行中</div>
-                        </div>
-                    `;
-                }
+            result.rented_agents.forEach(agent => {
+                const status = agent.status === 'running' ? '运行中' : '已停止';
+                const statusColor = agent.status === 'running' ? 'var(--success)' : 'var(--danger)';
+                html += `
+                    <div class="agent-card ${agent.status}" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
+                        <div class="agent-id" style="font-weight: bold;">${agent.agent_id}</div>
+                        <div style="color: var(--text-secondary);">${agent.interface || 'N/A'} - ${agent.ip_address || 'N/A'}</div>
+                        <div class="status-badge" style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">${status}</div>
+                    </div>
+                `;
             });
-            container.innerHTML = html || '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
+            container.innerHTML = html;
         } else {
-            container.innerHTML = '<p style="color: var(--text-secondary);">请先启动 Agent</p>';
+            container.innerHTML = '<p style="color: var(--text-secondary);">没有租用的 Agent，请先在 Agent 管理页面租用 Agent</p>';
         }
     } catch (e) {
-        container.innerHTML = '<p style="color: var(--danger);">加载失败</p>';
+        container.innerHTML = '<p style="color: var(--danger);">加载失败: ' + e.message + '</p>';
     }
 }
 
