@@ -1311,6 +1311,9 @@ function selectClientProtocol(protocol, element) {
         const actionsEl = document.getElementById(`${protocol}-client-actions`);
         if (actionsEl) actionsEl.style.display = 'flex';
     }
+
+    // 切换协议后刷新状态，恢复 FTP/HTTP 等协议的连接 UI
+    refreshClientStatus();
 }
 
 // Mail操作选择
@@ -2801,6 +2804,20 @@ async function refreshClientStatus() {
                         sendBtn.textContent = '📤 发送';
                         sendBtn.className = 'btn-action btn-send';
                     }
+                }
+            } else if (clientProtocol === 'ftp') {
+                // FTP 协议状态恢复
+                if (state.running) {
+                    showFtpConnectedButtons();
+                } else {
+                    hideFtpConnectedButtons();
+                }
+            } else if (clientProtocol === 'http') {
+                // HTTP 协议状态恢复
+                if (state.running) {
+                    showHttpConnectedButtons();
+                } else {
+                    hideHttpConnectedButtons();
                 }
             }
 
