@@ -1548,11 +1548,20 @@ async function refreshServerStatus() {
                     const smtpServerPort = document.getElementById('smtp-server-port');
                     const mailReceiveServer = document.getElementById('mail-receive-server');
                     const mailReceivePort = document.getElementById('mail-receive-port');
+                    const mailReceiveProtocol = document.getElementById('mail-receive-protocol');
 
                     if (smtpServer) smtpServer.value = displayHost;
                     if (smtpServerPort) smtpServerPort.value = state.smtp_port || 25;
                     if (mailReceiveServer) mailReceiveServer.value = displayHost;
-                    if (mailReceivePort) mailReceivePort.value = state.imap_port || 143;
+                    // 根据当前选择的协议设置端口
+                    if (mailReceivePort && mailReceiveProtocol) {
+                        const currentProtocol = mailReceiveProtocol.value;
+                        if (currentProtocol === 'pop3') {
+                            mailReceivePort.value = state.pop3_port || 110;
+                        } else {
+                            mailReceivePort.value = state.imap_port || 143;
+                        }
+                    }
 
                     // 加载邮件用户列表
                     loadMailUsers();
