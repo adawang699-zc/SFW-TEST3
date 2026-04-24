@@ -44,9 +44,21 @@ def ssh_connect() -> paramiko.SSHClient:
     return ssh
 
 
-def ssh_exec(ssh: paramiko.SSHClient, cmd: str, timeout: int = 120) -> tuple[int, str, str]:
-    """执行 SSH 命令"""
+def ssh_exec(ssh: paramiko.SSHClient, cmd: str, timeout: int = 120, background: bool = False) -> tuple[int, str, str]:
+    """执行 SSH 命令
+
+    Args:
+        background: 如果为 True，不等待命令完成（用于 nohup 后台命令）
+    """
     stdin, stdout, stderr = ssh.exec_command(cmd, timeout=timeout)
+
+    if background:
+        # 后台命令不等待退出状态，立即返回
+        time.sleep(1)  # 给命令启动时间
+        out = ""
+        err = ""
+        return 0, out, err
+
     exit_status = stdout.channel.recv_exit_status()
     out = stdout.read().decode('utf-8', errors='ignore')
     err = stderr.read().decode('utf-8', errors='ignore')
@@ -112,9 +124,9 @@ def step3_restart_django(ssh: paramiko.SSHClient) -> bool:
     ssh_exec(ssh, cmd, timeout=10)
     time.sleep(2)
 
-    # 启动 Django
+    # 启动 Django (后台运行)
     cmd = f"cd {UBUNTU_PROJECT_PATH} && nohup sfw/bin/python manage.py runserver 0.0.0.0:8000 > logs/django.log 2>&1 &"
-    code, out, err = ssh_exec(ssh, cmd)
+    code, out, err = ssh_exec(ssh, cmd, background=True)
 
     if code != 0:
         print(f"  启动 Django 失败: {err}")
