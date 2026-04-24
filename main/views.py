@@ -1491,13 +1491,12 @@ def api_stop_scan(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@require_http_methods(["POST"])
+@require_http_methods(["GET"])
 @csrf_exempt
 def api_scan_progress(request):
     """获取扫描进度"""
     try:
-        data = json.loads(request.body)
-        agent_id = data.get('agent_id')
+        agent_id = request.GET.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
@@ -1524,8 +1523,9 @@ def api_scan_results(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.get(
+        resp = requests.post(
             f"http://{agent.interface.ip_address}:{agent.port}/api/scan_results",
+            json={},
             timeout=5
         )
 

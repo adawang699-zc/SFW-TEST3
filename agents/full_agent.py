@@ -89,7 +89,10 @@ statistics = {
 
 # 导入功能模块
 from agents.modules.packet_sender import send_tcp_packet, send_udp_packet
-from agents.modules.port_scanner import port_scan
+from agents.modules.port_scanner import (
+    port_scan, get_scan_types, start_async_scan, stop_scan,
+    get_scan_progress, get_scan_results, COMMON_PORTS
+)
 from agents.modules.packet_replay import start_replay, stop_replay, get_replay_status
 from agents.services.listeners import start_tcp_listener, stop_tcp_listener, start_udp_listener, stop_udp_listener
 # 导入完整监听功能（支持 FTP/HTTP/Mail）
@@ -234,9 +237,88 @@ def api_statistics():
 
 # ========== 端口扫描功能 ==========
 
+@app.route('/api/start_scan', methods=['POST'])
+def api_start_scan():
+    """启动端口扫描 - 异步"""
+    data = request.get_json()
+    target_ip = data.get('target_ip')
+    port_range = data.get('port_range', '1-1000')
+    scan_type = data.get('scan_type', 'S')  # 默认 SYN 扫描
+
+    if not target_ip:
+        return jsonify({'success': False, 'error': '缺少目标 IP'}), 400
+
+    result = start_async_scan(target_ip, port_range, scan_type)
+    if result.get('status') == 'already_running':
+        return jsonify({'success': False, 'error': result.get('error')}), 400
+
+    return jsonify({
+        'success': True,
+        'status': result.get('status'),
+        'target': result.get('target'),
+        'scan_type': result.get('scan_type'),
+        'agent_id': AGENT_ID
+    })
+
+@app.route('/api/stop_scan', methods=['POST'])
+def api_stop_scan():
+    """停止端口扫描"""
+    result = stop_scan()
+    return jsonify({
+        'success': True,
+        'status': result.get('status'),
+        'agent_id': AGENT_ID
+    })
+
+@app.route('/api/scan_progress', methods=['GET'])
+def api_scan_progress():
+    """获取扫描进度"""
+    result = get_scan_progress()
+    return jsonify({
+        'success': True,
+        'running': result.get('running'),
+        'progress': result.get('progress'),
+        'target': result.get('target'),
+        'results_count': result.get('results_count', 0),
+        'error': result.get('error'),
+        'agent_id': AGENT_ID
+    })
+
+@app.route('/api/scan_results', methods=['POST'])
+def api_scan_results():
+    """获取扫描结果"""
+    result = get_scan_results()
+    return jsonify({
+        'success': True,
+        'running': result.get('running'),
+        'results': result.get('results', []),
+        'target': result.get('target'),
+        'total': result.get('total', 0),
+        'error': result.get('error'),
+        'agent_id': AGENT_ID
+    })
+
+@app.route('/api/scan_types', methods=['GET'])
+def api_scan_types():
+    """获取支持的扫描类型"""
+    types = get_scan_types()
+    types_list = []
+    for code, info in types.items():
+        types_list.append({
+            'code': code,
+            'name': info['name'],
+            'desc': info['desc']
+        })
+    return jsonify({
+        'success': True,
+        'scan_types': types_list,
+        'agent_id': AGENT_ID
+    })
+
+# 保留旧 API 以兼容
 @app.route('/api/port_scan', methods=['POST'])
 def api_port_scan():
-    """端口扫描 API"""
+    """端口扫描 API（同步，已废弃）"""
     data = request.get_json()
     target_ip = data.get('target_ip')
     port_range = data.get('port_range', '1-1000')
@@ -249,16 +331,6 @@ def api_port_scan():
         return jsonify({'success': True, 'result': result})
     else:
         return jsonify({'success': False, 'error': result.get('error', '扫描失败')}), 500
-
-@app.route('/api/port_scan/stop', methods=['POST'])
-def api_port_scan_stop():
-    """停止扫描"""
-    return jsonify({'success': True, 'message': '扫描已停止'})
-
-@app.route('/api/port_scan/progress', methods=['GET'])
-def api_scan_progress():
-    """扫描进度"""
-    return jsonify({'progress': 0, 'running': False})
 
 # ========== 报文回放功能 ==========
 

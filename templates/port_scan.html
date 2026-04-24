@@ -5,7 +5,7 @@
 <div class="card">
     <div class="card-header">端口扫描</div>
     <p style="color: var(--text-secondary); margin-bottom: 20px;">
-        使用本地 Agent 扫描目标设备的端口开放状态
+        使用 Nmap 进行端口扫描，支持多种扫描类型，实时显示进度和开放端口
     </p>
 </div>
 
@@ -27,13 +27,30 @@
     <div class="form-group">
         <label class="form-label">端口范围</label>
         <input type="text" id="port-range" class="form-input" value="1-1000" placeholder="例如: 1-1000 或 22,80,443">
+        <small style="color: var(--text-secondary);">支持范围 (1-1000) 和列表 (22,80,443)</small>
     </div>
 
     <div class="form-group">
         <label class="form-label">扫描类型</label>
         <select id="scan-type" class="form-input">
-            <option value="tcp">TCP 扫描</option>
+            <option value="S">SYN 扫描 (-sS) - 半开放，速度快</option>
+            <option value="T">TCP Connect (-sT) - 全连接，无需特权</option>
+            <option value="U">UDP 扫描 (-sU) - UDP 端口</option>
+            <option value="N">Null 扫描 (-sN) - 空标志包</option>
+            <option value="F">FIN 扫描 (-sF) - FIN 包</option>
+            <option value="X">Xmas 扫描 (-sX) - FIN/PSH/URG</option>
+            <option value="A">ACK 扫描 (-sA) - 防火墙探测</option>
         </select>
+        <small style="color: var(--text-secondary);">SYN 扫描需要 root 权限</small>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">快速扫描</label>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-secondary" onclick="setCommonPorts()">常见端口</button>
+            <button class="btn btn-secondary" onclick="setTopPorts(100)">Top 100</button>
+            <button class="btn btn-secondary" onclick="setTopPorts(1000)">Top 1000</button>
+        </div>
     </div>
 
     <div style="display: flex; gap: 12px;">
@@ -62,17 +79,26 @@
             <thead>
                 <tr>
                     <th>端口</th>
+                    <th>协议</th>
                     <th>状态</th>
-                    <th>类型</th>
+                    <th>服务</th>
                 </tr>
             </thead>
             <tbody id="results-table">
-                <tr><td colspan="3" style="color: var(--text-secondary);">暂无结果</td></tr>
+                <tr><td colspan="4" style="color: var(--text-secondary);">暂无结果</td></tr>
             </tbody>
         </table>
     </div>
     <div id="results-summary" style="color: var(--text-secondary); margin-top: 12px;">
-        发现 <span id="open-count">0</span> 个开放端口
+        发现 <span id="open-count" style="color: var(--success); font-weight: bold;">0</span> 个开放端口
+    </div>
+</div>
+
+<div class="card" id="raw-output-card" style="display: none;">
+    <div class="card-header" style="cursor: pointer;" onclick="toggleRawOutput()">
+        详细输出 <span id="raw-toggle">▼</span>
+    </div>
+    <div id="raw-output" style="display: none; max-height: 300px; overflow-y: auto; background: var(--bg-dark); padding: 12px; border-radius: 8px; font-family: monospace; white-space: pre-wrap;">
     </div>
 </div>
 {% endblock %}
@@ -82,6 +108,9 @@
 let selectedAgentId = null;
 let scanInterval = null;
 let currentTarget = null;
+
+// 常见端口列表
+const COMMON_PORTS = [21,22,23,25,53,80,110,143,443,445,993,995,3306,5432,6379,8080,8443,27017];
 
 async function loadAgents() {
     try {
@@ -93,10 +122,10 @@ async function loadAgents() {
             result.agents.forEach(agent => {
                 if (agent.status === 'running') {
                     html += `
-                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer; border: 2px solid var(--border);">
-                            <div class="agent-id">${agent.agent_id}</div>
-                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address}</div>
-                            <div class="status-badge status-running">运行中</div>
+                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
+                            <div class="agent-id" style="font-weight: bold;">${agent.agent_id}</div>
+                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address || 'N/A'}</div>
+                            <div class="status-badge" style="background: var(--success); color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">运行中</div>
                         </div>
                     `;
                 }
@@ -115,7 +144,16 @@ function selectAgent(agentId) {
     document.querySelectorAll('.agent-card').forEach(card => {
         const id = card.querySelector('.agent-id').textContent;
         card.style.borderColor = id === agentId ? 'var(--primary)' : 'var(--border)';
+        card.style.background = id === agentId ? 'var(--bg-secondary)' : '';
     });
+}
+
+function setCommonPorts() {
+    document.getElementById('port-range').value = COMMON_PORTS.join(',');
+}
+
+function setTopPorts(count) {
+    document.getElementById('port-range').value = `1-${count}`;
 }
 
 async function startScan() {
@@ -135,6 +173,14 @@ async function startScan() {
 
     currentTarget = targetIp;
 
+    // 重置界面
+    document.getElementById('progress-bar').style.width = '0%';
+    document.getElementById('progress-percent').textContent = '0%';
+    document.getElementById('progress-text').textContent = '正在启动扫描...';
+    document.getElementById('results-table').innerHTML = '<tr><td colspan="4" style="color: var(--text-secondary);">扫描进行中...</td></tr>';
+    document.getElementById('open-count').textContent = '0';
+    document.getElementById('raw-output-card').style.display = 'none';
+
     try {
         const result = await apiRequest('/api/start_scan/', 'POST', {
             agent_id: selectedAgentId,
@@ -143,14 +189,12 @@ async function startScan() {
             scan_type: scanType
         });
 
-        if (result.status === 'scanning') {
+        if (result.success && result.status === 'scanning') {
             showToast('扫描已开始');
             document.getElementById('start-btn').style.display = 'none';
             document.getElementById('stop-btn').style.display = 'inline-block';
-            document.getElementById('progress-text').textContent = `扫描目标: ${targetIp}`;
-            document.getElementById('results-table').innerHTML = '<tr><td colspan="3" style="color: var(--text-secondary);">扫描进行中...</td></tr>';
-            document.getElementById('open-count').textContent = '0';
-            scanInterval = setInterval(updateScanProgress, 1000);
+            document.getElementById('progress-text').textContent = `扫描目标: ${targetIp} (${result.scan_type})`;
+            scanInterval = setInterval(updateScanProgress, 2000);
         } else {
             showToast('启动失败: ' + (result.error || '未知错误'), 'error');
         }
@@ -162,12 +206,12 @@ async function startScan() {
 async function stopScan() {
     try {
         const result = await apiRequest('/api/stop_scan/', 'POST', { agent_id: selectedAgentId });
-        if (result.status === 'stopped') {
+        if (result.success) {
             showToast('扫描已停止');
             document.getElementById('start-btn').style.display = 'inline-block';
             document.getElementById('stop-btn').style.display = 'none';
             if (scanInterval) clearInterval(scanInterval);
-            // 获取最终结果
+            // 获取当前结果
             fetchFinalResults();
         }
     } catch (e) {
@@ -179,9 +223,9 @@ async function updateScanProgress() {
     if (!selectedAgentId) return;
 
     try {
-        const result = await apiRequest('/api/scan_progress/', 'POST', { agent_id: selectedAgentId });
+        const result = await apiRequest(`/api/scan_progress/?agent_id=${selectedAgentId}`, 'GET');
 
-        if (result.running || result.progress > 0) {
+        if (result.success) {
             // 更新进度条
             const progress = result.progress || 0;
             document.getElementById('progress-bar').style.width = progress + '%';
@@ -189,6 +233,10 @@ async function updateScanProgress() {
 
             if (result.results_count) {
                 document.getElementById('open-count').textContent = result.results_count;
+            }
+
+            if (result.error) {
+                document.getElementById('progress-text').textContent = result.error;
             }
 
             // 扫描完成
@@ -211,31 +259,51 @@ async function fetchFinalResults() {
     try {
         const result = await apiRequest('/api/scan_results/', 'POST', { agent_id: selectedAgentId });
 
-        if (result.results && result.results.length > 0) {
+        if (result.success && result.results && result.results.length > 0) {
             renderResults(result.results);
             document.getElementById('open-count').textContent = result.results.length;
+            document.getElementById('progress-text').textContent = `扫描完成: ${result.target} (${result.total} 个开放端口)`;
+        } else if (result.error) {
+            document.getElementById('results-table').innerHTML = `<tr><td colspan="4" style="color: var(--danger);">${result.error}</td></tr>`;
+            document.getElementById('progress-text').textContent = result.error;
         } else {
-            document.getElementById('results-table').innerHTML = '<tr><td colspan="3" style="color: var(--text-secondary);">未发现开放端口</td></tr>';
+            document.getElementById('results-table').innerHTML = '<tr><td colspan="4" style="color: var(--text-secondary);">未发现开放端口</td></tr>';
         }
     } catch (e) {
         console.error('获取结果失败:', e);
+        document.getElementById('results-table').innerHTML = '<tr><td colspan="4" style="color: var(--danger);">获取结果失败</td></tr>';
     }
 }
 
 function renderResults(results) {
     const tbody = document.getElementById('results-table');
 
+    // 按端口排序
+    results.sort((a, b) => a.port - b.port);
+
     tbody.innerHTML = results.map(r => `
         <tr>
-            <td><span style="background: var(--primary); padding: 2px 8px; border-radius: 4px;">${r.port}</span></td>
+            <td><span style="background: var(--primary); padding: 2px 8px; border-radius: 4px; font-weight: bold;">${r.port}</span></td>
+            <td>${r.protocol || 'tcp'}</td>
             <td><span style="color: var(--success);">● 开放</span></td>
-            <td>${r.type || 'TCP'}</td>
+            <td><span style="color: var(--info);">${r.service || 'unknown'}</span></td>
         </tr>
     `).join('');
 }
 
+function toggleRawOutput() {
+    const output = document.getElementById('raw-output');
+    const toggle = document.getElementById('raw-toggle');
+    if (output.style.display === 'none') {
+        output.style.display = 'block';
+        toggle.textContent = '▲';
+    } else {
+        output.style.display = 'none';
+        toggle.textContent = '▼';
+    }
+}
+
 function showToast(message, type = 'success') {
-    // 简单提示
     const toast = document.createElement('div');
     toast.style.cssText = `position: fixed; top: 80px; right: 20px; padding: 12px 24px; background: ${type === 'error' ? 'var(--danger)' : 'var(--success)'}; color: white; border-radius: 8px; z-index: 9999;`;
     toast.textContent = message;
