@@ -1600,6 +1600,83 @@ def api_pcap_files(request):
 
 @require_http_methods(["POST"])
 @csrf_exempt
+def api_packet_replay_start(request):
+    """启动报文回放（新版 tcpreplay）"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+        pcap_files = data.get('pcap_files', [])
+        loop = data.get('loop', 1)
+        multiplier = data.get('multiplier')
+        rate_pps = data.get('rate_pps')
+        rate_mbps = data.get('rate_mbps')
+
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        resp = requests.post(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/packet_replay/start",
+            json={
+                'pcap_files': pcap_files,
+                'loop': loop,
+                'multiplier': multiplier,
+                'rate_pps': rate_pps,
+                'rate_mbps': rate_mbps
+            },
+            timeout=10
+        )
+
+        return JsonResponse(resp.json())
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_packet_replay_stop(request):
+    """停止报文回放"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        resp = requests.post(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/packet_replay/stop",
+            json={},
+            timeout=5
+        )
+        return JsonResponse(resp.json())
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+@csrf_exempt
+def api_packet_replay_status(request):
+    """获取回放状态"""
+    try:
+        agent_id = request.GET.get('agent_id')
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        resp = requests.get(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/packet_replay/status",
+            timeout=5
+        )
+
+        return JsonResponse(resp.json())
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
 def api_stop_replay(request):
     """停止报文回放"""
     try:

@@ -29,15 +29,15 @@
         <button class="btn btn-sm btn-secondary" onclick="selectAllFiles()">全选文件</button>
         <button class="btn btn-sm btn-secondary" onclick="clearSelection()">清除选择</button>
     </div>
-    <div id="pcap-files">
+    <div id="pcap-files" style="max-height: 400px; overflow-y: auto;">
         <table class="table" style="table-layout: fixed; width: 100%;">
             <thead>
                 <tr>
-                    <th style="width: 50px; text-align: center;">选择</th>
+                    <th style="width: 60px; text-align: center;">选择</th>
                     <th style="width: auto;">名称</th>
                     <th style="width: 70px; text-align: center;">类型</th>
                     <th style="width: 100px; text-align: right;">大小</th>
-                    <th style="width: 120px; text-align: center;">操作</th>
+                    <th style="width: 100px; text-align: center;">操作</th>
                 </tr>
             </thead>
             <tbody id="pcap-table">
@@ -409,7 +409,7 @@ async function updateReplayStats() {
     if (!selectedAgentId) return;
 
     try {
-        const result = await apiRequest('/api/packet_replay/status', 'GET');
+        const result = await apiRequest('/api/packet_replay/status?agent_id=' + selectedAgentId, 'GET');
 
         if (result) {
             document.getElementById('sent-count').textContent = result.packets_sent || 0;
