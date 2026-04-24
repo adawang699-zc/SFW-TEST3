@@ -1083,8 +1083,6 @@ let agents = [];
 let serverProtocol = 'tcp';
 let clientProtocol = 'tcp';
 let mailAction = 'send';
-let serverStatusInterval = null;
-let clientStatusInterval = null;
 let serverIsStarting = false;
 let tcpIsSending = false;
 
@@ -2858,30 +2856,30 @@ async function testNetworkConnect() {
     }
 }
 
-// 状态轮询
-function startServerStatusPoll() {
-    if (serverStatusInterval) clearInterval(serverStatusInterval);
-    serverStatusInterval = setInterval(refreshServerStatus, 3000);
+// 状态轮询 - 合并为单一定时器，减少请求次数
+let statusPollInterval = null;
+
+function startStatusPoll() {
+    if (statusPollInterval) clearInterval(statusPollInterval);
+    // 5秒刷新一次，减少服务器负载
+    statusPollInterval = setInterval(() => {
+        if (serverAgent) refreshServerStatus();
+        if (clientAgent) refreshClientStatus();
+    }, 5000);
 }
 
-function stopServerStatusPoll() {
-    if (serverStatusInterval) {
-        clearInterval(serverStatusInterval);
-        serverStatusInterval = null;
+function stopStatusPoll() {
+    if (statusPollInterval) {
+        clearInterval(statusPollInterval);
+        statusPollInterval = null;
     }
 }
 
-function startClientStatusPoll() {
-    if (clientStatusInterval) clearInterval(clientStatusInterval);
-    clientStatusInterval = setInterval(refreshClientStatus, 3000);
-}
-
-function stopClientStatusPoll() {
-    if (clientStatusInterval) {
-        clearInterval(clientStatusInterval);
-        clientStatusInterval = null;
-    }
-}
+// 保留旧函数名以兼容其他调用
+function startServerStatusPoll() { startStatusPoll(); }
+function stopServerStatusPoll() { stopStatusPoll(); }
+function startClientStatusPoll() { startStatusPoll(); }
+function stopClientStatusPoll() { stopStatusPoll(); }
 
 async function refreshClientStatus() {
     if (!clientAgent) return;
