@@ -133,7 +133,7 @@ def get_pcap_info(pcap_file: str) -> Dict:
         文件信息：报文数量、大小、时长等
     """
     try:
-        cmd = ['capinfos', pcap_file]
+        cmd = ['capinfos', '-T', pcap_file]  # -T 输出表格格式，更易解析
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
 
         info = {
@@ -143,30 +143,49 @@ def get_pcap_info(pcap_file: str) -> Dict:
             'duration': 0
         }
 
-        # 解析 capinfos 输出
+        # 解析 capinfos 表格输出
+        # 格式：Number of packets	100
         for line in result.stdout.split('\n'):
-            if 'Number of packets:' in line:
-                info['packets'] = int(line.split(':')[1].strip())
-            elif 'File size:' in line:
-                match = re.search(r'(\d+)', line.split(':')[1])
+            parts = line.split('\t')
+            if len(parts) >= 2:
+                key = parts[0].strip()
+                value = parts[1].strip()
+
+                if 'Number of packets' in key:
+                    try:
+                        info['packets'] = int(value)
+                    except:
+                        pass
+                elif 'File size' in key:
+                    try:
+                        info['bytes'] = int(value)
+                    except:
+                        pass
+                elif 'Capture duration' in key:
+                    try:
+                        info['duration'] = float(value)
+                    except:
+                        pass
+
+        # 如果表格格式解析失败，尝试传统格式
+        if info['packets'] == 0:
+            for line in result.stdout.split('\n'):
+                # 匹配 "Number of packets: 100" 格式
+                match = re.search(r'Number of packets[:\s]+(\d+)', line)
                 if match:
-                    info['bytes'] = int(match.group(1))
-            elif 'Capture duration:' in line:
-                match = re.search(r'(\d+\.?\d*)', line.split(':')[1])
-                if match:
-                    info['duration'] = float(match.group(1))
+                    info['packets'] = int(match.group(1))
 
         return {'success': True, 'info': info}
 
     except Exception as e:
-        logger.error(f'获取 PCAP 信息失败: {e}')
+        logger.error(f'获取 PCAP 信息失败: {pcap_file} - {e}')
         return {'success': False, 'error': str(e)}
 
 
 def start_replay_tcpreplay(pcap_files: List[str], interface: str,
                            loop: int = 1, rate: float = None,
                            rate_bps: str = None, multiplier: float = None,
-                           preload: int = None) -> Tuple[bool, str]:
+                           preload: int = None, topspeed: bool = False) -> Tuple[bool, str]:
     """
     使用 tcpreplay 开始报文回放
 
@@ -178,6 +197,7 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
         rate_bps: 速率（每秒比特数，如 '10Mbps'）
         multiplier: 速率倍数（相对于原始速率）
         preload: 预加载报文数
+        topspeed: 最大速率发送
 
     Returns:
         (成功标志，消息)
@@ -225,10 +245,12 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
                 cmd.extend(['--loop', str(loop)])
 
             # 速率控制
-            if rate:
+            if topspeed:
+                cmd.append('--topspeed')
+            elif rate:
                 cmd.extend(['--pps', str(rate)])
             elif rate_bps:
-                cmd.extend(['--mbps', rate_bps.replace('Mbps', '').replace('Mbps', '')])
+                cmd.extend(['--mbps', str(rate_bps).replace('Mbps', '')])
             elif multiplier:
                 cmd.extend(['--multiplier', str(multiplier)])
 

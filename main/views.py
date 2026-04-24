@@ -1610,6 +1610,7 @@ def api_packet_replay_start(request):
         multiplier = data.get('multiplier')
         rate_pps = data.get('rate_pps')
         rate_mbps = data.get('rate_mbps')
+        topspeed = data.get('topspeed', False)
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
@@ -1620,7 +1621,8 @@ def api_packet_replay_start(request):
                 'loop': loop,
                 'multiplier': multiplier,
                 'rate_pps': rate_pps,
-                'rate_mbps': rate_mbps
+                'rate_mbps': rate_mbps,
+                'topspeed': topspeed
             },
             timeout=10
         )

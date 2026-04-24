@@ -368,6 +368,7 @@ def api_replay_start():
     multiplier = data.get('multiplier')
     rate_pps = data.get('rate_pps')
     rate_mbps = data.get('rate_mbps')
+    topspeed = data.get('topspeed', False)
 
     # 获取总报文数
     total_packets = 0
@@ -384,7 +385,8 @@ def api_replay_start():
         interface=BIND_INTERFACE,
         loop=loop,
         rate=rate_pps,
-        multiplier=multiplier
+        multiplier=multiplier,
+        topspeed=topspeed
     )
 
     if success:
