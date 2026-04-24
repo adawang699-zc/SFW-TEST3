@@ -528,7 +528,10 @@ def api_services_client():
                 mail_config = {
                     'server': config.get('server', ''),
                     'port': int(config.get('port', 25)),
-                    'ssl': config.get('ssl', False)
+                    'ssl': config.get('ssl', False),
+                    'email': config.get('email', ''),
+                    'password': config.get('password', ''),
+                    'no_auth': config.get('no_auth', False)
                 }
                 success, result = test_mail_connection(test_type, mail_config)
             elif action == 'send':
