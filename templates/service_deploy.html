@@ -995,12 +995,19 @@
                 <div id="mail-receive-config" style="display:none;">
                     <div class="config-row">
                         <div class="config-group">
-                            <label>IMAP服务器</label>
-                            <input type="text" id="imap-server" class="config-input" placeholder="如: 192.168.1.100">
+                            <label>接收协议</label>
+                            <select id="mail-receive-protocol" class="config-input" onchange="updateReceivePort()">
+                                <option value="imap">IMAP</option>
+                                <option value="pop3">POP3</option>
+                            </select>
                         </div>
                         <div class="config-group">
-                            <label>IMAP端口</label>
-                            <input type="number" id="imap-server-port" class="config-input" value="143">
+                            <label>服务器</label>
+                            <input type="text" id="mail-receive-server" class="config-input" placeholder="如: 192.168.1.100">
+                        </div>
+                        <div class="config-group">
+                            <label>端口</label>
+                            <input type="number" id="mail-receive-port" class="config-input" value="143">
                         </div>
                     </div>
                     <div class="config-row">
@@ -2631,48 +2638,105 @@ async function sendMail() {
     }
 }
 
+function updateReceivePort() {
+    const protocol = document.getElementById('mail-receive-protocol').value;
+    const portInput = document.getElementById('mail-receive-port');
+    if (protocol === 'imap') {
+        portInput.value = 143;
+    } else if (protocol === 'pop3') {
+        portInput.value = 110;
+    }
+}
+
 async function receiveMails() {
     if (!clientAgent) return;
 
+    const protocol = document.getElementById('mail-receive-protocol').value;
     const config = {
         agent_id: clientAgent.agent_id,
         protocol: 'mail',
         action: 'get_inbox',
         receive_config: {
-            protocol: 'imap',
-            server: document.getElementById('imap-server').value,
-            port: parseInt(document.getElementById('imap-server-port').value),
+            protocol: protocol,
+            server: document.getElementById('mail-receive-server').value,
+            port: parseInt(document.getElementById('mail-receive-port').value),
             ssl: false,
             email: document.getElementById('mail-user').value,
             password: document.getElementById('mail-password').value
         }
     };
 
-    addClientLog('获取邮件...');
+    addClientLog(`获取邮件 (${protocol.toUpperCase()})...`);
 
     try {
         const result = await apiRequest('/api/services/client/', 'POST', config);
         if (result.success) {
-            addClientLog('获取邮件成功', 'info');
+            const mailCount = result.mails ? result.mails.length : 0;
+            addClientLog(`获取邮件成功: ${mailCount}封`, 'info');
             document.getElementById('mail-list-area').style.display = 'block';
+
             let mailsHtml = '';
-            if (result.mails) {
-                result.mails.forEach(mail => {
+            if (result.mails && result.mails.length > 0) {
+                // 表头
+                mailsHtml += `
+                    <div class="mail-table-header" style="display: grid; grid-template-columns: 40px 150px 180px 200px 80px 60px; padding: 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); font-weight: bold;">
+                        <span>#</span>
+                        <span>发件人</span>
+                        <span>主题</span>
+                        <span>日期</span>
+                        <span>大小</span>
+                        <span>协议</span>
+                    </div>
+                `;
+                // 邮件列表
+                result.mails.forEach((mail, idx) => {
+                    const size = mail.size ? formatFileSize(mail.size) : 'N/A';
                     mailsHtml += `
-                        <div class="connection-item">
-                            <span class="connection-info">${mail.mail_from}</span>
-                            <span class="connection-info">${mail.subject || '无主题'}</span>
+                        <div class="mail-item" style="display: grid; grid-template-columns: 40px 150px 180px 200px 80px 60px; padding: 8px; border-bottom: 1px solid var(--border-color); cursor: pointer;" onclick="showMailDetail(${idx})">
+                            <span>${mail.id || idx + 1}</span>
+                            <span>${mail.from || 'N/A'}</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${mail.subject || '无主题'}</span>
+                            <span style="font-size: 12px;">${mail.date || 'N/A'}</span>
+                            <span>${size}</span>
+                            <span>${mail.protocol || protocol.toUpperCase()}</span>
                         </div>
                     `;
                 });
+                // 存储邮件数据用于详情显示
+                window.currentMailList = result.mails;
             }
-            document.getElementById('mail-list-content').innerHTML = mailsHtml || '<div style="color:var(--text-muted)">无邮件</div>';
+            document.getElementById('mail-list-content').innerHTML = mailsHtml || '<div style="color:var(--text-muted); padding: 20px;">无邮件</div>';
         } else {
             addClientLog('获取失败: ' + (result.error || '未知错误'), 'error');
         }
     } catch (e) {
         addClientLog('请求失败: ' + e.message, 'error');
     }
+}
+
+function showMailDetail(idx) {
+    if (!window.currentMailList || !window.currentMailList[idx]) return;
+    const mail = window.currentMailList[idx];
+    const size = mail.size ? formatFileSize(mail.size) : 'N/A';
+
+    let detailHtml = `
+        <div style="padding: 10px; background: var(--bg-secondary); border-radius: 4px;">
+            <div style="margin-bottom: 8px;"><strong>发件人:</strong> ${mail.from || 'N/A'}</div>
+            <div style="margin-bottom: 8px;"><strong>收件人:</strong> ${mail.to || 'N/A'}</div>
+            <div style="margin-bottom: 8px;"><strong>主题:</strong> ${mail.subject || '无主题'}</div>
+            <div style="margin-bottom: 8px;"><strong>日期:</strong> ${mail.date || 'N/A'}</div>
+            <div style="margin-bottom: 8px;"><strong>大小:</strong> ${size}</div>
+            <hr style="border: none; border-top: 1px solid var(--border-color); margin: 10px 0;">
+            <div style="white-space: pre-wrap; word-wrap: break-word; max-height: 300px; overflow-y: auto; background: var(--bg-primary); padding: 10px; border-radius: 4px;">${mail.body || '无内容'}</div>
+        </div>
+    `;
+    document.getElementById('mail-list-content').innerHTML = detailHtml;
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 async function testMailConnection() {
