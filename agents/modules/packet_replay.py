@@ -25,7 +25,8 @@ replay_state = {
     'start_time': None,
     'rate': 0,  # 当前速率 (pps)
     'bps': 0,   # 当前速率 (bps)
-    'error': None
+    'error': None,
+    'completed': False  # 是否已完成（进程结束）
 }
 replay_lock = threading.Lock()
 stop_replay_event = threading.Event()
@@ -202,6 +203,7 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
         replay_state['bps'] = 0
         replay_state['error'] = None
         replay_state['current_file'] = None
+        replay_state['completed'] = False
 
     stop_replay_event.clear()
 
@@ -322,8 +324,11 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
         with replay_lock:
             replay_state['running'] = False
             replay_state['process'] = None
-            if not stop_replay_event.is_set():
-                replay_state['current_file'] = None
+            replay_state['completed'] = True  # 标记完成
+            replay_state['current_file'] = None
+            # 清零速率（回放结束后）
+            replay_state['rate'] = 0
+            replay_state['bps'] = 0
 
         logger.info(f"报文回放完成，发送 {replay_state['packets_sent']} 个报文")
 
@@ -377,6 +382,7 @@ def get_replay_status() -> Dict:
 
         return {
             'running': replay_state['running'],
+            'completed': replay_state['completed'],  # 是否已完成
             'packets_sent': replay_state['packets_sent'],
             'packets_total': replay_state['packets_total'],
             'current_file': replay_state['current_file'],

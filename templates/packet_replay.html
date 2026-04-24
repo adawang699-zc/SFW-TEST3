@@ -470,13 +470,16 @@ async function updateReplayStats() {
                     mins > 0 ? `${mins} 分 ${secs} 秒` : `${secs} 秒`;
             }
 
-            // 回放完成（非无限循环且进度100%）
-            if (!result.running && !result.is_infinite_loop && progress >= 100) {
+            // 回放完成（进程结束）
+            if (result.completed && !result.running) {
                 clearInterval(replayInterval);
                 document.getElementById('start-btn').style.display = 'inline-block';
                 document.getElementById('stop-btn').style.display = 'none';
                 document.getElementById('status-text').textContent = '已完成';
                 document.getElementById('current-file-display').textContent = '';
+                // 停止后清零速率显示
+                document.getElementById('rate-pps').textContent = '0';
+                document.getElementById('rate-mbps').textContent = '0.00';
             }
 
             // 错误处理
