@@ -237,19 +237,20 @@ function renderFileList(result) {
 
     // 文件列表
     if (result.files && result.files.length > 0) {
-        result.files.forEach(f => {
+        result.files.forEach((f, idx) => {
             const isSelected = selectedFiles.includes(f.path);
+            const escapedPath = f.path.replace(/'/g, "\\'").replace(/"/g, '\\"');
             html += `
                 <tr style="${isSelected ? 'background: rgba(255, 107, 53, 0.1);' : ''}">
                     <td style="text-align: center;">
                         <input type="checkbox" ${isSelected ? 'checked' : ''}
-                            onchange="toggleFileSelection('${f.path}', this.checked)">
+                            data-path="${f.path}" onchange="toggleFileSelection(this.dataset.path, this.checked)">
                     </td>
                     <td style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.name}</td>
                     <td style="text-align: center;">PCAP</td>
                     <td style="text-align: right;">${f.size_str}</td>
                     <td style="text-align: center;">
-                        <button class="btn btn-sm btn-primary" onclick="selectSingleFile('${f.path}')">单独回放</button>
+                        <button class="btn btn-sm btn-primary" data-path="${f.path}" onclick="selectSingleFile(this.dataset.path)">单独回放</button>
                     </td>
                 </tr>
             `;
