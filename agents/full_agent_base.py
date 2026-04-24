@@ -5017,7 +5017,13 @@ def connect_ftp_client(config):
     with service_lock:
         state = client_states.get('ftp')
         if state and state.get('running'):
-            return False, 'FTP客户端已连接'
+            # 检查是否真正连接
+            worker = state.get('worker')
+            if worker and worker.connected:
+                return False, 'FTP客户端已连接'
+            # 状态不一致，清理旧状态
+            add_service_log('FTP客户端', '清理无效连接状态')
+            client_states['ftp'] = {'running': False}
         state = {
             'protocol': 'ftp',
             'server_ip': server_ip,
@@ -5067,15 +5073,15 @@ def disconnect_ftp_client():
     if not state:
         return False, 'FTP客户端未连接'
     worker = state.get('worker')
+    # 无论断开成功与否，都要清理状态
     if worker:
         success, message = worker.disconnect()
-        if success:
-            with service_lock:
-                client_states['ftp'] = {'running': False}
-            return True, {'message': message}
-        else:
-            return False, message
-    return False, 'FTP客户端工作器不存在'
+    else:
+        success, message = True, '无活跃连接'
+    # 清理状态
+    with service_lock:
+        client_states['ftp'] = {'running': False}
+    return True, {'message': 'FTP已断开'}
 
 
 def list_ftp_files():
@@ -5444,7 +5450,13 @@ def connect_http_client(config):
     with service_lock:
         state = client_states.get('http')
         if state and state.get('running'):
-            return False, 'HTTP客户端已连接'
+            # 检查是否真正连接
+            worker = state.get('worker')
+            if worker and worker.connected:
+                return False, 'HTTP客户端已连接'
+            # 状态不一致，清理旧状态
+            add_service_log('HTTP客户端', '清理无效连接状态')
+            client_states['http'] = {'running': False}
         state = {
             'protocol': 'http',
             'server_ip': server_ip,
