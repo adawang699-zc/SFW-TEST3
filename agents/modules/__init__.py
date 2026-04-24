@@ -9,7 +9,10 @@ from .port_scanner import (
     port_scan, start_async_scan, stop_scan,
     get_scan_progress, get_scan_results, get_scan_types, COMMON_PORTS
 )
-from .packet_replay import start_replay, stop_replay, get_replay_status
+from .packet_replay import (
+    start_replay, stop_replay, get_replay_status,
+    get_pcap_files, start_replay_tcpreplay, get_pcap_info, DEFAULT_PCAP_DIR
+)
 from .packet_capture import start_capture, stop_capture, save_capture_to_pcap
 
 __all__ = [
@@ -23,6 +26,10 @@ __all__ = [
     'start_replay',
     'stop_replay',
     'get_replay_status',
+    'get_pcap_files',
+    'start_replay_tcpreplay',
+    'get_pcap_info',
+    'DEFAULT_PCAP_DIR',
     'start_capture',
     'stop_capture',
     'save_capture'

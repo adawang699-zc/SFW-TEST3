@@ -93,7 +93,11 @@ from agents.modules.port_scanner import (
     port_scan, get_scan_types, start_async_scan, stop_scan,
     get_scan_progress, get_scan_results, COMMON_PORTS
 )
-from agents.modules.packet_replay import start_replay, stop_replay, get_replay_status
+from agents.modules.packet_replay import (
+    start_replay, stop_replay, get_replay_status,
+    get_pcap_files, start_replay_tcpreplay, DEFAULT_PCAP_DIR,
+    get_pcap_info
+)
 from agents.services.listeners import start_tcp_listener, stop_tcp_listener, start_udp_listener, stop_udp_listener
 # 导入完整监听功能（支持 FTP/HTTP/Mail）
 from agents.full_agent_base import (
@@ -334,18 +338,59 @@ def api_port_scan():
 
 # ========== 报文回放功能 ==========
 
+@app.route('/api/pcap_files/', methods=['POST'])
+def api_pcap_files():
+    """获取 PCAP 文件列表"""
+    data = request.get_json() or {}
+    directory = data.get('directory', DEFAULT_PCAP_DIR)
+    search = data.get('search', '')
+
+    result = get_pcap_files(directory, search)
+    return jsonify(result)
+
 @app.route('/api/packet_replay/start', methods=['POST'])
 def api_replay_start():
     """启动报文回放"""
     data = request.get_json()
-    pcap_file = data.get('pcap_file')
 
-    if not pcap_file:
-        return jsonify({'success': False, 'error': '缺少 PCAP 文件路径'}), 400
+    # 支持单个文件或多个文件
+    pcap_files = data.get('pcap_files', [])
+    if not pcap_files:
+        pcap_file = data.get('pcap_file')
+        if pcap_file:
+            pcap_files = [pcap_file]
 
-    success, message = start_replay([pcap_file], BIND_INTERFACE)
+    if not pcap_files:
+        return jsonify({'success': False, 'error': '缺少 PCAP 文件'}), 400
+
+    # tcpreplay 参数
+    loop = data.get('loop', 1)
+    multiplier = data.get('multiplier')
+    rate_pps = data.get('rate_pps')
+    rate_mbps = data.get('rate_mbps')
+
+    # 获取总报文数
+    total_packets = 0
+    for f in pcap_files:
+        info_result = get_pcap_info(f) if 'get_pcap_info' in dir() else {'success': False}
+        if info_result.get('success'):
+            total_packets += info_result['info'].get('packets', 0) * loop
+
+    success, message = start_replay_tcpreplay(
+        pcap_files=pcap_files,
+        interface=BIND_INTERFACE,
+        loop=loop,
+        rate=rate_pps,
+        multiplier=multiplier
+    )
+
     if success:
-        return jsonify({'success': True, 'message': message})
+        return jsonify({
+            'success': True,
+            'message': message,
+            'status': 'replaying',
+            'total_packets': total_packets
+        })
     else:
         return jsonify({'success': False, 'error': message}), 500
 
@@ -353,7 +398,7 @@ def api_replay_start():
 def api_replay_stop():
     """停止回放"""
     success, message = stop_replay()
-    return jsonify({'success': success, 'message': message})
+    return jsonify({'success': success, 'message': message, 'status': 'stopped'})
 
 @app.route('/api/packet_replay/status', methods=['GET'])
 def api_replay_status():
