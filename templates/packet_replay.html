@@ -368,7 +368,8 @@ async function startReplay() {
         return;
     }
 
-    const loop = parseInt(document.getElementById('loop-count').value) || 1;
+    const loopValue = document.getElementById('loop-count').value;
+    const loop = loopValue === '' || loopValue === undefined ? 1 : parseInt(loopValue);
     const rateMode = document.getElementById('rate-mode').value;
     const rateValue = parseFloat(document.getElementById('rate-value').value) || 1;
 
