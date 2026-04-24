@@ -236,8 +236,11 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
             if preload:
                 cmd.extend(['--preload-packets', str(preload)])
 
-            # 统计输出
-            cmd.extend(['--stats', pcap_file])
+            # 统计输出间隔（每秒输出一次）
+            cmd.extend(['--stats', '1'])
+
+            # 文件路径放在最后
+            cmd.append(pcap_file)
 
             logger.info(f'执行 tcpreplay: {cmd}')
 
