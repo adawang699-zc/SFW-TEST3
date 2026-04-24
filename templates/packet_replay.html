@@ -287,9 +287,11 @@ function selectAllFiles() {
     const checkboxes = document.querySelectorAll('#pcap-table input[type="checkbox"]');
     checkboxes.forEach(cb => {
         const row = cb.closest('tr');
-        const fileCell = row.querySelector('td:nth-child(2)');
-        if (fileCell && !fileCell.textContent.includes('📁')) {
-            const path = row.querySelector('button')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
+        // 检查是否是文件行（不是目录）
+        const typeCell = row.querySelector('td:nth-child(3)');
+        if (typeCell && typeCell.textContent.trim() === 'PCAP') {
+            // 从 checkbox 或 button 的 data-path 获取路径
+            const path = cb.dataset.path || row.querySelector('button')?.dataset.path;
             if (path && !selectedFiles.includes(path)) {
                 selectedFiles.push(path);
             }
