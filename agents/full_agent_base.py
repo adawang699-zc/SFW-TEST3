@@ -4100,7 +4100,7 @@ Message-ID: <{mail_id}@{self.domain}>
                             
                             # 尝试直接认证（完整邮箱地址）
                             is_valid, email, auth_method = self._authenticate_user_detailed(username, password)
-                            
+
                             # 如果直接认证失败，且用户名包含@，尝试提取用户名部分
                             if not is_valid and '@' in username:
                                 username_part = username.split('@')[0]
@@ -4108,16 +4108,20 @@ Message-ID: <{mail_id}@{self.domain}>
                                 is_valid, email, auth_method = self._authenticate_user_detailed(username_part, password)
                                 if is_valid:
                                     username = username_part  # 更新用户名为提取的部分
-                            
+                            elif is_valid and '@' in username:
+                                # 即使完整邮箱认证成功，也提取用户名部分用于邮件目录查找
+                                username = username.split('@')[0]
+                                add_service_log('邮件服务器', f'IMAP提取用户名部分: {username} (用于邮件目录)')
+
                             if is_valid:
                                 response = f'{tag} OK LOGIN completed\r\n'
                                 client_socket.send(response.encode())
                                 with service_lock:
                                     if conn_id in self.state['connections']:
                                         self.state['connections'][conn_id]['authenticated'] = True
-                                        self.state['connections'][conn_id]['username'] = username
+                                        self.state['connections'][conn_id]['username'] = username  # 确保是用户名部分
                                         self.state['connections'][conn_id]['email'] = email
-                                add_service_log('邮件服务器', f'IMAP用户登录成功: {email} (认证方式: {auth_method})')
+                                add_service_log('邮件服务器', f'IMAP用户登录成功: {email} -> username={username} (认证方式: {auth_method})')
                             else:
                                 # 获取所有可用用户名进行详细分析
                                 all_usernames = self._get_all_usernames()
