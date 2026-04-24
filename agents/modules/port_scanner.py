@@ -133,12 +133,13 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
 
             line = line.strip()
 
-            # 解析端口信息
-            match = re.match(r'(\d+)/(\w+)\s+open\s+(.+)', line)
+            # 解析端口信息 - 支持 open 和 open|filtered 状态
+            match = re.match(r'(\d+)/(\w+)\s+(open|open\|filtered)\s+(.+)', line)
             if match:
                 port = int(match.group(1))
                 protocol = match.group(2)
-                service_raw = match.group(3).strip()
+                state = match.group(3)
+                service_raw = match.group(4).strip()
 
                 # 识别服务
                 service = COMMON_PORTS.get(port, service_raw.split()[0] if service_raw else 'unknown')
@@ -147,7 +148,7 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
                     'port': port,
                     'protocol': protocol,
                     'service': service,
-                    'state': 'open'
+                    'state': state
                 })
 
                 # 更新进度（基于发现数量估算）
