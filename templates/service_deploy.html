@@ -2573,17 +2573,24 @@ async function sendMail() {
     const config = {
         agent_id: clientAgent.agent_id,
         protocol: 'mail',
-        action: 'send_mail',
-        smtp_config: {
-            server: document.getElementById('smtp-server').value,
-            port: parseInt(document.getElementById('smtp-server-port').value)
-        },
-        mail_data: mailData
+        action: 'send',
+        config: {
+            smtp_server: document.getElementById('smtp-server').value,
+            smtp_port: parseInt(document.getElementById('smtp-server-port').value),
+            smtp_ssl: false,
+            from: mailData.from,
+            to: mailData.to,
+            subject: mailData.subject,
+            content: mailData.body,
+            content_type: 'plain',
+            password: document.getElementById('mail-password').value,
+            no_auth: false
+        }
     };
 
-    // 如果有附件，添加到 mail_data
+    // 如果有附件，添加到 config
     if (attachments.length > 0) {
-        config.mail_data.attachments = attachments;
+        config.config.attachments = attachments;
     }
 
     addClientLog(`发送邮件: ${config.mail_data.subject}${attachments.length > 0 ? ' (含 ' + attachments.length + ' 个附件)' : ''}...`);
@@ -2611,11 +2618,12 @@ async function receiveMails() {
     const config = {
         agent_id: clientAgent.agent_id,
         protocol: 'mail',
-        action: 'get_inbox',
-        receive_config: {
-            server: document.getElementById('imap-server').value,
-            port: parseInt(document.getElementById('imap-server-port').value),
-            username: document.getElementById('mail-user').value,
+        action: 'receive',
+        config: {
+            imap_server: document.getElementById('imap-server').value,
+            imap_port: parseInt(document.getElementById('imap-server-port').value),
+            imap_ssl: false,
+            user: document.getElementById('mail-user').value,
             password: document.getElementById('mail-password').value
         }
     };
@@ -2657,7 +2665,10 @@ async function testMailConnection() {
         type: 'smtp',
         config: {
             server: document.getElementById('smtp-server').value,
-            port: parseInt(document.getElementById('smtp-server-port').value)
+            port: parseInt(document.getElementById('smtp-server-port').value),
+            ssl: false,
+            email: document.getElementById('mail-from').value,
+            password: document.getElementById('mail-password').value
         }
     };
 
