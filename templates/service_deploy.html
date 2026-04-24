@@ -1324,8 +1324,18 @@ function selectMailAction(action, element) {
     });
     element.classList.add('active');
 
+    // 切换配置区域显示
     document.getElementById('mail-send-config').style.display = action === 'send' ? 'block' : 'none';
     document.getElementById('mail-receive-config').style.display = action === 'receive' ? 'block' : 'none';
+
+    // 切换按钮显示
+    const sendBtn = document.querySelector('#mail-client-actions .btn-send');
+    const receiveBtn = document.getElementById('mail-receive-btn');
+    const testBtn = document.querySelector('#mail-client-actions .btn-secondary:last-of-type');
+
+    if (sendBtn) sendBtn.style.display = action === 'send' ? 'inline-block' : 'none';
+    if (receiveBtn) receiveBtn.style.display = action === 'receive' ? 'inline-block' : 'none';
+    // 测试连接按钮始终显示
 }
 
 // ========== 服务端操作 ==========
@@ -2593,7 +2603,7 @@ async function sendMail() {
         config.config.attachments = attachments;
     }
 
-    addClientLog(`发送邮件: ${config.mail_data.subject}${attachments.length > 0 ? ' (含 ' + attachments.length + ' 个附件)' : ''}...`);
+    addClientLog(`发送邮件: ${mailData.subject}${attachments.length > 0 ? ' (含 ' + attachments.length + ' 个附件)' : ''}...`);
 
     try {
         const result = await apiRequest('/api/services/client/', 'POST', config);
