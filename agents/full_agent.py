@@ -366,8 +366,8 @@ def api_service_listener():
 
     elif action == 'list_users':
         if protocol == 'mail':
-            from agents.full_agent_base import get_mail_users
-            users = get_mail_users()
+            from agents.full_agent_base import list_mail_users
+            users = list_mail_users()
             return jsonify({'success': True, 'mail_users': users})
         else:
             return jsonify({'success': False, 'error': '只有Mail协议支持列出用户'}), 400
