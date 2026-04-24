@@ -372,9 +372,12 @@ def api_replay_start():
     # 获取总报文数
     total_packets = 0
     for f in pcap_files:
-        info_result = get_pcap_info(f) if 'get_pcap_info' in dir() else {'success': False}
-        if info_result.get('success'):
-            total_packets += info_result['info'].get('packets', 0) * loop
+        try:
+            info_result = get_pcap_info(f)
+            if info_result.get('success'):
+                total_packets += info_result['info'].get('packets', 0) * loop
+        except Exception as e:
+            logger.warning(f'获取 pcap 信息失败: {f} - {e}')
 
     success, message = start_replay_tcpreplay(
         pcap_files=pcap_files,
