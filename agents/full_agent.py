@@ -559,7 +559,7 @@ def api_services_client():
                     'server': config.get('imap_server', ''),
                     'port': int(config.get('imap_port', 143)),
                     'ssl': config.get('imap_ssl', False),
-                    'user': config.get('user', ''),
+                    'email': config.get('user', ''),  # user字段映射到email
                     'password': config.get('password', '')
                 }
                 source_ip = BIND_IP if BIND_IP != '0.0.0.0' else ''
