@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # 全局状态
 syslog_server_state = {
     'running': False,
-    'port': 514,
+    'port': 5140,  # 默认使用非特权端口
     'logs': deque(maxlen=10000),  # 最多保存10000条日志
     'filter_ip': '',  # 过滤IP，空字符串表示不过滤
     'lock': threading.Lock(),
@@ -191,12 +191,13 @@ def syslog_server_worker():
         syslog_server_state['thread'] = None
 
 
-def start_syslog_server(port=514):
+def start_syslog_server(port=5140):
     """
     启动syslog服务器
 
     Args:
-        port: 监听端口，默认514
+        port: 监听端口，默认5140（非特权端口）
+              注意：使用514等特权端口需要root权限
 
     Returns:
         tuple: (success: bool, message: str)
@@ -207,12 +208,16 @@ def start_syslog_server(port=514):
         if syslog_server_state['running']:
             return False, 'Syslog服务器已在运行中'
 
-        # 检查端口是否被占用
+        # 检查端口权限和可用性
         try:
             test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             test_sock.bind(('0.0.0.0', port))
             test_sock.close()
+        except PermissionError:
+            return False, f'端口 {port} 需要root权限（特权端口<1024），请使用非特权端口如5140'
         except OSError as e:
+            if 'Permission denied' in str(e):
+                return False, f'端口 {port} 需要root权限（特权端口<1024），请使用非特权端口如5140'
             return False, f'端口 {port} 已被占用: {str(e)}'
 
         syslog_server_state['port'] = port
