@@ -279,59 +279,57 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
     """
     global trap_receiver_state
 
-    with trap_receiver_state['lock']:
-        if trap_receiver_state['running']:
-            return False, 'SNMPTRAP 接收器已在运行中'
+    # 先检查是否运行中（不持有锁）
+    if trap_receiver_state['running']:
+        return False, 'SNMPTRAP 接收器已在运行中'
 
-        # 检查工具
-        available, msg = check_snmp_tools()
-        if not available:
-            return False, msg
+    # 检查工具（不持有锁）
+    available, msg = check_snmp_tools()
+    if not available:
+        return False, msg
 
-        # 检查端口权限
-        if port < 1024:
-            # 特权端口需要 root 或 setcap
-            try:
-                subprocess.run(['sudo', 'setcap', 'cap_net_bind_service=+ep', '/usr/bin/snmptrapd'],
-                               capture_output=True, check=True)
-                logger.info('已设置 snmptrapd 端口绑定权限')
-            except subprocess.CalledProcessError:
-                logger.warning('设置端口权限失败，可能需要手动执行')
-
-        # 生成配置文件
-        config_content = generate_snmptrapd_config(port, security_username, security_level,
-                                                    auth_protocol, auth_password, priv_protocol, priv_password)
-
-        config_file = '/tmp/snmptrapd_custom.conf'
+    # 检查端口权限并设置 setcap（不持有锁）
+    if port < 1024:
         try:
-            with open(config_file, 'w') as f:
-                f.write(config_content)
+            subprocess.run(['sudo', 'setcap', 'cap_net_bind_service=+ep', '/usr/sbin/snmptrapd'],
+                           capture_output=True, check=False, timeout=5)
+            logger.info('已设置 snmptrapd 端口绑定权限')
+        except subprocess.TimeoutExpired:
+            logger.warning('设置端口权限超时，可能需要手动执行')
         except Exception as e:
-            return False, f'写入配置文件失败: {e}'
+            logger.warning(f'设置端口权限失败: {e}')
 
-        # 启动 snmptrapd
-        # 使用 -C 指定配置文件，-Lf 输出到文件
-        handler_script = '/opt/snmptrap_handler.py'
-        log_file = TRAP_LOG_FILE
+    # 生成配置文件（不持有锁）
+    config_content = generate_snmptrapd_config(port, security_username, security_level,
+                                                auth_protocol, auth_password, priv_protocol, priv_password)
 
-        cmd = ['snmptrapd', '-C', '-c', config_file, '-Lf', log_file, '-p', '/tmp/snmptrapd.pid']
+    config_file = '/tmp/snmptrapd_custom.conf'
+    try:
+        with open(config_file, 'w') as f:
+            f.write(config_content)
+    except Exception as e:
+        return False, f'写入配置文件失败: {e}'
 
-        # 如果端口不是 162，需要指定
-        if port != 162:
-            cmd.extend(['-n', str(port)])
+    # 启动 snmptrapd（不持有锁）
+    cmd = ['snmptrapd', '-C', '-c', config_file, '-Lf', TRAP_LOG_FILE, '-p', '/tmp/snmptrapd.pid']
+    if port != 162:
+        cmd.extend(['-n', str(port)])
 
-        logger.info(f'启动 snmptrapd: {cmd}')
+    logger.info(f'启动 snmptrapd: {cmd}')
 
-        try:
-            # 使用 sudo 启动（特权端口需要）
-            subprocess.run(['sudo'] + cmd, capture_output=True, check=False, timeout=5)
+    try:
+        # 直接启动（已通过 setcap 设置权限，不需要 sudo）
+        subprocess.run(cmd, capture_output=True, check=False, timeout=5)
 
-            # 等待启动
-            import time
-            time.sleep(1)
+        # 等待启动
+        import time
+        time.sleep(1)
 
-            # 检查是否启动成功
-            result = subprocess.run(['pgrep', 'snmptrapd'], capture_output=True)
+        # 检查是否启动成功
+        result = subprocess.run(['pgrep', 'snmptrapd'], capture_output=True, timeout=5)
+
+        # 更新状态（持有锁）
+        with trap_receiver_state['lock']:
             if result.returncode == 0:
                 trap_receiver_state['running'] = True
                 trap_receiver_state['port'] = port
@@ -339,9 +337,11 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
             else:
                 return False, 'SNMPTRAP 接收器启动失败'
 
-        except Exception as e:
-            logger.exception(f'启动 snmptrapd 失败: {e}')
-            return False, f'启动失败: {str(e)}'
+    except subprocess.TimeoutExpired:
+        return False, '启动 snmptrapd 超时'
+    except Exception as e:
+        logger.exception(f'启动 snmptrapd 失败: {e}')
+        return False, f'启动失败: {str(e)}'
 
 
 def generate_snmptrapd_config(port: int, security_username: str,
@@ -389,18 +389,22 @@ def stop_trap_receiver() -> Tuple[bool, str]:
     """
     global trap_receiver_state
 
-    with trap_receiver_state['lock']:
-        if not trap_receiver_state['running']:
-            return False, 'SNMPTRAP 接收器未运行'
+    # 先检查是否运行中（不持有锁）
+    if not trap_receiver_state['running']:
+        return False, 'SNMPTRAP 接收器未运行'
 
-        # 停止 snmptrapd
-        try:
-            subprocess.run(['sudo', 'pkill', 'snmptrapd'], capture_output=True, check=False)
-            trap_receiver_state['running'] = False
-            return True, 'SNMPTRAP 接收器已停止'
-        except Exception as e:
-            logger.exception(f'停止 snmptrapd 失败: {e}')
-            return False, f'停止失败: {str(e)}'
+    # 停止 snmptrapd（不持有锁，有超时）
+    try:
+        subprocess.run(['pkill', 'snmptrapd'], capture_output=True, check=False, timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    except Exception as e:
+        logger.warning(f'pkill snmptrapd 失败: {e}')
+
+    # 更新状态（持有锁）
+    with trap_receiver_state['lock']:
+        trap_receiver_state['running'] = False
+        return True, 'SNMPTRAP 接收器已停止'
 
 
 def get_trap_receiver_status() -> Dict:
@@ -412,14 +416,21 @@ def get_trap_receiver_status() -> Dict:
     """
     global trap_receiver_state
 
-    # 检查 snmptrapd 进程是否运行
-    result = subprocess.run(['pgrep', 'snmptrapd'], capture_output=True)
+    # 检查 snmptrapd 进程是否运行（不持有锁，有超时）
+    try:
+        result = subprocess.run(['pgrep', 'snmptrapd'], capture_output=True, timeout=5)
+        running = result.returncode == 0
+    except subprocess.TimeoutExpired:
+        running = False
+    except Exception:
+        running = False
 
+    # 读取 trap 数量（不持有锁）
+    traps = get_trap_receiver_traps()
+
+    # 更新状态（持有锁）
     with trap_receiver_state['lock']:
-        trap_receiver_state['running'] = result.returncode == 0
-
-        # 读取 trap 数量
-        traps = get_trap_receiver_traps()
+        trap_receiver_state['running'] = running
 
         return {
             'running': trap_receiver_state['running'],
