@@ -63,6 +63,44 @@
     border-radius: 4px;
     overflow-x: auto;
 }
+/* Modbus 数据表格样式 */
+.modbus-data-table td {
+    cursor: pointer;
+    min-width: 80px;
+}
+.modbus-data-table td:hover {
+    background: rgba(255, 107, 53, 0.1);
+}
+.modbus-data-table td.editable {
+    cursor: pointer;
+}
+.modbus-data-table td.selected {
+    background: rgba(255, 107, 53, 0.2);
+    border: 2px solid var(--primary);
+}
+/* 模态框样式 */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+}
+.modal-overlay.show {
+    display: flex;
+}
+.modal-content {
+    background: var(--bg-primary);
+    border-radius: 8px;
+    padding: 20px;
+    max-width: 500px;
+    width: 90%;
+}
 </style>
 
 <div class="card">
@@ -100,70 +138,66 @@
             <div>
                 <h4 style="color: var(--primary); margin-bottom: 12px;">Modbus Client</h4>
                 <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">目标 IP</label>
-                        <input type="text" id="modbus-client-ip" class="form-input" placeholder="192.168.1.100">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">目标 IP</label>
+                            <input type="text" id="modbus-client-ip" class="form-input" placeholder="192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" id="modbus-client-port" class="form-input" value="502">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unit ID</label>
+                            <input type="number" id="modbus-unit-id" class="form-input" value="1">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">端口</label>
-                        <input type="number" id="modbus-client-port" class="form-input" value="502">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Unit ID</label>
-                        <input type="number" id="modbus-unit-id" class="form-input" value="1">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-success" onclick="modbusClientConnect()">连接</button>
                         <button class="btn btn-danger" onclick="modbusClientDisconnect()">断开</button>
-                        <button class="btn btn-secondary" onclick="modbusClientStatus()">状态</button>
                     </div>
-                    <div id="modbus-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
+                    <div id="modbus-client-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                        <span style="color: var(--text-muted);">状态：未连接</span>
+                    </div>
                 </div>
 
                 <div class="config-section">
-                    <h5>读取数据</h5>
-                    <div class="form-group">
-                        <label class="form-label">功能码</label>
-                        <select id="modbus-read-func" class="form-input">
-                            <option value="1">读线圈 (FC1)</option>
-                            <option value="2">读离散输入 (FC2)</option>
-                            <option value="3" selected>读保持寄存器 (FC3)</option>
-                            <option value="4">读输入寄存器 (FC4)</option>
-                        </select>
+                    <h5 style="margin-bottom: 12px;">读取配置</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">功能码</label>
+                            <select id="modbus-client-func" class="form-input" onchange="updateModbusClientTable()">
+                                <option value="1">FC1 - 读线圈</option>
+                                <option value="2">FC2 - 读离散输入</option>
+                                <option value="3" selected>FC3 - 读保持寄存器</option>
+                                <option value="4">FC4 - 读输入寄存器</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">起始地址</label>
+                            <input type="number" id="modbus-client-start" class="form-input" value="0" onchange="updateModbusClientTable()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">结束地址</label>
+                            <input type="number" id="modbus-client-end" class="form-input" value="99" onchange="updateModbusClientTable()">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">起始地址</label>
-                        <input type="number" id="modbus-read-address" class="form-input" value="0">
+                    <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center;">
+                        <button class="btn btn-primary" onclick="modbusClientRefresh()">刷新</button>
+                        <button class="btn btn-outline-primary" onclick="showWriteMultipleModal()">FC15/16 写入</button>
+                        <label style="color: var(--text-muted); margin-left: auto;">刷新间隔(秒):</label>
+                        <input type="number" id="modbus-client-interval" class="form-input" style="width: 60px;" value="1" min="0.5" max="60" step="0.5">
+                        <button class="btn btn-secondary" onclick="toggleAutoRefresh()" id="modbus-auto-refresh-btn">自动刷新</button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">数量</label>
-                        <input type="number" id="modbus-read-count" class="form-input" value="10">
-                    </div>
-                    <button class="btn btn-primary" onclick="modbusClientRead()">读取</button>
-                    <div id="modbus-read-result" style="margin-top: 12px;"></div>
                 </div>
 
                 <div class="config-section">
-                    <h5>写入数据</h5>
-                    <div class="form-group">
-                        <label class="form-label">功能码</label>
-                        <select id="modbus-write-func" class="form-input">
-                            <option value="5">写单个线圈 (FC5)</option>
-                            <option value="6">写单个寄存器 (FC6)</option>
-                            <option value="15">写多个线圈 (FC15)</option>
-                            <option value="16" selected>写多个寄存器 (FC16)</option>
-                        </select>
+                    <h5 style="margin-bottom: 12px;">数据表格 <small style="color: var(--text-muted);">(双击单元格编辑，仅FC1和FC3支持)</small></h5>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table modbus-data-table" id="modbus-client-data-table">
+                            <tbody id="modbus-client-data-tbody"></tbody>
+                        </table>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">地址</label>
-                        <input type="number" id="modbus-write-address" class="form-input" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">值 (逗号分隔)</label>
-                        <input type="text" id="modbus-write-values" class="form-input" placeholder="1,2,3,4,5">
-                    </div>
-                    <button class="btn btn-primary" onclick="modbusClientWrite()">写入</button>
-                    <div id="modbus-write-result" style="margin-top: 12px;"></div>
                 </div>
             </div>
 
@@ -171,46 +205,107 @@
             <div>
                 <h4 style="color: var(--primary); margin-bottom: 12px;">Modbus Server</h4>
                 <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">监听端口</label>
-                        <input type="number" id="modbus-server-port" class="form-input" value="502">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">监听端口</label>
+                            <input type="number" id="modbus-server-port" class="form-input" value="502">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Unit ID</label>
+                            <input type="number" id="modbus-server-unit-id" class="form-input" value="1">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Unit ID</label>
-                        <input type="number" id="modbus-server-unit-id" class="form-input" value="1">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-success" onclick="modbusServerStart()">启动</button>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-success" onclick="modbusServerStart()">启动监听</button>
                         <button class="btn btn-danger" onclick="modbusServerStop()">停止</button>
-                        <button class="btn btn-secondary" onclick="modbusServerStatus()">状态</button>
                     </div>
-                    <div id="modbus-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                    <div id="modbus-server-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                        <span style="color: var(--text-muted);">状态：未监听</span>
+                    </div>
                 </div>
 
                 <div class="config-section">
-                    <h5>数据区设置</h5>
-                    <div class="form-group">
-                        <label class="form-label">区域类型</label>
-                        <select id="modbus-server-area" class="form-input">
-                            <option value="coils">线圈 (Coils)</option>
-                            <option value="discrete_inputs">离散输入 (Discrete Inputs)</option>
-                            <option value="holding_registers" selected>保持寄存器 (Holding Registers)</option>
-                            <option value="input_registers">输入寄存器 (Input Registers)</option>
-                        </select>
+                    <h5 style="margin-bottom: 12px;">数据区配置</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">功能码</label>
+                            <select id="modbus-server-func" class="form-input" onchange="updateModbusServerTable()">
+                                <option value="1">FC1 - 线圈</option>
+                                <option value="2">FC2 - 离散输入</option>
+                                <option value="3" selected>FC3 - 保持寄存器</option>
+                                <option value="4">FC4 - 输入寄存器</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">起始地址</label>
+                            <input type="number" id="modbus-server-start" class="form-input" value="0" onchange="updateModbusServerTable()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">结束地址</label>
+                            <input type="number" id="modbus-server-end" class="form-input" value="99" onchange="updateModbusServerTable()">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">地址</label>
-                        <input type="number" id="modbus-server-set-address" class="form-input" value="0">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-primary" onclick="modbusServerRefresh()">刷新</button>
+                        <button class="btn btn-warning" onclick="modbusServerReset()">重置</button>
+                        <button class="btn btn-info" onclick="modbusServerRandom()">随机</button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">值 (逗号分隔)</label>
-                        <input type="text" id="modbus-server-set-values" class="form-input" placeholder="100,200,300">
-                    </div>
-                    <button class="btn btn-primary" onclick="modbusServerSetData()">设置</button>
-                    <button class="btn btn-secondary" onclick="modbusServerGetData()">获取</button>
                 </div>
 
-                <div id="modbus-server-data" style="margin-top: 12px;"></div>
+                <div class="config-section">
+                    <h5 style="margin-bottom: 12px;">数据表格 <small style="color: var(--text-muted);">(双击单元格修改值)</small></h5>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table modbus-data-table" id="modbus-server-data-table">
+                            <tbody id="modbus-server-data-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑单元格模态框 -->
+    <div class="modal-overlay" id="editCellModal">
+        <div class="modal-content">
+            <h4 style="margin-bottom: 16px;">编辑值</h4>
+            <div class="form-group">
+                <label class="form-label">地址</label>
+                <input type="text" id="edit-cell-address" class="form-input" readonly>
+            </div>
+            <div class="form-group">
+                <label class="form-label">值</label>
+                <input type="number" id="edit-cell-value" class="form-input" min="0" max="65535">
+                <small id="edit-cell-hint" style="color: var(--text-muted);">请输入值</small>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveCellValue()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 写入多个值模态框 -->
+    <div class="modal-overlay" id="writeMultipleModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h4 style="margin-bottom: 16px;">写入多个值 (FC15/FC16)</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">起始地址</label>
+                    <input type="number" id="write-multiple-address" class="form-input" value="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">数量</label>
+                    <input type="number" id="write-multiple-count" class="form-input" value="10" min="1" max="100">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">值 (逗号分隔)</label>
+                <textarea id="write-multiple-values" class="form-input" rows="4" placeholder="例如: 1,0,1,1,0 或 100,200,300"></textarea>
+                <small style="color: var(--text-muted);">FC15: 输入0或1 | FC16: 输入0-65535</small>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeWriteMultipleModal()">取消</button>
+                <button class="btn btn-primary" onclick="executeWriteMultiple()">写入</button>
             </div>
         </div>
     </div>
@@ -792,6 +887,75 @@ function switchTab(tabId) {
     document.getElementById(`${tabId}-content`).classList.add('active');
 }
 
+// ========== Modbus 状态和变量 ==========
+let modbusClientConnected = false;
+let modbusServerRunning = false;
+let modbusAutoRefresh = false;
+let modbusRefreshInterval = null;
+let currentEditCell = null;
+let currentEditTableType = null;
+
+// 获取功能码对应的起始显示地址
+function getModbusStartAddress(funcCode) {
+    if (funcCode == 1) return 1;
+    if (funcCode == 2) return 10001;
+    if (funcCode == 3) return 40001;
+    if (funcCode == 4) return 30001;
+    return 1;
+}
+
+// 初始化 Modbus 数据表格
+function initModbusTable(tbodyId, startAddr, endAddr) {
+    const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = '';
+
+    const total = endAddr - startAddr + 1;
+    const cols = 5;
+    const rows = Math.ceil(total / cols);
+
+    for (let row = 0; row < Math.min(rows, 20); row++) {
+        const tr = document.createElement('tr');
+        for (let col = 0; col < cols; col++) {
+            const addr = startAddr + row + col * Math.min(rows, 20);
+            if (addr > endAddr) break;
+
+            const td = document.createElement('td');
+            td.textContent = `${String(addr).padStart(5, '0')}：0`;
+            td.dataset.address = addr;
+            td.dataset.value = '0';
+            td.style.cursor = 'pointer';
+
+            // 双击编辑
+            td.addEventListener('dblclick', function() {
+                openEditModal(this, tbodyId);
+            });
+
+            tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+    }
+}
+
+// 更新客户端表格
+function updateModbusClientTable() {
+    const func = parseInt(document.getElementById('modbus-client-func').value);
+    const start = parseInt(document.getElementById('modbus-client-start').value);
+    const end = parseInt(document.getElementById('modbus-client-end').value);
+    const displayStart = getModbusStartAddress(func) + start;
+    const displayEnd = getModbusStartAddress(func) + end;
+    initModbusTable('modbus-client-data-tbody', displayStart, displayEnd);
+}
+
+// 更新服务端表格
+function updateModbusServerTable() {
+    const func = parseInt(document.getElementById('modbus-server-func').value);
+    const start = parseInt(document.getElementById('modbus-server-start').value);
+    const end = parseInt(document.getElementById('modbus-server-end').value);
+    const displayStart = getModbusStartAddress(func) + start;
+    const displayEnd = getModbusStartAddress(func) + end;
+    initModbusTable('modbus-server-data-tbody', displayStart, displayEnd);
+}
+
 // ========== Modbus Client ==========
 async function modbusClientConnect() {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
@@ -805,8 +969,10 @@ async function modbusClientConnect() {
 
     const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);
     if (result.success) {
-        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+        modbusClientConnected = true;
+        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--success);">状态：已连接</span>';
         showToast('Modbus 连接成功', 'success');
+        modbusClientRefresh();
     } else {
         showToast('连接失败: ' + result.error, 'error');
     }
@@ -817,60 +983,86 @@ async function modbusClientDisconnect() {
 
     const result = await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedAgentId });
     if (result.success) {
-        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        modbusClientConnected = false;
+        stopAutoRefresh();
+        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--text-muted);">状态：未连接</span>';
         showToast('已断开连接', 'success');
     } else {
         showToast('断开失败: ' + result.error, 'error');
     }
 }
 
-async function modbusClientStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+async function modbusClientRefresh() {
+    if (!selectedAgentId || !modbusClientConnected) return;
 
-    const result = await apiRequest('/api/industrial/modbus_client/status/', 'POST', { agent_id: selectedAgentId });
-    document.getElementById('modbus-client-status').textContent = JSON.stringify(result);
-}
-
-async function modbusClientRead() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    const func = parseInt(document.getElementById('modbus-client-func').value);
+    const start = parseInt(document.getElementById('modbus-client-start').value);
+    const end = parseInt(document.getElementById('modbus-client-end').value);
+    const count = end - start + 1;
 
     const data = {
         agent_id: selectedAgentId,
-        function_code: parseInt(document.getElementById('modbus-read-func').value),
-        address: parseInt(document.getElementById('modbus-read-address').value),
-        count: parseInt(document.getElementById('modbus-read-count').value)
+        function_code: func,
+        address: start,
+        count: count
     };
 
     const result = await apiRequest('/api/industrial/modbus_client/read/', 'POST', data);
-    if (result.success) {
-        document.getElementById('modbus-read-result').innerHTML = `
-            <div class="hex-display">${JSON.stringify(result.data || result.values)}</div>
-        `;
-        showToast('读取成功', 'success');
-    } else {
+    if (result.success && result.values) {
+        updateTableValues('modbus-client-data-tbody', result.values, start);
+    } else if (!result.success) {
         showToast('读取失败: ' + result.error, 'error');
     }
 }
 
-async function modbusClientWrite() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
-
-    const valuesStr = document.getElementById('modbus-write-values').value;
-    const values = valuesStr.split(',').map(v => parseInt(v.trim()));
-
-    const data = {
-        agent_id: selectedAgentId,
-        function_code: parseInt(document.getElementById('modbus-write-func').value),
-        address: parseInt(document.getElementById('modbus-write-address').value),
-        values: values
-    };
-
-    const result = await apiRequest('/api/industrial/modbus_client/write/', 'POST', data);
-    if (result.success) {
-        showToast('写入成功', 'success');
+function toggleAutoRefresh() {
+    if (modbusAutoRefresh) {
+        stopAutoRefresh();
     } else {
-        showToast('写入失败: ' + result.error, 'error');
+        startAutoRefresh();
     }
+}
+
+function startAutoRefresh() {
+    modbusAutoRefresh = true;
+    document.getElementById('modbus-auto-refresh-btn').textContent = '停止刷新';
+    document.getElementById('modbus-auto-refresh-btn').classList.remove('btn-secondary');
+    document.getElementById('modbus-auto-refresh-btn').classList.add('btn-warning');
+
+    const interval = parseFloat(document.getElementById('modbus-client-interval').value) * 1000;
+    modbusRefreshInterval = setInterval(modbusClientRefresh, interval);
+}
+
+function stopAutoRefresh() {
+    modbusAutoRefresh = false;
+    document.getElementById('modbus-auto-refresh-btn').textContent = '自动刷新';
+    document.getElementById('modbus-auto-refresh-btn').classList.remove('btn-warning');
+    document.getElementById('modbus-auto-refresh-btn').classList.add('btn-secondary');
+
+    if (modbusRefreshInterval) {
+        clearInterval(modbusRefreshInterval);
+        modbusRefreshInterval = null;
+    }
+}
+
+// 更新表格值
+function updateTableValues(tbodyId, values, offsetAddr) {
+    const tbody = document.getElementById(tbodyId);
+    const cells = tbody.querySelectorAll('td');
+    const func = tbodyId.includes('client')
+        ? parseInt(document.getElementById('modbus-client-func').value)
+        : parseInt(document.getElementById('modbus-server-func').value);
+    const displayStart = getModbusStartAddress(func) + offsetAddr;
+
+    cells.forEach(cell => {
+        const cellAddr = parseInt(cell.dataset.address);
+        const idx = cellAddr - displayStart;
+        if (idx >= 0 && idx < values.length) {
+            const val = values[idx];
+            cell.dataset.value = val;
+            cell.textContent = `${String(cellAddr).padStart(5, '0')}：${val}`;
+        }
+    });
 }
 
 // ========== Modbus Server ==========
@@ -885,8 +1077,10 @@ async function modbusServerStart() {
 
     const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
     if (result.success) {
-        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        modbusServerRunning = true;
+        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--success);">状态：运行中</span>';
         showToast('Modbus Server 启动成功', 'success');
+        modbusServerRefresh();
     } else {
         showToast('启动失败: ' + result.error, 'error');
     }
@@ -897,58 +1091,269 @@ async function modbusServerStop() {
 
     const result = await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedAgentId });
     if (result.success) {
-        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        modbusServerRunning = false;
+        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动</span>';
         showToast('已停止', 'success');
     } else {
         showToast('停止失败: ' + result.error, 'error');
     }
 }
 
-async function modbusServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+async function modbusServerRefresh() {
+    if (!selectedAgentId || !modbusServerRunning) return;
 
-    const result = await apiRequest('/api/industrial/modbus_server/status/', 'POST', { agent_id: selectedAgentId });
-    document.getElementById('modbus-server-status').textContent = JSON.stringify(result);
-}
+    const func = parseInt(document.getElementById('modbus-server-func').value);
+    const start = parseInt(document.getElementById('modbus-server-start').value);
+    const end = parseInt(document.getElementById('modbus-server-end').value);
+    const count = end - start + 1;
 
-async function modbusServerSetData() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
-
-    const valuesStr = document.getElementById('modbus-server-set-values').value;
-    const values = valuesStr.split(',').map(v => parseInt(v.trim()));
-
-    const data = {
-        agent_id: selectedAgentId,
-        area: document.getElementById('modbus-server-area').value,
-        address: parseInt(document.getElementById('modbus-server-set-address').value),
-        values: values
-    };
-
-    const result = await apiRequest('/api/industrial/modbus_server/set_data/', 'POST', data);
-    if (result.success) {
-        showToast('设置成功', 'success');
-    } else {
-        showToast('设置失败: ' + result.error, 'error');
-    }
-}
-
-async function modbusServerGetData() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    // 获取区域类型
+    const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
+    const area = areaMap[func];
 
     const data = {
         agent_id: selectedAgentId,
-        area: document.getElementById('modbus-server-area').value,
-        address: parseInt(document.getElementById('modbus-server-set-address').value),
-        count: 10
+        area: area,
+        address: start,
+        count: count
     };
 
     const result = await apiRequest('/api/industrial/modbus_server/get_data/', 'POST', data);
-    if (result.success) {
-        document.getElementById('modbus-server-data').innerHTML = `
-            <div class="hex-display">${JSON.stringify(result.data || result.values)}</div>
-        `;
-    } else {
+    if (result.success && result.values) {
+        updateTableValues('modbus-server-data-tbody', result.values, start);
+    } else if (!result.success) {
         showToast('获取失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusServerReset() {
+    if (!selectedAgentId || !modbusServerRunning) { showToast('请先启动服务端', 'error'); return; }
+
+    const func = parseInt(document.getElementById('modbus-server-func').value);
+    const start = parseInt(document.getElementById('modbus-server-start').value);
+    const end = parseInt(document.getElementById('modbus-server-end').value);
+
+    const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
+    const area = areaMap[func];
+
+    const count = end - start + 1;
+    const values = new Array(count).fill(0);
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: area,
+        address: start,
+        values: values
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_server/bulk_set_data/', 'POST', data);
+    if (result.success) {
+        updateTableValues('modbus-server-data-tbody', values, start);
+        showToast('已重置为0', 'success');
+    } else {
+        showToast('重置失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusServerRandom() {
+    if (!selectedAgentId || !modbusServerRunning) { showToast('请先启动服务端', 'error'); return; }
+
+    const func = parseInt(document.getElementById('modbus-server-func').value);
+    const start = parseInt(document.getElementById('modbus-server-start').value);
+    const end = parseInt(document.getElementById('modbus-server-end').value);
+
+    const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
+    const area = areaMap[func];
+
+    const count = end - start + 1;
+    const maxVal = (func == 1 || func == 2) ? 1 : 65535;
+    const values = Array.from({ length: count }, () => Math.floor(Math.random() * (maxVal + 1)));
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: area,
+        address: start,
+        values: values
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_server/bulk_set_data/', 'POST', data);
+    if (result.success) {
+        updateTableValues('modbus-server-data-tbody', values, start);
+        showToast('已随机生成', 'success');
+    } else {
+        showToast('随机失败: ' + result.error, 'error');
+    }
+}
+
+// ========== 编辑模态框 ==========
+function openEditModal(cell, tbodyId) {
+    const func = tbodyId.includes('client')
+        ? parseInt(document.getElementById('modbus-client-func').value)
+        : parseInt(document.getElementById('modbus-server-func').value);
+
+    // 检查是否支持编辑
+    if (tbodyId.includes('client') && func != 1 && func != 3) {
+        showToast('仅FC1和FC3支持双击编辑', 'warning');
+        return;
+    }
+
+    // 检查连接状态
+    if (tbodyId.includes('client') && !modbusClientConnected) {
+        showToast('请先连接 Modbus', 'warning');
+        return;
+    }
+    if (tbodyId.includes('server') && !modbusServerRunning) {
+        showToast('请先启动 Modbus Server', 'warning');
+        return;
+    }
+
+    currentEditCell = cell;
+    currentEditTableType = tbodyId;
+
+    document.getElementById('edit-cell-address').value = String(cell.dataset.address).padStart(5, '0');
+    document.getElementById('edit-cell-value').value = cell.dataset.value;
+
+    // 设置输入限制
+    if (func == 1 || func == 2) {
+        document.getElementById('edit-cell-value').min = 0;
+        document.getElementById('edit-cell-value').max = 1;
+        document.getElementById('edit-cell-hint').textContent = '请输入0或1';
+    } else {
+        document.getElementById('edit-cell-value').min = 0;
+        document.getElementById('edit-cell-value').max = 65535;
+        document.getElementById('edit-cell-hint').textContent = '请输入0-65535';
+    }
+
+    document.getElementById('editCellModal').classList.add('show');
+}
+
+function closeEditModal() {
+    document.getElementById('editCellModal').classList.remove('show');
+    currentEditCell = null;
+    currentEditTableType = null;
+}
+
+async function saveCellValue() {
+    if (!currentEditCell || !selectedAgentId) return;
+
+    const func = currentEditTableType.includes('client')
+        ? parseInt(document.getElementById('modbus-client-func').value)
+        : parseInt(document.getElementById('modbus-server-func').value);
+
+    const displayAddr = parseInt(currentEditCell.dataset.address);
+    const startAddr = parseInt(currentEditTableType.includes('client')
+        ? document.getElementById('modbus-client-start').value
+        : document.getElementById('modbus-server-start').value);
+    const modbusAddr = displayAddr - getModbusStartAddress(func);
+    const value = parseInt(document.getElementById('edit-cell-value').value);
+
+    // 验证值
+    const maxVal = (func == 1 || func == 2) ? 1 : 65535;
+    if (value < 0 || value > maxVal) {
+        showToast(`值必须在0-${maxVal}之间`, 'error');
+        return;
+    }
+
+    if (currentEditTableType.includes('client')) {
+        // 客户端写入：使用FC5或FC6
+        const writeFunc = (func == 1) ? 5 : 6;
+        const data = {
+            agent_id: selectedAgentId,
+            function_code: writeFunc,
+            address: modbusAddr,
+            values: [value]
+        };
+        const result = await apiRequest('/api/industrial/modbus_client/write/', 'POST', data);
+        if (result.success) {
+            currentEditCell.dataset.value = value;
+            currentEditCell.textContent = `${String(displayAddr).padStart(5, '0')}：${value}`;
+            showToast('写入成功', 'success');
+            closeEditModal();
+        } else {
+            showToast('写入失败: ' + result.error, 'error');
+        }
+    } else {
+        // 服务端设置
+        const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
+        const data = {
+            agent_id: selectedAgentId,
+            area: areaMap[func],
+            address: modbusAddr,
+            values: [value]
+        };
+        const result = await apiRequest('/api/industrial/modbus_server/set_data/', 'POST', data);
+        if (result.success) {
+            currentEditCell.dataset.value = value;
+            currentEditCell.textContent = `${String(displayAddr).padStart(5, '0')}：${value}`;
+            showToast('设置成功', 'success');
+            closeEditModal();
+        } else {
+            showToast('设置失败: ' + result.error, 'error');
+        }
+    }
+}
+
+// ========== 写入多个值模态框 ==========
+function showWriteMultipleModal() {
+    if (!modbusClientConnected) {
+        showToast('请先连接 Modbus', 'warning');
+        return;
+    }
+    document.getElementById('write-multiple-address').value = document.getElementById('modbus-client-start').value;
+    document.getElementById('write-multiple-count').value = 10;
+    document.getElementById('write-multiple-values').value = '';
+    document.getElementById('writeMultipleModal').classList.add('show');
+}
+
+function closeWriteMultipleModal() {
+    document.getElementById('writeMultipleModal').classList.remove('show');
+}
+
+async function executeWriteMultiple() {
+    if (!selectedAgentId || !modbusClientConnected) return;
+
+    const func = parseInt(document.getElementById('modbus-client-func').value);
+    const address = parseInt(document.getElementById('write-multiple-address').value);
+    const count = parseInt(document.getElementById('write-multiple-count').value);
+    const valuesStr = document.getElementById('write-multiple-values').value;
+
+    if (!valuesStr) {
+        showToast('请输入值', 'error');
+        return;
+    }
+
+    const values = valuesStr.split(',').map(v => parseInt(v.trim()));
+    if (values.length != count) {
+        showToast(`值数量(${values.length})与指定数量(${count})不一致`, 'error');
+        return;
+    }
+
+    // 验证值范围
+    const maxVal = (func == 1) ? 1 : 65535;
+    for (const v of values) {
+        if (v < 0 || v > maxVal) {
+            showToast(`值${v}超出范围(0-${maxVal})`, 'error');
+            return;
+        }
+    }
+
+    // 使用FC15或FC16
+    const writeFunc = (func == 1) ? 15 : 16;
+
+    const data = {
+        agent_id: selectedAgentId,
+        function_code: writeFunc,
+        address: address,
+        values: values
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_client/write/', 'POST', data);
+    if (result.success) {
+        showToast('写入成功', 'success');
+        closeWriteMultipleModal();
+        modbusClientRefresh();
+    } else {
+        showToast('写入失败: ' + result.error, 'error');
     }
 }
 
@@ -1738,6 +2143,10 @@ async function httpFileDownload(filename) {
 }
 
 // 页面加载
-window.onload = loadAgents;
+window.onload = function() {
+    loadAgents();
+    updateModbusClientTable();
+    updateModbusServerTable();
+};
 </script>
 {% endblock %}

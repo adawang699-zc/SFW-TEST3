@@ -3476,12 +3476,21 @@ def _proxy_industrial_request(agent_id, protocol_path, method='GET', data=None, 
         else:
             resp = requests.post(url, json=data, timeout=timeout)
 
-        return resp.json()
+        # 处理空响应
+        if resp.status_code != 200:
+            return {'success': False, 'error': f'Agent 返回错误: HTTP {resp.status_code}'}
+
+        try:
+            return resp.json()
+        except json.JSONDecodeError:
+            return {'success': False, 'error': f'Agent 返回非JSON响应: {resp.text[:200]}'}
 
     except LocalAgent.DoesNotExist:
         return {'success': False, 'error': 'Agent 不存在'}
     except requests.exceptions.Timeout:
         return {'success': False, 'error': 'Agent 响应超时'}
+    except requests.exceptions.ConnectionError:
+        return {'success': False, 'error': 'Agent 连接失败'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
