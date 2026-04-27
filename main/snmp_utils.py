@@ -364,6 +364,9 @@ def generate_snmptrapd_config(port: int, security_username: str,
     """
     config = []
 
+    # 允许所有 trap（不验证 community）
+    config.append('disableAuthorization yes')
+
     # V1/V2C 配置
     config.append('authCommunity log,execute,net public')
     config.append('authCommunity log,execute,net private')
