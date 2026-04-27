@@ -214,7 +214,8 @@ class ModbusServer:
                         loop.close()
                         if server_id in self.loops:
                             del self.loops[server_id]
-                    thread = threading.Thread(target=run_async_thread, daemon=True, name=f'modbus-server-{server_id}')
+
+                thread = threading.Thread(target=run_async_thread, daemon=True, name=f'modbus-server-{server_id}')
                 thread.start()
 
                 # 等待服务器准备好（最多10秒）
