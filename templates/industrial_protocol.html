@@ -153,11 +153,10 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button class="btn btn-success" onclick="modbusClientConnect()">连接</button>
-                        <button class="btn btn-danger" onclick="modbusClientDisconnect()">断开</button>
+                        <button class="btn btn-success" id="modbus-client-connect-btn" onclick="modbusClientToggleConnect()">连接</button>
                     </div>
                     <div id="modbus-client-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
-                        <span style="color: var(--text-muted);">状态：未连接</span>
+                        <span class="status-badge status-stopped">未连接</span>
                     </div>
                 </div>
 
@@ -216,11 +215,10 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button class="btn btn-success" onclick="modbusServerStart()">启动监听</button>
-                        <button class="btn btn-danger" onclick="modbusServerStop()">停止</button>
+                        <button class="btn btn-success" id="modbus-server-toggle-btn" onclick="modbusServerToggle()">启动监听</button>
                     </div>
                     <div id="modbus-server-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
-                        <span style="color: var(--text-muted);">状态：未监听</span>
+                        <span class="status-badge status-stopped">未启动</span>
                     </div>
                 </div>
 
@@ -957,38 +955,56 @@ function updateModbusServerTable() {
 }
 
 // ========== Modbus Client ==========
-async function modbusClientConnect() {
+async function modbusClientToggleConnect() {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const data = {
-        agent_id: selectedAgentId,
-        ip: document.getElementById('modbus-client-ip').value,
-        port: parseInt(document.getElementById('modbus-client-port').value),
-        unit_id: parseInt(document.getElementById('modbus-unit-id').value)
-    };
-
-    const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);
-    if (result.success) {
-        modbusClientConnected = true;
-        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--success);">状态：已连接</span>';
-        showToast('Modbus 连接成功', 'success');
-        modbusClientRefresh();
+    if (modbusClientConnected) {
+        // 断开连接
+        const result = await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+        if (result.success) {
+            modbusClientConnected = false;
+            stopAutoRefresh();
+            updateClientButtonState(false);
+            showToast('已断开连接', 'success');
+        } else {
+            showToast('断开失败: ' + result.error, 'error');
+        }
     } else {
-        showToast('连接失败: ' + result.error, 'error');
+        // 连接
+        const data = {
+            agent_id: selectedAgentId,
+            ip: document.getElementById('modbus-client-ip').value,
+            port: parseInt(document.getElementById('modbus-client-port').value),
+            unit_id: parseInt(document.getElementById('modbus-unit-id').value)
+        };
+
+        const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);
+        if (result.success) {
+            modbusClientConnected = true;
+            updateClientButtonState(true);
+            showToast('Modbus 连接成功', 'success');
+            modbusClientRefresh();
+        } else {
+            showToast('连接失败: ' + result.error, 'error');
+        }
     }
 }
 
-async function modbusClientDisconnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+function updateClientButtonState(connected) {
+    const btn = document.getElementById('modbus-client-connect-btn');
+    const statusDiv = document.getElementById('modbus-client-status');
 
-    const result = await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedAgentId });
-    if (result.success) {
-        modbusClientConnected = false;
-        stopAutoRefresh();
-        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--text-muted);">状态：未连接</span>';
-        showToast('已断开连接', 'success');
+    if (connected) {
+        btn.textContent = '断开';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-danger');
+        statusDiv.innerHTML = '<span class="status-badge status-running">已连接</span>';
+        document.getElementById('modbus-client-refresh-btn').disabled = false;
     } else {
-        showToast('断开失败: ' + result.error, 'error');
+        btn.textContent = '连接';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-success');
+        statusDiv.innerHTML = '<span class="status-badge status-stopped">未连接</span>';
     }
 }
 
@@ -1066,36 +1082,54 @@ function updateTableValues(tbodyId, values, offsetAddr) {
 }
 
 // ========== Modbus Server ==========
-async function modbusServerStart() {
+async function modbusServerToggle() {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const data = {
-        agent_id: selectedAgentId,
-        port: parseInt(document.getElementById('modbus-server-port').value),
-        unit_id: parseInt(document.getElementById('modbus-server-unit-id').value)
-    };
-
-    const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
-    if (result.success) {
-        modbusServerRunning = true;
-        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--success);">状态：运行中</span>';
-        showToast('Modbus Server 启动成功', 'success');
-        modbusServerRefresh();
+    if (modbusServerRunning) {
+        // 停止
+        const result = await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedAgentId });
+        if (result.success) {
+            modbusServerRunning = false;
+            updateServerButtonState(false);
+            showToast('已停止', 'success');
+        } else {
+            showToast('停止失败: ' + result.error, 'error');
+        }
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        // 启动
+        const data = {
+            agent_id: selectedAgentId,
+            port: parseInt(document.getElementById('modbus-server-port').value),
+            unit_id: parseInt(document.getElementById('modbus-server-unit-id').value)
+        };
+
+        const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
+        if (result.success) {
+            modbusServerRunning = true;
+            updateServerButtonState(true);
+            showToast('Modbus Server 启动成功', 'success');
+            modbusServerRefresh();
+        } else {
+            showToast('启动失败: ' + result.error, 'error');
+        }
     }
 }
 
-async function modbusServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+function updateServerButtonState(running) {
+    const btn = document.getElementById('modbus-server-toggle-btn');
+    const statusDiv = document.getElementById('modbus-server-status');
 
-    const result = await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedAgentId });
-    if (result.success) {
-        modbusServerRunning = false;
-        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动</span>';
-        showToast('已停止', 'success');
+    if (running) {
+        btn.textContent = '停止';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-danger');
+        statusDiv.innerHTML = '<span class="status-badge status-running">运行中</span>';
+        document.getElementById('modbus-server-refresh-btn').disabled = false;
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        btn.textContent = '启动监听';
+        btn.classList.remove('btn-danger');
+        btn.classList.add('btn-success');
+        statusDiv.innerHTML = '<span class="status-badge status-stopped">未启动</span>';
     }
 }
 
