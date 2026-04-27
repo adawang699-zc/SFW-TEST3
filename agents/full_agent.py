@@ -847,19 +847,140 @@ def modbus_client_write():
 @app.route('/api/industrial_protocol/modbus_server/start', methods=['POST'])
 def modbus_server_start():
     """启动 Modbus 服务端"""
-    from agents.protocols.modbus_server import ModbusServer
-    # TODO: 实现启动逻辑
-    return jsonify({'success': True, 'message': 'Modbus 服务端启动功能待实现'})
+    from agents.protocols.modbus_server import modbus_server, PYMODBUS_AVAILABLE, add_modbus_log
+
+    if not PYMODBUS_AVAILABLE:
+        return jsonify({'success': False, 'error': 'pymodbus 未安装'})
+
+    try:
+        data = request.json or {}
+        server_id = data.get('server_id', 'default')
+        port = data.get('port', 502)
+        unit_id = data.get('unit_id', 1)
+        interface = data.get('interface', '0.0.0.0')
+
+        add_modbus_log('INFO', '收到启动请求', {
+            'server_id': server_id,
+            'port': port,
+            'unit_id': unit_id
+        })
+
+        success, message = modbus_server.start(server_id, port=port, interface=interface, unit_id=unit_id)
+        return jsonify({'success': success, 'message': message})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/industrial_protocol/modbus_server/stop', methods=['POST'])
 def modbus_server_stop():
     """停止 Modbus 服务端"""
-    return jsonify({'success': True})
+    from agents.protocols.modbus_server import modbus_server
 
-@app.route('/api/industrial_protocol/modbus_server/status', methods=['GET'])
+    try:
+        data = request.json or {}
+        server_id = data.get('server_id', 'default')
+
+        success, message = modbus_server.stop(server_id)
+        return jsonify({'success': success, 'message': message})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/industrial_protocol/modbus_server/status', methods=['GET', 'POST'])
 def modbus_server_status():
     """Modbus 服务端状态"""
-    return jsonify({'success': True, 'running': False})
+    from agents.protocols.modbus_server import modbus_server
+
+    try:
+        data = request.json or {}
+        server_id = data.get('server_id', 'default')
+
+        status = modbus_server.status(server_id)
+        return jsonify({'success': True, **status})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/industrial_protocol/modbus_server/get_data', methods=['POST'])
+def modbus_server_get_data():
+    """获取 Modbus 服务端数据"""
+    from agents.protocols.modbus_server import modbus_server
+
+    try:
+        data = request.json or {}
+        server_id = data.get('server_id', 'default')
+        function_code = data.get('function_code', 3)
+        address = data.get('address', 0)
+        count = data.get('count', 10)
+
+        success, values = modbus_server.get_data(server_id, function_code, address, count)
+        return jsonify({'success': success, 'values': values})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/industrial_protocol/modbus_server/set_data', methods=['POST'])
+def modbus_server_set_data():
+    """设置 Modbus 服务端数据"""
+    from agents.protocols.modbus_server import modbus_server
+
+    try:
+        data = request.json or {}
+        server_id = data.get('server_id', 'default')
+        function_code = data.get('function_code', 3)
+        address = data.get('address', 0)
+        values = data.get('values', [])
+
+        success, message = modbus_server.set_data(server_id, function_code, address, values)
+        return jsonify({'success': success, 'message': message})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/industrial_protocol/modbus_server/bulk_set_data', methods=['POST'])
+def modbus_server_bulk_set_data():
+    """批量设置 Modbus 服务端数据"""
+    from agents.protocols.modbus_server import modbus_server
+
+    try:
+        data = request.json or {}
+        server_id = data.get('server_id', 'default')
+        function_code = data.get('function_code', 3)
+        address = data.get('address', 0)
+        values = data.get('values', [])
+
+        success, message = modbus_server.set_data(server_id, function_code, address, values)
+        return jsonify({'success': success, 'message': message})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/industrial_protocol/modbus_server/logs', methods=['GET', 'POST'])
+def modbus_server_logs():
+    """获取 Modbus 服务端操作日志"""
+    from agents.protocols.modbus_server import modbus_server
+
+    try:
+        data = request.json or {}
+        limit = data.get('limit', 100)
+
+        logs = modbus_server.get_logs(limit)
+        return jsonify({'success': True, 'logs': logs})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/industrial_protocol/modbus_server/clear_logs', methods=['POST'])
+def modbus_server_clear_logs():
+    """清空 Modbus 服务端日志"""
+    from agents.protocols.modbus_server import modbus_server
+
+    try:
+        modbus_server.clear_logs()
+        return jsonify({'success': True, 'message': '日志已清空'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 # GOOSE/SV API
 @app.route('/api/industrial_protocol/goose-sv/interfaces', methods=['GET'])

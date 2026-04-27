@@ -1141,13 +1141,9 @@ async function modbusServerRefresh() {
     const end = parseInt(document.getElementById('modbus-server-end').value);
     const count = end - start + 1;
 
-    // 获取区域类型
-    const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
-    const area = areaMap[func];
-
     const data = {
         agent_id: selectedAgentId,
-        area: area,
+        function_code: func,
         address: start,
         count: count
     };
@@ -1167,15 +1163,12 @@ async function modbusServerReset() {
     const start = parseInt(document.getElementById('modbus-server-start').value);
     const end = parseInt(document.getElementById('modbus-server-end').value);
 
-    const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
-    const area = areaMap[func];
-
     const count = end - start + 1;
     const values = new Array(count).fill(0);
 
     const data = {
         agent_id: selectedAgentId,
-        area: area,
+        function_code: func,
         address: start,
         values: values
     };
@@ -1196,16 +1189,13 @@ async function modbusServerRandom() {
     const start = parseInt(document.getElementById('modbus-server-start').value);
     const end = parseInt(document.getElementById('modbus-server-end').value);
 
-    const areaMap = { 1: 'coils', 2: 'discrete_inputs', 3: 'holding_registers', 4: 'input_registers' };
-    const area = areaMap[func];
-
     const count = end - start + 1;
     const maxVal = (func == 1 || func == 2) ? 1 : 65535;
     const values = Array.from({ length: count }, () => Math.floor(Math.random() * (maxVal + 1)));
 
     const data = {
         agent_id: selectedAgentId,
-        area: area,
+        function_code: func,
         address: start,
         values: values
     };
