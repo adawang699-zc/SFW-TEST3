@@ -3458,3 +3458,230 @@ def api_services_logs(request):
     except Exception as e:
         logger.exception(f"获取服务日志失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 工控协议代理 API ==========
+
+def _proxy_industrial_request(agent_id, protocol_path, method='GET', data=None, params=None, timeout=30):
+    """通用工控协议代理请求函数"""
+    try:
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+        if agent.status != 'running':
+            return {'success': False, 'error': 'Agent 未运行'}
+
+        url = f"http://{agent.interface.ip_address}:{agent.port}/api/industrial_protocol/{protocol_path}"
+
+        if method == 'GET':
+            resp = requests.get(url, params=params, timeout=timeout)
+        else:
+            resp = requests.post(url, json=data, timeout=timeout)
+
+        return resp.json()
+
+    except LocalAgent.DoesNotExist:
+        return {'success': False, 'error': 'Agent 不存在'}
+    except requests.exceptions.Timeout:
+        return {'success': False, 'error': 'Agent 响应超时'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+@csrf_exempt
+def api_industrial_modbus_client(request, action):
+    """Modbus Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"modbus_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_modbus_server(request, action):
+    """Modbus Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"modbus_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_s7_client(request, action):
+    """S7 Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"s7_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_s7_server(request, action):
+    """S7 Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"s7_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_goose_sv(request, action):
+    """GOOSE/SV 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"goose-sv/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_enip_client(request, action):
+    """Ethernet/IP Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"enip_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_enip_server(request, action):
+    """Ethernet/IP Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"enip_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_bacnet_client(request, action):
+    """BACnet Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"bacnet_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_bacnet_server(request, action):
+    """BACnet Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"bacnet_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_dnp3_client(request, action):
+    """DNP3 Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"dnp3_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_dnp3_server(request, action):
+    """DNP3 Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"dnp3_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_mms_client(request, action):
+    """MMS Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"mms_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_mms_server(request, action):
+    """MMS Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"mms_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_http_client(request, action):
+    """HTTP Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"http_client/{action}", method='POST', data=data, timeout=60)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_http_server(request, action):
+    """HTTP Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+        result = _proxy_industrial_request(agent_id, f"http_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_http_files(request, action, filename=None):
+    """HTTP Files 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        agent_id = data.get('agent_id') or request.GET.get('agent_id')
+
+        if action == 'download' and filename:
+            result = _proxy_industrial_request(agent_id, f"http_files/download/{filename}", method='GET')
+        elif action == 'analyze' and filename:
+            result = _proxy_industrial_request(agent_id, f"http_files/analyze/{filename}", method='GET')
+        elif action == 'delete' and filename:
+            result = _proxy_industrial_request(agent_id, f"http_files/delete/{filename}", method='POST', data=data)
+        else:
+            result = _proxy_industrial_request(agent_id, f"http_files/{action}", method='POST', data=data)
+
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})

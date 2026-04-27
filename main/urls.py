@@ -138,4 +138,23 @@ urlpatterns = [
     path('api/license/knowledge/decrypt/', views.api_license_knowledge_decrypt, name='api_license_knowledge_decrypt'),
     path('api/license/device/test_connection/', views.api_license_device_test_connection, name='api_license_device_test_connection'),
     path('api/license/device/generate/', views.api_license_device_generate, name='api_license_device_generate'),
+
+    # ========== 工控协议代理 API ==========
+    path('api/industrial/modbus_client/<str:action>/', views.api_industrial_modbus_client, name='api_industrial_modbus_client'),
+    path('api/industrial/modbus_server/<str:action>/', views.api_industrial_modbus_server, name='api_industrial_modbus_server'),
+    path('api/industrial/s7_client/<str:action>/', views.api_industrial_s7_client, name='api_industrial_s7_client'),
+    path('api/industrial/s7_server/<str:action>/', views.api_industrial_s7_server, name='api_industrial_s7_server'),
+    path('api/industrial/goose_sv/<str:action>/', views.api_industrial_goose_sv, name='api_industrial_goose_sv'),
+    path('api/industrial/enip_client/<str:action>/', views.api_industrial_enip_client, name='api_industrial_enip_client'),
+    path('api/industrial/enip_server/<str:action>/', views.api_industrial_enip_server, name='api_industrial_enip_server'),
+    path('api/industrial/bacnet_client/<str:action>/', views.api_industrial_bacnet_client, name='api_industrial_bacnet_client'),
+    path('api/industrial/bacnet_server/<str:action>/', views.api_industrial_bacnet_server, name='api_industrial_bacnet_server'),
+    path('api/industrial/dnp3_client/<str:action>/', views.api_industrial_dnp3_client, name='api_industrial_dnp3_client'),
+    path('api/industrial/dnp3_server/<str:action>/', views.api_industrial_dnp3_server, name='api_industrial_dnp3_server'),
+    path('api/industrial/mms_client/<str:action>/', views.api_industrial_mms_client, name='api_industrial_mms_client'),
+    path('api/industrial/mms_server/<str:action>/', views.api_industrial_mms_server, name='api_industrial_mms_server'),
+    path('api/industrial/http_client/<str:action>/', views.api_industrial_http_client, name='api_industrial_http_client'),
+    path('api/industrial/http_server/<str:action>/', views.api_industrial_http_server, name='api_industrial_http_server'),
+    path('api/industrial/http_files/<str:action>/', views.api_industrial_http_files, name='api_industrial_http_files'),
+    path('api/industrial/http_files/<str:action>/<str:filename>/', views.api_industrial_http_files, name='api_industrial_http_files_with_filename'),
 ]

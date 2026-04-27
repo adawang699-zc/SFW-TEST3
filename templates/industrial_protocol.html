@@ -2,15 +2,78 @@
 {% block title %}工控协议测试{% endblock %}
 
 {% block content %}
+<style>
+.protocol-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 8px;
+}
+.protocol-tab {
+    padding: 10px 20px;
+    border-radius: 8px 8px 0 0;
+    cursor: pointer;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    transition: all 0.3s;
+}
+.protocol-tab:hover {
+    background: var(--bg-secondary);
+}
+.protocol-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+.protocol-content {
+    display: none;
+}
+.protocol-content.active {
+    display: block;
+}
+.client-server-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.data-table th, .data-table td {
+    padding: 8px;
+    border: 1px solid var(--border);
+    text-align: center;
+}
+.data-table th {
+    background: var(--bg-dark);
+}
+.config-section {
+    padding: 16px;
+    background: var(--bg-dark);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+.hex-display {
+    font-family: monospace;
+    background: var(--bg-secondary);
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+</style>
+
 <div class="card">
     <div class="card-header">工控协议测试</div>
     <p style="color: var(--text-secondary); margin-bottom: 20px;">
-        支持 Modbus、S7、GOOSE、SV、DNP3、BACnet、Ethernet/IP 等工控协议
+        支持 Modbus、S7、GOOSE、SV、DNP3、BACnet、Ethernet/IP、MMS 等工控协议的客户端和服务端模拟
     </p>
 </div>
 
 <div class="card">
-    <div class="card-header">选择发送 Agent</div>
+    <div class="card-header">选择 Agent</div>
     <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
         <p style="color: var(--text-secondary);">加载中...</p>
     </div>
@@ -19,60 +82,641 @@
 <div class="card">
     <div class="card-header">协议选择</div>
 
-    <div class="form-group">
-        <label class="form-label">工控协议</label>
-        <select id="protocol" class="form-input" onchange="updateProtocolFields()">
-            <option value="modbus-tcp">Modbus TCP (端口 502)</option>
-            <option value="s7">西门子 S7 (端口 102)</option>
-            <option value="goose">IEC61850 GOOSE</option>
-            <option value="sv">IEC61850 SV</option>
-            <option value="dnp3">DNP3 (端口 20000)</option>
-            <option value="bacnet">BACnet (端口 47808)</option>
-            <option value="enip">Ethernet/IP (端口 44818)</option>
-            <option value="mms">MMS (端口 102)</option>
-        </select>
+    <div class="protocol-tabs">
+        <div class="protocol-tab active" onclick="switchTab('modbus')">Modbus</div>
+        <div class="protocol-tab" onclick="switchTab('s7')">S7</div>
+        <div class="protocol-tab" onclick="switchTab('goose-sv')">GOOSE/SV</div>
+        <div class="protocol-tab" onclick="switchTab('dnp3')">DNP3</div>
+        <div class="protocol-tab" onclick="switchTab('bacnet')">BACnet</div>
+        <div class="protocol-tab" onclick="switchTab('enip')">ENIP</div>
+        <div class="protocol-tab" onclick="switchTab('mms')">MMS</div>
+        <div class="protocol-tab" onclick="switchTab('http')">HTTP</div>
     </div>
 
-    <div class="form-group">
-        <label class="form-label">目标 IP</label>
-        <input type="text" id="dst-ip" class="form-input" placeholder="例如: 192.168.1.100">
+    <!-- Modbus Tab -->
+    <div id="modbus-content" class="protocol-content active">
+        <div class="client-server-grid">
+            <!-- Modbus Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">Modbus Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 IP</label>
+                        <input type="text" id="modbus-client-ip" class="form-input" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口</label>
+                        <input type="number" id="modbus-client-port" class="form-input" value="502">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Unit ID</label>
+                        <input type="number" id="modbus-unit-id" class="form-input" value="1">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="modbusClientConnect()">连接</button>
+                        <button class="btn btn-danger" onclick="modbusClientDisconnect()">断开</button>
+                        <button class="btn btn-secondary" onclick="modbusClientStatus()">状态</button>
+                    </div>
+                    <div id="modbus-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
+                </div>
+
+                <div class="config-section">
+                    <h5>读取数据</h5>
+                    <div class="form-group">
+                        <label class="form-label">功能码</label>
+                        <select id="modbus-read-func" class="form-input">
+                            <option value="1">读线圈 (FC1)</option>
+                            <option value="2">读离散输入 (FC2)</option>
+                            <option value="3" selected>读保持寄存器 (FC3)</option>
+                            <option value="4">读输入寄存器 (FC4)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">起始地址</label>
+                        <input type="number" id="modbus-read-address" class="form-input" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数量</label>
+                        <input type="number" id="modbus-read-count" class="form-input" value="10">
+                    </div>
+                    <button class="btn btn-primary" onclick="modbusClientRead()">读取</button>
+                    <div id="modbus-read-result" style="margin-top: 12px;"></div>
+                </div>
+
+                <div class="config-section">
+                    <h5>写入数据</h5>
+                    <div class="form-group">
+                        <label class="form-label">功能码</label>
+                        <select id="modbus-write-func" class="form-input">
+                            <option value="5">写单个线圈 (FC5)</option>
+                            <option value="6">写单个寄存器 (FC6)</option>
+                            <option value="15">写多个线圈 (FC15)</option>
+                            <option value="16" selected>写多个寄存器 (FC16)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">地址</label>
+                        <input type="number" id="modbus-write-address" class="form-input" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">值 (逗号分隔)</label>
+                        <input type="text" id="modbus-write-values" class="form-input" placeholder="1,2,3,4,5">
+                    </div>
+                    <button class="btn btn-primary" onclick="modbusClientWrite()">写入</button>
+                    <div id="modbus-write-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- Modbus Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">Modbus Server</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="modbus-server-port" class="form-input" value="502">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Unit ID</label>
+                        <input type="number" id="modbus-server-unit-id" class="form-input" value="1">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="modbusServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="modbusServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="modbusServerStatus()">状态</button>
+                    </div>
+                    <div id="modbus-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+
+                <div class="config-section">
+                    <h5>数据区设置</h5>
+                    <div class="form-group">
+                        <label class="form-label">区域类型</label>
+                        <select id="modbus-server-area" class="form-input">
+                            <option value="coils">线圈 (Coils)</option>
+                            <option value="discrete_inputs">离散输入 (Discrete Inputs)</option>
+                            <option value="holding_registers" selected>保持寄存器 (Holding Registers)</option>
+                            <option value="input_registers">输入寄存器 (Input Registers)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">地址</label>
+                        <input type="number" id="modbus-server-set-address" class="form-input" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">值 (逗号分隔)</label>
+                        <input type="text" id="modbus-server-set-values" class="form-input" placeholder="100,200,300">
+                    </div>
+                    <button class="btn btn-primary" onclick="modbusServerSetData()">设置</button>
+                    <button class="btn btn-secondary" onclick="modbusServerGetData()">获取</button>
+                </div>
+
+                <div id="modbus-server-data" style="margin-top: 12px;"></div>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group" id="port-group">
-        <label class="form-label">目标端口</label>
-        <input type="number" id="dst-port" class="form-input" value="502">
+    <!-- S7 Tab -->
+    <div id="s7-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- S7 Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">S7 Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 IP</label>
+                        <input type="text" id="s7-client-ip" class="form-input" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口</label>
+                        <input type="number" id="s7-client-port" class="form-input" value="102">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"> Rack/Slot</label>
+                        <input type="text" id="s7-rack-slot" class="form-input" value="0/1" placeholder="rack/slot">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="s7ClientConnect()">连接</button>
+                        <button class="btn btn-danger" onclick="s7ClientDisconnect()">断开</button>
+                        <button class="btn btn-secondary" onclick="s7ClientStatus()">状态</button>
+                    </div>
+                    <div id="s7-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
+                </div>
+
+                <div class="config-section">
+                    <h5>读取数据</h5>
+                    <div class="form-group">
+                        <label class="form-label">区域类型</label>
+                        <select id="s7-area" class="form-input">
+                            <option value="DB" selected>DB (数据块)</option>
+                            <option value="I">I (输入)</option>
+                            <option value="Q">Q (输出)</option>
+                            <option value="M">M (标记)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DB 号号 (仅 DB 区域)</label>
+                        <input type="number" id="s7-db-number" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">起始地址</label>
+                        <input type="text" id="s7-start-address" class="form-input" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数据类型</label>
+                        <select id="s7-data-type" class="form-input">
+                            <option value="byte">Byte</option>
+                            <option value="word">Word</option>
+                            <option value="dword">DWord</option>
+                            <option value="int">Int</option>
+                            <option value=" dint" selected>DInt</option>
+                            <option value="real">Real</option>
+                            <option value="char">Char</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数量</label>
+                        <input type="number" id="s7-read-count" class="form-input" value="10">
+                    </div>
+                    <button class="btn btn-primary" onclick="s7ClientRead()">读取</button>
+                    <div id="s7-read-result" style="margin-top: 12px;"></div>
+                </div>
+
+                <div class="config-section">
+                    <h5>PLC 操作</h5>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-secondary" onclick="s7GetCpuInfo()">CPU 信息</button>
+                        <button class="btn btn-secondary" onclick="s7GetCpuState()">CPU 状态</button>
+                        <button class="btn btn-warning" onclick="s7PlcColdStart()">冷启动</button>
+                        <button class="btn btn-warning" onclick="s7PlcHotStart()">热启动</button>
+                        <button class="btn btn-danger" onclick="s7PlcStop()">停止</button>
+                    </div>
+                    <div id="s7-plc-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- S7 Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">S7 Server</div>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="s7-server-port" class="form-input" value="102">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="s7ServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="s7ServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="s7ServerStatus()">状态</button>
+                    </div>
+                    <div id="s7-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+
+                <div class="config-section">
+                    <h5>数据区设置</h5>
+                    <div class="form-group">
+                        <label class="form-label">区域</label>
+                        <select id="s7-server-area" class="form-input">
+                            <option value="DB" selected>DB</option>
+                            <option value="I">I</option>
+                            <option value="Q">Q</option>
+                            <option value="M">M</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DB 号号</label>
+                        <input type="number" id="s7-server-db" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">地址</label>
+                        <input type="number" id="s7-server-address" class="form-input" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">值 (十六进制,逗号分隔)</label>
+                        <input type="text" id="s7-server-values" class="form-input" placeholder="00,01,02">
+                    </div>
+                    <button class="btn btn-primary" onclick="s7ServerSetData()">设置</button>
+                    <button class="btn btn-secondary" onclick="s7ServerGetData()">获取</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="form-group">
-        <label class="form-label">协议参数 (JSON 格式)</label>
-        <textarea id="protocol-config" class="form-input" rows="4" placeholder='{"unit_id": 1, "function": 3, "address": 0, "count": 10}'></textarea>
+    <!-- GOOSE/SV Tab -->
+    <div id="goose-sv-content" class="protocol-content">
+        <div class="config-section">
+            <div class="form-group">
+                <label class="form-label">选择网卡</label>
+                <select id="goose-sv-interface" class="form-input">
+                    <option value="">-- 加载中 --</option>
+                </select>
+            </div>
+            <button class="btn btn-secondary" onclick="loadGooseSvInterfaces()">获取网卡列表</button>
+        </div>
+
+        <div class="client-server-grid">
+            <!-- GOOSE -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">GOOSE 接收器</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">GOOSE ID</label>
+                        <input type="text" id="goose-id" class="form-input" placeholder="GOOSE1">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="gooseStart()">启动接收</button>
+                        <button class="btn btn-danger" onclick="gooseStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="gooseStatus()">状态</button>
+                    </div>
+                    <div id="goose-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+                <div id="goose-data" style="margin-top: 12px;"></div>
+            </div>
+
+            <!-- SV -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">SV 接收器</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">SV ID</label>
+                        <input type="text" id="sv-id" class="form-input" placeholder="SV1">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="svStart()">启动接收</button>
+                        <button class="btn btn-danger" onclick="svStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="svStatus()">状态</button>
+                    </div>
+                    <div id="sv-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+                <div id="sv-data" style="margin-top: 12px;"></div>
+            </div>
+        </div>
     </div>
 
-    <div style="display: flex; gap: 12px;">
-        <button class="btn btn-primary" onclick="sendProtocolPacket()">发送报文</button>
-    </div>
-</div>
+    <!-- DNP3 Tab -->
+    <div id="dnp3-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- DNP3 Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">DNP3 Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 IP</label>
+                        <input type="text" id="dnp3-client-ip" class="form-input" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口</label>
+                        <input type="number" id="dnp3-client-port" class="form-input" value="20000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"> Master Address</label>
+                        <input type="number" id="dnp3-master-addr" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"> Outstation Address</label>
+                        <input type="number" id="dnp3-outstation-addr" class="form-input" value="10">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="dnp3ClientConnect()">连接</button>
+                        <button class="btn btn-danger" onclick="dnp3ClientDisconnect()">断开</button>
+                        <button class="btn btn-secondary" onclick="dnp3ClientStatus()">状态</button>
+                    </div>
+                    <div id="dnp3-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
+                </div>
 
-<div class="card">
-    <div class="card-header">协议说明</div>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>协议</th>
-                <th>默认端口</th>
-                <th>说明</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr><td>Modbus TCP</td><td>502</td><td>工业自动化标准协议</td></tr>
-            <tr><td>Siemens S7</td><td>102</td><td>西门子 PLC 通信协议</td></tr>
-            <tr><td>GOOSE</td><td>-</td><td>IEC61850 快速报文传输</td></tr>
-            <tr><td>SV</td><td>-</td><td>IEC61850 采样值传输</td></tr>
-            <tr><td>DNP3</td><td>20000</td><td>电力行业分布式协议</td></tr>
-            <tr><td>BACnet</td><td>47808</td><td>楼宇自动化协议</td></tr>
-            <tr><td>Ethernet/IP</td><td>44818</td><td>工业以太网协议</td></tr>
-        </tbody>
-    </table>
+                <div class="config-section">
+                    <h5>读取数据</h5>
+                    <div class="form-group">
+                        <label class="form-label">对象类型</label>
+                        <select id="dnp3-object-type" class="form-input">
+                            <option value="12">Binary Input</option>
+                            <option value="1">Binary Output</option>
+                            <option value="22">Analog Input</option>
+                            <option value="32" selected>Analog Output</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">起始地址</label>
+                        <input type="number" id="dnp3-read-address" class="form-input" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">数量</label>
+                        <input type="number" id="dnp3-read-count" class="form-input" value="10">
+                    </div>
+                    <button class="btn btn-primary" onclick="dnp3ClientRead()">读取</button>
+                    <div id="dnp3-read-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- DNP3 Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">DNP3 Server</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="dnp3-server-port" class="form-input" value="20000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label"> Outstation Address</label>
+                        <input type="number" id="dnp3-server-addr" class="form-input" value="10">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="dnp3ServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="dnp3ServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="dnp3ServerStatus()">状态</button>
+                    </div>
+                    <div id="dnp3-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BACnet Tab -->
+    <div id="bacnet-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- BACnet Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">BACnet Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 IP</label>
+                        <input type="text" id="bacnet-client-ip" class="form-input" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">对象类型</label>
+                        <select id="bacnet-object-type" class="form-input">
+                            <option value="analogInput" selected>Analog Input</option>
+                            <option value="analogOutput">Analog Output</option>
+                            <option value="analogValue">Analog Value</option>
+                            <option value="binaryInput">Binary Input</option>
+                            <option value="binaryOutput">Binary Output</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">对象实例</label>
+                        <input type="number" id="bacnet-object-instance" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">属性</label>
+                        <select id="bacnet-property" class="form-input">
+                            <option value="presentValue" selected>Present Value</option>
+                            <option value="description">Description</option>
+                            <option value="name">Name</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="bacnetClientRead()">读取</button>
+                        <button class="btn btn-primary" onclick="bacnetClientWrite()">写入</button>
+                    </div>
+                    <div class="form-group" id="bacnet-write-value-group" style="display: none;">
+                        <label class="form-label">写入值</label>
+                        <input type="text" id="bacnet-write-value" class="form-input" placeholder="输入值">
+                    </div>
+                    <div id="bacnet-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- BACnet Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">BACnet Server</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="bacnet-server-port" class="form-input" value="47808">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">设备 ID</label>
+                        <input type="number" id="bacnet-device-id" class="form-input" value="1234">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="bacnetServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="bacnetServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="bacnetServerStatus()">状态</button>
+                    </div>
+                    <div id="bacnet-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ENIP Tab -->
+    <div id="enip-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- ENIP Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">Ethernet/IP Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 IP</label>
+                        <input type="text" id="enip-client-ip" class="form-input" placeholder="192.168.1.100">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="enipClientConnect()">连接</button>
+                        <button class="btn btn-danger" onclick="enipClientDisconnect()">断开</button>
+                        <button class="btn btn-secondary" onclick="enipClientStatus()">状态</button>
+                        <button class="btn btn-secondary" onclick="enipGetIdentity()">设备信息</button>
+                    </div>
+                    <div id="enip-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
+                </div>
+
+                <div class="config-section">
+                    <h5>读取数据</h5>
+                    <div class="form-group">
+                        <label class="form-label">Class ID</label>
+                        <input type="number" id="enip-class-id" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Instance ID</label>
+                        <input type="number" id="enip-instance-id" class="form-input" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Attribute ID</label>
+                        <input type="number" id="enip-attribute-id" class="form-input" value="1">
+                    </div>
+                    <button class="btn btn-primary" onclick="enipClientRead()">读取</button>
+                    <button class="btn btn-primary" onclick="enipClientWrite()">写入</button>
+                    <div id="enip-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- ENIP Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">Ethernet/IP Server</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="enip-server-port" class="form-input" value="44818">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="enipServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="enipServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="enipServerStatus()">状态</button>
+                    </div>
+                    <div id="enip-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MMS Tab -->
+    <div id="mms-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- MMS Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">MMS Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 IP</label>
+                        <input type="text" id="mms-client-ip" class="form-input" placeholder="192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口</label>
+                        <input type="number" id="mms-client-port" class="form-input" value="102">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="mmsClientConnect()">连接</button>
+                        <button class="btn btn-secondary" onclick="mmsGetDomains()">获取域</button>
+                    </div>
+                </div>
+
+                <div class="config-section">
+                    <h5>读取数据</h5>
+                    <div class="form-group">
+                        <label class="form-label">域名</label>
+                        <input type="text" id="mms-domain" class="form-input" placeholder="DomainName">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">变量名</label>
+                        <input type="text" id="mms-variable" class="form-input" placeholder="VariableName">
+                    </div>
+                    <button class="btn btn-primary" onclick="mmsClientRead()">读取</button>
+                    <button class="btn btn-primary" onclick="mmsClientWrite()">写入</button>
+                    <div id="mms-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- MMS Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">MMS Server</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="mms-server-port" class="form-input" value="102">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="mmsServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="mmsServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="mmsServerStatus()">状态</button>
+                    </div>
+                    <div id="mms-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HTTP Tab -->
+    <div id="http-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- HTTP Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">HTTP Client</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">目标 URL</label>
+                        <input type="text" id="http-client-url" class="form-input" placeholder="http://192.168.1.100/api">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">方法</label>
+                        <select id="http-method" class="form-input">
+                            <option value="GET" selected>GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">请求体 (JSON)</label>
+                        <textarea id="http-body" class="form-input" rows="3" placeholder='{"key": "value"}'></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">超时 (秒)</label>
+                        <input type="number" id="http-timeout" class="form-input" value="30">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="httpClientSend()">发送请求</button>
+                        <button class="btn btn-secondary" onclick="httpClientTestConnection()">测试连接</button>
+                    </div>
+                    <div id="http-client-result" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+
+            <!-- HTTP Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">HTTP Server</h4>
+                <div class="config-section">
+                    <div class="form-group">
+                        <label class="form-label">监听端口</label>
+                        <input type="number" id="http-server-port" class="form-input" value="8080">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文件目录</label>
+                        <input type="text" id="http-server-dir" class="form-input" placeholder="/tmp/http_files">
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-success" onclick="httpServerStart()">启动</button>
+                        <button class="btn btn-danger" onclick="httpServerStop()">停止</button>
+                        <button class="btn btn-secondary" onclick="httpServerStatus()">状态</button>
+                        <button class="btn btn-secondary" onclick="httpServerLogs()">日志</button>
+                    </div>
+                    <div id="http-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                </div>
+
+                <div class="config-section">
+                    <h5>文件管理</h5>
+                    <button class="btn btn-secondary" onclick="httpFilesList()">刷新文件列表</button>
+                    <div id="http-files-list" style="margin-top: 12px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -80,101 +724,1020 @@
 <script>
 let selectedAgentId = null;
 
+// 加载租用的 Agent 列表（按 eth1, eth2, eth3... 排序）
 async function loadAgents() {
     try {
-        const result = await apiRequest('/api/agents/list/');
+        const result = await apiRequest('/api/agents/my-rented/');
         const container = document.getElementById('agent-selector');
 
-        if (result.agents && result.agents.length > 0) {
-            let html = '';
-            result.agents.forEach(agent => {
-                if (agent.status === 'running') {
-                    html += `
-                        <div class="agent-card running" onclick="selectAgent('${agent.agent_id}')" style="cursor: pointer;">
-                            <div class="agent-id">${agent.agent_id}</div>
-                            <div style="color: var(--text-secondary);">${agent.interface_name} - ${agent.ip_address}</div>
-                            <div class="status-badge status-running">运行中</div>
-                        </div>
-                    `;
-                }
-            });
-            container.innerHTML = html || '<p style="color: var(--text-secondary);">没有运行中的 Agent</p>';
-        } else {
-            container.innerHTML = '<p style="color: var(--text-secondary);">请先启动 Agent</p>';
-        }
-    } catch (e) {
-        container.innerHTML = '<p style="color: var(--danger);">加载失败</p>';
-    }
-}
+        const agents = result.agents || result.rented_agents || [];
 
-function selectAgent(agentId) {
-    selectedAgentId = agentId;
-    document.querySelectorAll('.agent-card').forEach(card => {
-        card.style.borderColor = card.querySelector('.agent-id').textContent === agentId
-            ? 'var(--primary)' : 'var(--border)';
-    });
-}
+        // 篮选运行中的 Agent
+        const runningAgents = agents.filter(a => a.status === 'running');
 
-function updateProtocolFields() {
-    const protocol = document.getElementById('protocol').value;
-    const portInput = document.getElementById('dst-port');
-
-    const defaultPorts = {
-        'modbus-tcp': 502,
-        's7': 102,
-        'dnp3': 20000,
-        'bacnet': 47808,
-        'enip': 44818,
-        'mms': 102
-    };
-
-    portInput.value = defaultPorts[protocol] || 502;
-
-    // 更新配置模板
-    const templates = {
-        'modbus-tcp': '{"unit_id": 1, "function": 3, "address": 0, "count": 10}',
-        's7': '{"db_number": 1, "start": 0, "size": 10}',
-        'goose': '{"go_id": "GOOSE1", "go_ref": "LD/GO$GOOSE1"}'
-    };
-    document.getElementById('protocol-config').value = templates[protocol] || '{}';
-}
-
-async function sendProtocolPacket() {
-    if (!selectedAgentId) {
-        showToast('请先选择 Agent', 'error');
-        return;
-    }
-
-    const protocol = document.getElementById('protocol').value;
-    const dstIp = document.getElementById('dst-ip').value;
-    const dstPort = parseInt(document.getElementById('dst-port').value);
-    const configStr = document.getElementById('protocol-config').value;
-
-    if (!dstIp) {
-        showToast('请输入目标 IP', 'error');
-        return;
-    }
-
-    try {
-        const payload = JSON.parse(configStr);
-        const result = await apiRequest('/api/send_protocol/', 'POST', {
-            agent_id: selectedAgentId,
-            protocol: protocol,
-            dst_ip: dstIp,
-            dst_port: dstPort,
-            payload: payload
+        // 按 eth1, eth2, eth3... 排序
+        runningAgents.sort((a, b) => {
+            const getEthNum = (agentId) => {
+                const match = agentId.match(/eth(\d+)/);
+                return match ? parseInt(match[1]) : 999;
+            };
+            return getEthNum(a.agent_id) - getEthNum(b.agent_id);
         });
 
-        if (result.status === 'sent') {
-            showToast('协议报文发送成功');
+        if (runningAgents.length > 0) {
+            let html = '';
+            runningAgents.forEach(agent => {
+                const interfaceName = agent.interface_name || agent.interface || 'N/A';
+                const ip = agent.ip_address || 'N/A';
+                const port = agent.port || 8888;
+
+                html += `
+                    <div class="agent-card ${agent.status}" onclick="selectAgent('${agent.agent_id}', '${interfaceName}')"
+                         data-agent-id="${agent.agent_id}"
+                         style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
+                        <div class="agent-id" style="font-weight: bold; color: var(--primary);">${agent.agent_id}</div>
+                        <div style="color: var(--text-secondary);">网卡: ${interfaceName}</div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">IP: ${ip}:${port}</div>
+                        <div class="status-badge status-running" style="margin-top: 4px;">运行中</div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
         } else {
-            showToast('发送失败: ' + (result.error || '未知错误'), 'error');
+            container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">没有租用的 Agent，请先在 <a href="/agent-manage/" style="color: var(--primary);">Agent 管理</a> 页面租用 Agent</p>';
         }
     } catch (e) {
-        showToast('请求失败: ' + e.message, 'error');
+        container.innerHTML = '<p style="color: var(--danger); text-align: center;">加载失败: ' + e.message + '</p>';
     }
 }
 
+function selectAgent(agentId, interfaceName) {
+    selectedAgentId = agentId;
+
+    // 更新卡片边框
+    document.querySelectorAll('.agent-card').forEach(card => {
+        const isSelected = card.dataset.agentId === agentId;
+        card.style.borderColor = isSelected ? 'var(--primary)' : 'var(--border)';
+        card.style.background = isSelected ? 'rgba(255, 107, 53, 0.1)' : '';
+    });
+
+    showToast(`已选择 Agent: ${agentId}`, 'success');
+}
+
+function switchTab(tabId) {
+    document.querySelectorAll('.protocol-tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.protocol-content').forEach(content => content.classList.remove('active'));
+
+    document.querySelector(`.protocol-tab[onclick="switchTab('${tabId}')"]`).classList.add('active');
+    document.getElementById(`${tabId}-content`).classList.add('active');
+}
+
+// ========== Modbus Client ==========
+async function modbusClientConnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('modbus-client-ip').value,
+        port: parseInt(document.getElementById('modbus-client-port').value),
+        unit_id: parseInt(document.getElementById('modbus-unit-id').value)
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);
+    if (result.success) {
+        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+        showToast('Modbus 连接成功', 'success');
+    } else {
+        showToast('连接失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusClientDisconnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('modbus-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        showToast('已断开连接', 'success');
+    } else {
+        showToast('断开失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusClientStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/modbus_client/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('modbus-client-status').textContent = JSON.stringify(result);
+}
+
+async function modbusClientRead() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        function_code: parseInt(document.getElementById('modbus-read-func').value),
+        address: parseInt(document.getElementById('modbus-read-address').value),
+        count: parseInt(document.getElementById('modbus-read-count').value)
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_client/read/', 'POST', data);
+    if (result.success) {
+        document.getElementById('modbus-read-result').innerHTML = `
+            <div class="hex-display">${JSON.stringify(result.data || result.values)}</div>
+        `;
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusClientWrite() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const valuesStr = document.getElementById('modbus-write-values').value;
+    const values = valuesStr.split(',').map(v => parseInt(v.trim()));
+
+    const data = {
+        agent_id: selectedAgentId,
+        function_code: parseInt(document.getElementById('modbus-write-func').value),
+        address: parseInt(document.getElementById('modbus-write-address').value),
+        values: values
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_client/write/', 'POST', data);
+    if (result.success) {
+        showToast('写入成功', 'success');
+    } else {
+        showToast('写入失败: ' + result.error, 'error');
+    }
+}
+
+// ========== Modbus Server ==========
+async function modbusServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('modbus-server-port').value),
+        unit_id: parseInt(document.getElementById('modbus-server-unit-id').value)
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('Modbus Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('modbus-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/modbus_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('modbus-server-status').textContent = JSON.stringify(result);
+}
+
+async function modbusServerSetData() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const valuesStr = document.getElementById('modbus-server-set-values').value;
+    const values = valuesStr.split(',').map(v => parseInt(v.trim()));
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: document.getElementById('modbus-server-area').value,
+        address: parseInt(document.getElementById('modbus-server-set-address').value),
+        values: values
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_server/set_data/', 'POST', data);
+    if (result.success) {
+        showToast('设置成功', 'success');
+    } else {
+        showToast('设置失败: ' + result.error, 'error');
+    }
+}
+
+async function modbusServerGetData() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: document.getElementById('modbus-server-area').value,
+        address: parseInt(document.getElementById('modbus-server-set-address').value),
+        count: 10
+    };
+
+    const result = await apiRequest('/api/industrial/modbus_server/get_data/', 'POST', data);
+    if (result.success) {
+        document.getElementById('modbus-server-data').innerHTML = `
+            <div class="hex-display">${JSON.stringify(result.data || result.values)}</div>
+        `;
+    } else {
+        showToast('获取失败: ' + result.error, 'error');
+    }
+}
+
+// ========== S7 Client ==========
+async function s7ClientConnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const rackSlot = document.getElementById('s7-rack-slot').value.split('/');
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('s7-client-ip').value,
+        port: parseInt(document.getElementById('s7-client-port').value),
+        rack: parseInt(rackSlot[0]) || 0,
+        slot: parseInt(rackSlot[1]) || 1
+    };
+
+    const result = await apiRequest('/api/industrial/s7_client/connect/', 'POST', data);
+    if (result.success) {
+        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+        showToast('S7 连接成功', 'success');
+    } else {
+        showToast('连接失败: ' + result.error, 'error');
+    }
+}
+
+async function s7ClientDisconnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        showToast('已断开', 'success');
+    } else {
+        showToast('断开失败: ' + result.error, 'error');
+    }
+}
+
+async function s7ClientStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('s7-client-status').textContent = JSON.stringify(result);
+}
+
+async function s7ClientRead() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: document.getElementById('s7-area').value,
+        db_number: parseInt(document.getElementById('s7-db-number').value),
+        start: parseInt(document.getElementById('s7-start-address').value),
+        size: parseInt(document.getElementById('s7-read-count').value),
+        data_type: document.getElementById('s7-data-type').value
+    };
+
+    const result = await apiRequest('/api/industrial/s7_client/read/', 'POST', data);
+    if (result.success) {
+        document.getElementById('s7-read-result').innerHTML = `
+            <div class="hex-display">${JSON.stringify(result.data || result.values)}</div>
+        `;
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + result.error, 'error');
+    }
+}
+
+async function s7GetCpuInfo() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/get_cpu_info/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+}
+
+async function s7GetCpuState() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/get_cpu_state/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+}
+
+async function s7PlcColdStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/plc_cold_start/', 'POST', { agent_id: selectedAgentId });
+    showToast(result.success ? '冷启动成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+async function s7PlcHotStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/plc_hot_start/', 'POST', { agent_id: selectedAgentId });
+    showToast(result.success ? '热启动成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+async function s7PlcStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/plc_stop/', 'POST', { agent_id: selectedAgentId });
+    showToast(result.success ? '停止成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+// ========== S7 Server ==========
+async function s7ServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('s7-server-port').value)
+    };
+
+    const result = await apiRequest('/api/industrial/s7_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('S7 Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function s7ServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function s7ServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('s7-server-status').textContent = JSON.stringify(result);
+}
+
+async function s7ServerSetData() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const valuesStr = document.getElementById('s7-server-values').value;
+    const values = valuesStr.split(',').map(v => parseInt(v.trim(), 16));
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: document.getElementById('s7-server-area').value,
+        db_number: parseInt(document.getElementById('s7-server-db').value),
+        start: parseInt(document.getElementById('s7-server-address').value),
+        data: values
+    };
+
+    const result = await apiRequest('/api/industrial/s7_server/set_data/', 'POST', data);
+    showToast(result.success ? '设置成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+async function s7ServerGetData() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        area: document.getElementById('s7-server-area').value,
+        db_number: parseInt(document.getElementById('s7-server-db').value),
+        start: parseInt(document.getElementById('s7-server-address').value),
+        size: 10
+    };
+
+    const result = await apiRequest('/api/industrial/s7_server/get_data/', 'POST', data);
+    if (result.success) {
+        document.getElementById('s7-server-status').innerHTML = `<div class="hex-display">${JSON.stringify(result.data)}</div>`;
+    } else {
+        showToast('获取失败: ' + result.error, 'error');
+    }
+}
+
+// ========== GOOSE/SV ==========
+async function loadGooseSvInterfaces() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedAgentId });
+    if (result.success && result.interfaces) {
+        const select = document.getElementById('goose-sv-interface');
+        select.innerHTML = '';
+        result.interfaces.forEach(iface => {
+            select.innerHTML += `<option value="${iface}">${iface}</option>`;
+        });
+    } else {
+        showToast('获取网卡失败: ' + result.error, 'error');
+    }
+}
+
+async function gooseStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        interface: document.getElementById('goose-sv-interface').value,
+        go_id: document.getElementById('goose-id').value
+    };
+
+    const result = await apiRequest('/api/industrial/goose_sv/goose/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('goose-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
+        showToast('GOOSE 接收已启动', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function gooseStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function gooseStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('goose-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+    } else {
+        showToast('获取状态失败: ' + result.error, 'error');
+    }
+}
+
+async function svStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        interface: document.getElementById('goose-sv-interface').value,
+        sv_id: document.getElementById('sv-id').value
+    };
+
+    const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
+        showToast('SV 接收已启动', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function svStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function svStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+    } else {
+        showToast('获取状态失败: ' + result.error, 'error');
+    }
+}
+
+// ========== DNP3 Client ==========
+async function dnp3ClientConnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('dnp3-client-ip').value,
+        port: parseInt(document.getElementById('dnp3-client-port').value),
+        master_address: parseInt(document.getElementById('dnp3-master-addr').value),
+        outstation_address: parseInt(document.getElementById('dnp3-outstation-addr').value)
+    };
+
+    const result = await apiRequest('/api/industrial/dnp3_client/connect/', 'POST', data);
+    if (result.success) {
+        document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+        showToast('DNP3 连接成功', 'success');
+    } else {
+        showToast('连接失败: ' + result.error, 'error');
+    }
+}
+
+async function dnp3ClientDisconnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        showToast('已断开', 'success');
+    } else {
+        showToast('断开失败: ' + result.error, 'error');
+    }
+}
+
+async function dnp3ClientStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/dnp3_client/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('dnp3-client-status').textContent = JSON.stringify(result);
+}
+
+async function dnp3ClientRead() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        object_type: parseInt(document.getElementById('dnp3-object-type').value),
+        start_address: parseInt(document.getElementById('dnp3-read-address').value),
+        count: parseInt(document.getElementById('dnp3-read-count').value)
+    };
+
+    const result = await apiRequest('/api/industrial/dnp3_client/read/', 'POST', data);
+    if (result.success) {
+        document.getElementById('dnp3-read-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.values)}</div>`;
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + result.error, 'error');
+    }
+}
+
+// ========== DNP3 Server ==========
+async function dnp3ServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('dnp3-server-port').value),
+        outstation_address: parseInt(document.getElementById('dnp3-server-addr').value)
+    };
+
+    const result = await apiRequest('/api/industrial/dnp3_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('DNP3 Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function dnp3ServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/dnp3_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function dnp3ServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/dnp3_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('dnp3-server-status').textContent = JSON.stringify(result);
+}
+
+// ========== BACnet Client ==========
+async function bacnetClientRead() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('bacnet-client-ip').value,
+        object_type: document.getElementById('bacnet-object-type').value,
+        object_instance: parseInt(document.getElementById('bacnet-object-instance').value),
+        property: document.getElementById('bacnet-property').value
+    };
+
+    const result = await apiRequest('/api/industrial/bacnet_client/read/', 'POST', data);
+    if (result.success) {
+        document.getElementById('bacnet-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.value)}</div>`;
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + result.error, 'error');
+    }
+}
+
+async function bacnetClientWrite() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('bacnet-client-ip').value,
+        object_type: document.getElementById('bacnet-object-type').value,
+        object_instance: parseInt(document.getElementById('bacnet-object-instance').value),
+        property: document.getElementById('bacnet-property').value,
+        value: document.getElementById('bacnet-write-value').value
+    };
+
+    const result = await apiRequest('/api/industrial/bacnet_client/write/', 'POST', data);
+    showToast(result.success ? '写入成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+// ========== BACnet Server ==========
+async function bacnetServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('bacnet-server-port').value),
+        device_id: parseInt(document.getElementById('bacnet-device-id').value)
+    };
+
+    const result = await apiRequest('/api/industrial/bacnet_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('bacnet-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('BACnet Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function bacnetServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/bacnet_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('bacnet-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function bacnetServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/bacnet_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('bacnet-server-status').textContent = JSON.stringify(result);
+}
+
+// ========== ENIP Client ==========
+async function enipClientConnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('enip-client-ip').value
+    };
+
+    const result = await apiRequest('/api/industrial/enip_client/connect/', 'POST', data);
+    if (result.success) {
+        document.getElementById('enip-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+        showToast('ENIP 连接成功', 'success');
+    } else {
+        showToast('连接失败: ' + result.error, 'error');
+    }
+}
+
+async function enipClientDisconnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/enip_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('enip-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        showToast('已断开', 'success');
+    } else {
+        showToast('断开失败: ' + result.error, 'error');
+    }
+}
+
+async function enipClientStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/enip_client/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('enip-client-status').textContent = JSON.stringify(result);
+}
+
+async function enipGetIdentity() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/enip_client/get_identity/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('enip-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.identity || result)}</div>`;
+    } else {
+        showToast('获取失败: ' + result.error, 'error');
+    }
+}
+
+async function enipClientRead() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        class_id: parseInt(document.getElementById('enip-class-id').value),
+        instance_id: parseInt(document.getElementById('enip-instance-id').value),
+        attribute_id: parseInt(document.getElementById('enip-attribute-id').value)
+    };
+
+    const result = await apiRequest('/api/industrial/enip_client/read/', 'POST', data);
+    if (result.success) {
+        document.getElementById('enip-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.value)}</div>`;
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + result.error, 'error');
+    }
+}
+
+async function enipClientWrite() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        class_id: parseInt(document.getElementById('enip-class-id').value),
+        instance_id: parseInt(document.getElementById('enip-instance-id').value),
+        attribute_id: parseInt(document.getElementById('enip-attribute-id').value),
+        value: 1
+    };
+
+    const result = await apiRequest('/api/industrial/enip_client/write/', 'POST', data);
+    showToast(result.success ? '写入成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+// ========== ENIP Server ==========
+async function enipServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('enip-server-port').value)
+    };
+
+    const result = await apiRequest('/api/industrial/enip_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('enip-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('ENIP Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function enipServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/enip_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('enip-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function enipServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/enip_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('enip-server-status').textContent = JSON.stringify(result);
+}
+
+// ========== MMS Client ==========
+async function mmsClientConnect() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        ip: document.getElementById('mms-client-ip').value,
+        port: parseInt(document.getElementById('mms-client-port').value)
+    };
+
+    const result = await apiRequest('/api/industrial/mms_client/connect/', 'POST', data);
+    showToast(result.success ? 'MMS 连接成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+async function mmsGetDomains() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/mms_client/get_domains/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('mms-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.domains || result)}</div>`;
+    } else {
+        showToast('获取失败: ' + result.error, 'error');
+    }
+}
+
+async function mmsClientRead() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        domain: document.getElementById('mms-domain').value,
+        variable: document.getElementById('mms-variable').value
+    };
+
+    const result = await apiRequest('/api/industrial/mms_client/read/', 'POST', data);
+    if (result.success) {
+        document.getElementById('mms-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.value)}</div>`;
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + result.error, 'error');
+    }
+}
+
+async function mmsClientWrite() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        domain: document.getElementById('mms-domain').value,
+        variable: document.getElementById('mms-variable').value,
+        value: 1
+    };
+
+    const result = await apiRequest('/api/industrial/mms_client/write/', 'POST', data);
+    showToast(result.success ? '写入成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+// ========== MMS Server ==========
+async function mmsServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('mms-server-port').value)
+    };
+
+    const result = await apiRequest('/api/industrial/mms_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('mms-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('MMS Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function mmsServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/mms_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('mms-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function mmsServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/mms_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('mms-server-status').textContent = JSON.stringify(result);
+}
+
+// ========== HTTP Client ==========
+async function httpClientTestConnection() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        url: document.getElementById('http-client-url').value,
+        timeout: parseInt(document.getElementById('http-timeout').value)
+    };
+
+    const result = await apiRequest('/api/industrial/http_client/test_connection/', 'POST', data);
+    showToast(result.success ? '连接测试成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+}
+
+async function httpClientSend() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const bodyStr = document.getElementById('http-body').value;
+    let body = {};
+    try {
+        if (bodyStr) body = JSON.parse(bodyStr);
+    } catch (e) {
+        showToast('JSON 格式错误', 'error');
+        return;
+    }
+
+    const data = {
+        agent_id: selectedAgentId,
+        url: document.getElementById('http-client-url').value,
+        method: document.getElementById('http-method').value,
+        body: body,
+        timeout: parseInt(document.getElementById('http-timeout').value)
+    };
+
+    const result = await apiRequest('/api/industrial/http_client/send/', 'POST', data);
+    if (result.success) {
+        document.getElementById('http-client-result').innerHTML = `
+            <div class="config-section">
+                <div><strong>状态码:</strong> ${result.status_code || 'N/A'}</div>
+                <div class="hex-display" style="margin-top: 8px;">${JSON.stringify(result.response || result.data)}</div>
+            </div>
+        `;
+        showToast('请求成功', 'success');
+    } else {
+        showToast('请求失败: ' + result.error, 'error');
+    }
+}
+
+// ========== HTTP Server ==========
+async function httpServerStart() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const data = {
+        agent_id: selectedAgentId,
+        port: parseInt(document.getElementById('http-server-port').value),
+        directory: document.getElementById('http-server-dir').value
+    };
+
+    const result = await apiRequest('/api/industrial/http_server/start/', 'POST', data);
+    if (result.success) {
+        document.getElementById('http-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        showToast('HTTP Server 启动成功', 'success');
+    } else {
+        showToast('启动失败: ' + result.error, 'error');
+    }
+}
+
+async function httpServerStop() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/http_server/stop/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('http-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + result.error, 'error');
+    }
+}
+
+async function httpServerStatus() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/http_server/status/', 'POST', { agent_id: selectedAgentId });
+    document.getElementById('http-server-status').textContent = JSON.stringify(result);
+}
+
+async function httpServerLogs() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/http_server/logs/', 'POST', { agent_id: selectedAgentId });
+    if (result.success) {
+        document.getElementById('http-files-list').innerHTML = `<div class="hex-display">${JSON.stringify(result.logs)}</div>`;
+    } else {
+        showToast('获取日志失败: ' + result.error, 'error');
+    }
+}
+
+async function httpFilesList() {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/http_files/list/', 'POST', { agent_id: selectedAgentId });
+    if (result.success && result.files) {
+        let html = '<table class="data-table"><tr><th>文件名</th><th>大小</th><th>操作</th></tr>';
+        result.files.forEach(file => {
+            html += `<tr>
+                <td>${file.name || file}</td>
+                <td>${file.size || '-'}</td>
+                <td>
+                    <button class="btn btn-secondary btn-sm" onclick="httpFileDownload('${file.name || file}')">下载</button>
+                </td>
+            </tr>`;
+        });
+        html += '</table>';
+        document.getElementById('http-files-list').innerHTML = html;
+    } else {
+        showToast('获取文件列表失败: ' + result.error, 'error');
+    }
+}
+
+async function httpFileDownload(filename) {
+    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/http_files/download/' + filename + '/', 'POST', { agent_id: selectedAgentId });
+    showToast(result.success ? '文件内容已获取' : '下载失败: ' + result.error, result.success ? 'success' : 'error');
+    if (result.success) {
+        document.getElementById('http-files-list').innerHTML += `<div class="hex-display">${result.content || JSON.stringify(result)}</div>`;
+    }
+}
+
+// 页面加载
 window.onload = loadAgents;
 </script>
 {% endblock %}
