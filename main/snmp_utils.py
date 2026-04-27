@@ -321,7 +321,8 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
         return False, f'写入配置文件失败: {e}'
 
     # 启动 snmptrapd（不持有锁）
-    cmd = ['snmptrapd', '-C', '-c', config_file, '-Lf', TRAP_LOG_FILE, '-p', '/tmp/snmptrapd.pid']
+    # -Ln 不输出日志到文件，只通过 traphandle 处理
+    cmd = ['snmptrapd', '-C', '-c', config_file, '-Ln', '-p', '/tmp/snmptrapd.pid']
     if port != 162:
         cmd.extend(['-n', str(port)])
 
