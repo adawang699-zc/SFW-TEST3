@@ -200,43 +200,63 @@
         </div>
 
         <div class="form-group">
-            <label class="form-label">安全用户名（V3）</label>
-            <input type="text" id="trap-username" class="form-input" placeholder="留空则接受所有用户">
-        </div>
-
-        <div class="form-group">
-            <label class="form-label">安全级别（V3）</label>
-            <select id="trap-level" class="form-input">
-                <option value="noAuthNoPriv">不认证不加密</option>
-                <option value="authNoPriv">只认证不加密</option>
-                <option value="authPriv">既认证又加密</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label class="form-label">认证方式（V3）</label>
+            <label class="form-label">接收版本</label>
             <div style="display: flex; gap: 8px;">
-                <button class="btn btn-primary" id="btn-trap-auth-md5" style="flex: 1;">MD5</button>
-                <button class="btn btn-secondary" id="btn-trap-auth-sha" style="flex: 1;">SHA</button>
+                <button class="btn btn-primary" id="btn-trap-v2c" style="flex: 1;">V1/V2C</button>
+                <button class="btn btn-secondary" id="btn-trap-v3" style="flex: 1;">V3</button>
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label">认证密码（V3）</label>
-            <input type="password" id="trap-auth-pass" class="form-input">
-        </div>
-
-        <div class="form-group">
-            <label class="form-label">加密方式（V3）</label>
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-primary" id="btn-trap-priv-des" style="flex: 1;">DES</button>
-                <button class="btn btn-secondary" id="btn-trap-priv-aes" style="flex: 1;">AES</button>
+        <!-- V1/V2C 配置 -->
+        <div id="trap-v1-v2c-config">
+            <div class="form-group">
+                <label class="form-label">Community</label>
+                <input type="text" id="trap-community" class="form-input" value="public" placeholder="多个用逗号分隔，如 public,private">
+                <small style="color: var(--text-muted);">V1/V2C 使用 community 认证，留空则接受所有</small>
             </div>
         </div>
 
-        <div class="form-group">
-            <label class="form-label">加密密码（V3）</label>
-            <input type="password" id="trap-priv-pass" class="form-input">
+        <!-- V3 配置 -->
+        <div id="trap-v3-config" style="display: none;">
+            <div class="form-group">
+                <label class="form-label">安全用户名</label>
+                <input type="text" id="trap-username" class="form-input" placeholder="留空则接受所有用户">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">安全级别</label>
+                <select id="trap-level" class="form-input">
+                    <option value="noAuthNoPriv">不认证不加密</option>
+                    <option value="authNoPriv">只认证不加密</option>
+                    <option value="authPriv">既认证又加密</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">认证方式</label>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary" id="btn-trap-auth-md5" style="flex: 1;">MD5</button>
+                    <button class="btn btn-secondary" id="btn-trap-auth-sha" style="flex: 1;">SHA</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">认证密码</label>
+                <input type="password" id="trap-auth-pass" class="form-input">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">加密方式</label>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary" id="btn-trap-priv-des" style="flex: 1;">DES</button>
+                    <button class="btn btn-secondary" id="btn-trap-priv-aes" style="flex: 1;">AES</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">加密密码</label>
+                <input type="password" id="trap-priv-pass" class="form-input">
+            </div>
         </div>
 
         <div style="display: flex; gap: 12px;">
@@ -273,6 +293,7 @@
 let snmpVersion = 'v2c';
 let snmpAuthProtocol = 'MD5';
 let snmpPrivProtocol = 'DES';
+let trapVersion = 'v2c';  // TRAP 接收版本
 let trapAuthProtocol = 'MD5';
 let trapPrivProtocol = 'DES';
 let trapUpdateInterval = null;
@@ -381,6 +402,24 @@ document.getElementById('btn-trap-priv-aes').addEventListener('click', function(
 function updateTrapPrivButtons() {
     document.getElementById('btn-trap-priv-des').className = trapPrivProtocol === 'DES' ? 'btn btn-primary' : 'btn btn-secondary';
     document.getElementById('btn-trap-priv-aes').className = trapPrivProtocol === 'AES' ? 'btn btn-primary' : 'btn btn-secondary';
+}
+
+// TRAP 版本切换
+document.getElementById('btn-trap-v2c').addEventListener('click', function() {
+    trapVersion = 'v2c';
+    updateTrapVersionButtons();
+});
+document.getElementById('btn-trap-v3').addEventListener('click', function() {
+    trapVersion = 'v3';
+    updateTrapVersionButtons();
+});
+
+function updateTrapVersionButtons() {
+    document.getElementById('btn-trap-v2c').className = trapVersion === 'v2c' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-trap-v3').className = trapVersion === 'v3' ? 'btn btn-primary' : 'btn btn-secondary';
+
+    document.getElementById('trap-v1-v2c-config').style.display = trapVersion === 'v3' ? 'none' : 'block';
+    document.getElementById('trap-v3-config').style.display = trapVersion === 'v3' ? 'block' : 'none';
 }
 
 // OID 下拉选择
@@ -534,13 +573,21 @@ document.getElementById('btn-trap-start').addEventListener('click', async functi
     const payload = {
         action: 'start',
         port: port,
-        security_username: document.getElementById('trap-username').value,
-        security_level: document.getElementById('trap-level').value,
-        auth_protocol: trapAuthProtocol,
-        auth_password: document.getElementById('trap-auth-pass').value,
-        priv_protocol: trapPrivProtocol,
-        priv_password: document.getElementById('trap-priv-pass').value
+        version: trapVersion
     };
+
+    if (trapVersion === 'v2c') {
+        // V1/V2C 配置
+        payload.community = document.getElementById('trap-community').value || 'public';
+    } else {
+        // V3 配置
+        payload.security_username = document.getElementById('trap-username').value;
+        payload.security_level = document.getElementById('trap-level').value;
+        payload.auth_protocol = trapAuthProtocol;
+        payload.auth_password = document.getElementById('trap-auth-pass').value;
+        payload.priv_protocol = trapPrivProtocol;
+        payload.priv_password = document.getElementById('trap-priv-pass').value;
+    }
 
     const result = await apiRequest('/api/snmp/trap/control/', 'POST', payload);
 

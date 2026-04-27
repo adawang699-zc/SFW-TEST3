@@ -1971,6 +1971,8 @@ def api_snmp_trap_control(request):
 
         if action == 'start':
             port = data.get('port', 162)
+            version = data.get('version', 'v2c')
+            community = data.get('community', 'public')
             security_username = data.get('security_username', '')
             security_level = data.get('security_level', 'noAuthNoPriv')
             auth_protocol = data.get('auth_protocol', 'MD5')
@@ -1979,7 +1981,7 @@ def api_snmp_trap_control(request):
             priv_password = data.get('priv_password', '')
 
             success, message = start_trap_receiver(
-                port, security_username, security_level,
+                port, version, community, security_username, security_level,
                 auth_protocol, auth_password,
                 priv_protocol, priv_password
             )

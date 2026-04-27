@@ -258,7 +258,8 @@ def parse_snmp_output(output: str) -> List[Dict]:
     return results
 
 
-def start_trap_receiver(port: int = 162, security_username: str = '',
+def start_trap_receiver(port: int = 162, version: str = 'v2c', community: str = 'public',
+                        security_username: str = '',
                         security_level: str = 'noAuthNoPriv',
                         auth_protocol: str = 'MD5', auth_password: str = '',
                         priv_protocol: str = 'DES', priv_password: str = '') -> Tuple[bool, str]:
@@ -267,6 +268,8 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
 
     Args:
         port: 监听端口，默认 162
+        version: SNMP 版本 ('v1', 'v2c', 'v3')
+        community: V1/V2C community 字符串（多个用逗号分隔）
         security_username: SNMPv3 安全用户名
         security_level: SNMPv3 安全级别
         auth_protocol: SNMPv3 认证协议
@@ -310,7 +313,7 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
         logger.warning(f'停止 systemd snmptrapd 失败: {e}')
 
     # 生成配置文件（不持有锁）
-    config_content = generate_snmptrapd_config(port, security_username, security_level,
+    config_content = generate_snmptrapd_config(port, version, community, security_username, security_level,
                                                 auth_protocol, auth_password, priv_protocol, priv_password)
 
     config_file = '/tmp/snmptrapd_custom.conf'
@@ -367,7 +370,8 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
         return False, f'启动失败: {str(e)}'
 
 
-def generate_snmptrapd_config(port: int, security_username: str,
+def generate_snmptrapd_config(port: int, version: str = 'v2c', community: str = 'public',
+                               security_username: str,
                                security_level: str, auth_protocol: str,
                                auth_password: str, priv_protocol: str,
                                priv_password: str) -> str:
@@ -380,8 +384,16 @@ def generate_snmptrapd_config(port: int, security_username: str,
     config.append('disableAuthorization yes')
 
     # V1/V2C 配置
-    config.append('authCommunity log,execute,net public')
-    config.append('authCommunity log,execute,net private')
+    if version in ('v1', 'v2c') or not security_username:
+        # 处理多个 community（逗号分隔）
+        communities = [c.strip() for c in community.split(',') if c.strip()]
+        if communities:
+            for c in communities:
+                config.append(f'authCommunity log,execute,net {c}')
+        else:
+            # 默认 community
+            config.append('authCommunity log,execute,net public')
+            config.append('authCommunity log,execute,net private')
 
     # V3 配置
     if security_username:
