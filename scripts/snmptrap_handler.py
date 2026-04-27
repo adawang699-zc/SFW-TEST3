@@ -4,23 +4,21 @@
 SNMP Trap Handler Script
 用于 snmptrapd traphandle，将 TRAP 数据写入 JSON 文件
 
-snmptrapd traphandle 参数:
-  $1 = hostname
+snmptrapd traphandle stdin 格式 (和 -Lf 输出相同):
+  时间戳 hostname [UDP: [IP]:port->[IP]:port]:
+  OID = TYPE: VALUE
+  ...
+
+参数:
+  $1 = hostname (通常为空)
   $2 = IP address
-
-stdin 格式 (每行一个 OID 绑定):
-  OID TYPE VALUE
-  例如:
-  .1.3.6.1.2.1.1.3.0 Timeticks "(12345) 0:02:03.45"
-  .1.3.6.1.6.3.1.1.4.1.0 OID ".1.3.6.1.4.1.12345"
-
-参考: http://www.net-snmp.org/docs/man/snmptrapd.conf.html
 """
 
 import sys
 import json
 import datetime
 import os
+import re
 
 # Trap 日志文件
 TRAP_LOG_FILE = '/var/log/snmptraps.json'
@@ -37,42 +35,75 @@ def parse_trap():
     }
 
     # 命令行参数: hostname 和 IP
-    # $1 = hostname, $2 = IP address
     if len(sys.argv) >= 3:
         trap_data['hostname'] = sys.argv[1] if sys.argv[1] else ''
         trap_data['source_ip'] = sys.argv[2]
     elif len(sys.argv) >= 2:
         trap_data['source_ip'] = sys.argv[1] if sys.argv[1] else 'unknown'
 
-    # 解析 stdin 中的变量绑定
-    # 格式: OID TYPE VALUE (每行一个)
+    # 解析 stdin
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
 
-        # 分割为 OID, TYPE, VALUE
-        parts = line.split(None, 2)  # 分割成最多 3 部分
-        if len(parts) >= 3:
-            oid = parts[0]
-            type_str = parts[1]
-            value = parts[2]
-        elif len(parts) == 2:
-            oid = parts[0]
-            type_str = parts[1]
-            value = ''
-        elif len(parts) == 1:
-            oid = parts[0]
-            type_str = ''
-            value = ''
-        else:
+        # 忽略时间戳行（格式: "2026-04-27 12:23:16 hostname [UDP:...]:")
+        # 这一行包含整个 header 信息
+        if re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}', line):
+            # 从 header 行提取 UDP 地址信息
+            udp_match = re.search(r'\[UDP:\s*\[([^\]]+)\]:(\d+)->\[([^\]]+)\]:(\d+)\]', line)
+            if udp_match:
+                trap_data['source_ip'] = udp_match.group(1)
+                trap_data['source_port'] = int(udp_match.group(2))
+            # 提取 hostname（时间戳后、UDP前的部分）
+            hostname_match = re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+(\S+)\s+\[UDP:', line)
+            if hostname_match:
+                trap_data['hostname'] = hostname_match.group(1)
             continue
 
-        trap_data['oid_values'].append({
-            'oid': oid,
-            'type': type_str,
-            'value': value
-        })
+        # 忽略单独的 UDP 地址行（如果没有时间戳前缀）
+        if re.match(r'^\[UDP:', line):
+            udp_match = re.search(r'\[UDP:\s*\[([^\]]+)\]:(\d+)->\[([^\]]+)\]:(\d+)\]', line)
+            if udp_match:
+                trap_data['source_ip'] = udp_match.group(1)
+                trap_data['source_port'] = int(udp_match.group(2))
+            continue
+
+        # 忽略只包含 hostname 的行（不含 OID，不含时间戳）
+        # hostname 行格式: "hostname [UDP:...]:" 或单独的 hostname
+        if re.match(r'^[A-Za-z0-9\-\.]+\s+\[UDP:', line) or re.match(r'^[A-Za-z0-9\-\.]+$', line):
+            continue
+
+        # 解析 OID = TYPE: VALUE 格式
+        # 有效 OID 格式: 以数字或 MIB 名称开头（如 .1.3.6 或 SNMPv2-MIB::）
+        if not re.match(r'^[\d\.]+', line) and not re.match(r'^[A-Za-z][A-Za-z0-9\-]*::', line):
+            continue
+
+        match = re.match(r'^(.+?)\s*=\s*(.+)$', line)
+        if match:
+            oid = match.group(1).strip()
+            type_value = match.group(2).strip()
+
+            # 分离 type 和 value
+            type_match = re.match(r'^(\w+):\s*(.+)$', type_value)
+            if type_match:
+                type_str = type_match.group(1)
+                value = type_match.group(2)
+            else:
+                # 尝试空格分隔
+                parts = type_value.split(None, 1)
+                if len(parts) >= 2:
+                    type_str = parts[0]
+                    value = parts[1]
+                else:
+                    type_str = type_value
+                    value = ''
+
+            trap_data['oid_values'].append({
+                'oid': oid,
+                'type': type_str,
+                'value': value
+            })
 
     return trap_data
 
@@ -87,15 +118,13 @@ def main():
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
 
-        # 写入 JSON 文件（追加模式，每行一个 JSON 对象）
+        # 写入 JSON 文件
         with open(TRAP_LOG_FILE, 'a') as f:
             json.dump(trap, f, ensure_ascii=False)
             f.write('\n')
 
     except Exception as e:
-        print(f'Error processing trap: {e}', file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
+        print(f'Error: {e}', file=sys.stderr)
         sys.exit(1)
 
 
