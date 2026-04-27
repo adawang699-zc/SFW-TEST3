@@ -44,8 +44,22 @@
                 </select>
             </div>
             <div class="form-group">
+                <label class="form-label">认证方式</label>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary" id="btn-auth-md5" style="flex: 1;">MD5</button>
+                    <button class="btn btn-secondary" id="btn-auth-sha" style="flex: 1;">SHA</button>
+                </div>
+            </div>
+            <div class="form-group">
                 <label class="form-label">认证密码</label>
                 <input type="password" id="snmp-auth-pass" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">加密方式</label>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary" id="btn-priv-des" style="flex: 1;">DES</button>
+                    <button class="btn btn-secondary" id="btn-priv-aes" style="flex: 1;">AES</button>
+                </div>
             </div>
             <div class="form-group">
                 <label class="form-label">加密密码</label>
@@ -105,8 +119,24 @@
         </div>
 
         <div class="form-group">
+            <label class="form-label">认证方式（V3）</label>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" id="btn-trap-auth-md5" style="flex: 1;">MD5</button>
+                <button class="btn btn-secondary" id="btn-trap-auth-sha" style="flex: 1;">SHA</button>
+            </div>
+        </div>
+
+        <div class="form-group">
             <label class="form-label">认证密码（V3）</label>
             <input type="password" id="trap-auth-pass" class="form-input">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">加密方式（V3）</label>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" id="btn-trap-priv-des" style="flex: 1;">DES</button>
+                <button class="btn btn-secondary" id="btn-trap-priv-aes" style="flex: 1;">AES</button>
+            </div>
         </div>
 
         <div class="form-group">
@@ -146,6 +176,10 @@
 {% block extra_js %}
 <script>
 let snmpVersion = 'v2c';
+let snmpAuthProtocol = 'MD5';
+let snmpPrivProtocol = 'DES';
+let trapAuthProtocol = 'MD5';
+let trapPrivProtocol = 'DES';
 let trapUpdateInterval = null;
 
 // SNMP 版本切换
@@ -169,6 +203,66 @@ function updateVersionButtons() {
 
     document.getElementById('v1-v2c-config').style.display = snmpVersion === 'v3' ? 'none' : 'block';
     document.getElementById('v3-config').style.display = snmpVersion === 'v3' ? 'block' : 'none';
+}
+
+// SNMP V3 认证方式切换
+document.getElementById('btn-auth-md5').addEventListener('click', function() {
+    snmpAuthProtocol = 'MD5';
+    updateAuthButtons();
+});
+document.getElementById('btn-auth-sha').addEventListener('click', function() {
+    snmpAuthProtocol = 'SHA';
+    updateAuthButtons();
+});
+
+function updateAuthButtons() {
+    document.getElementById('btn-auth-md5').className = snmpAuthProtocol === 'MD5' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-auth-sha').className = snmpAuthProtocol === 'SHA' ? 'btn btn-primary' : 'btn btn-secondary';
+}
+
+// SNMP V3 加密方式切换
+document.getElementById('btn-priv-des').addEventListener('click', function() {
+    snmpPrivProtocol = 'DES';
+    updatePrivButtons();
+});
+document.getElementById('btn-priv-aes').addEventListener('click', function() {
+    snmpPrivProtocol = 'AES';
+    updatePrivButtons();
+});
+
+function updatePrivButtons() {
+    document.getElementById('btn-priv-des').className = snmpPrivProtocol === 'DES' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-priv-aes').className = snmpPrivProtocol === 'AES' ? 'btn btn-primary' : 'btn btn-secondary';
+}
+
+// TRAP V3 认证方式切换
+document.getElementById('btn-trap-auth-md5').addEventListener('click', function() {
+    trapAuthProtocol = 'MD5';
+    updateTrapAuthButtons();
+});
+document.getElementById('btn-trap-auth-sha').addEventListener('click', function() {
+    trapAuthProtocol = 'SHA';
+    updateTrapAuthButtons();
+});
+
+function updateTrapAuthButtons() {
+    document.getElementById('btn-trap-auth-md5').className = trapAuthProtocol === 'MD5' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-trap-auth-sha').className = trapAuthProtocol === 'SHA' ? 'btn btn-primary' : 'btn btn-secondary';
+}
+
+// TRAP V3 加密方式切换
+document.getElementById('btn-trap-priv-des').addEventListener('click', function() {
+    trapPrivProtocol = 'DES';
+    updateTrapPrivButtons();
+});
+document.getElementById('btn-trap-priv-aes').addEventListener('click', function() {
+    trapPrivProtocol = 'AES';
+    updateTrapPrivButtons();
+});
+
+function updateTrapPrivButtons() {
+    document.getElementById('btn-trap-priv-des').className = trapPrivProtocol === 'DES' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('btn-trap-priv-aes').className = trapPrivProtocol === 'AES' ? 'btn btn-primary' : 'btn btn-secondary';
 }
 
 // SNMP 查询
@@ -196,7 +290,9 @@ document.getElementById('btn-query').addEventListener('click', async function() 
     } else {
         payload.security_username = document.getElementById('snmp-username').value;
         payload.security_level = document.getElementById('snmp-level').value;
+        payload.auth_protocol = snmpAuthProtocol;
         payload.auth_password = document.getElementById('snmp-auth-pass').value;
+        payload.priv_protocol = snmpPrivProtocol;
         payload.priv_password = document.getElementById('snmp-priv-pass').value;
     }
 
@@ -303,7 +399,9 @@ document.getElementById('btn-trap-start').addEventListener('click', async functi
         port: port,
         security_username: document.getElementById('trap-username').value,
         security_level: document.getElementById('trap-level').value,
+        auth_protocol: trapAuthProtocol,
         auth_password: document.getElementById('trap-auth-pass').value,
+        priv_protocol: trapPrivProtocol,
         priv_password: document.getElementById('trap-priv-pass').value
     };
 
