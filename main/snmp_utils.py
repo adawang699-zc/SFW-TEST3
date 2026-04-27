@@ -320,6 +320,18 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
     except Exception as e:
         return False, f'写入配置文件失败: {e}'
 
+    # 确保 trap 日志文件存在且有正确权限
+    try:
+        if not os.path.exists(TRAP_LOG_FILE):
+            # 创建文件并设置权限
+            subprocess.run(['sudo', 'touch', TRAP_LOG_FILE],
+                           capture_output=True, check=False, timeout=5)
+        subprocess.run(['sudo', 'chmod', '666', TRAP_LOG_FILE],
+                       capture_output=True, check=False, timeout=5)
+        logger.info(f'已设置 {TRAP_LOG_FILE} 权限')
+    except Exception as e:
+        logger.warning(f'设置日志文件权限失败: {e}')
+
     # 启动 snmptrapd（不持有锁）
     # -Ln 不输出日志到文件，只通过 traphandle 处理
     cmd = ['snmptrapd', '-C', '-c', config_file, '-Ln', '-p', '/tmp/snmptrapd.pid']
