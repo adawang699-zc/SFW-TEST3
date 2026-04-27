@@ -168,10 +168,11 @@ class ModbusServer:
 
                 # 启动服务端（异步）
                 async def create_and_run_server():
-                    from pymodbus.server import AsyncModbusTcpServer
+                    from pymodbus.server import ModbusTcpServer, StartAsyncTcpServer
                     try:
+                        # pymodbus 3.x 使用 StartAsyncTcpServer 启动
                         # 创建服务器实例
-                        server = AsyncModbusTcpServer(
+                        server = ModbusTcpServer(
                             context=server_context,
                             address=(interface, port)
                         )
@@ -186,7 +187,7 @@ class ModbusServer:
                             'port': port
                         })
 
-                        # 开始服务（会一直运行直到服务器被关闭）
+                        # 使用 serve_forever 或 StartAsyncTcpServer
                         await server.serve_forever()
 
                     except Exception as e:
