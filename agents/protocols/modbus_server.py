@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Modbus TCP 服务端
-使用 pymodbus 实现 Modbus TCP 服务端，支持日志记录
+使用 pymodbus 3.x 实现 Modbus TCP 服务端，支持日志记录
 """
 
 import logging
@@ -52,44 +52,6 @@ def add_modbus_log(level: str, message: str, details: dict = None):
         logger.debug(f"{message} - {details}")
 
 
-class LoggingDataBlock(ModbusSequentialDataBlock):
-    """带日志记录的数据块"""
-
-    def __init__(self, address, values, block_name='unknown'):
-        # pymodbus 3.x: address 是起始地址，values 是数据列表
-        # 使用 address=1 避免 0 地址问题（某些版本可能不支持）
-        super().__init__(address, values)
-        self.block_name = block_name
-        self._start_address = address
-
-    def getValues(self, address, count=1):
-        """读取数据时记录日志"""
-        # 调整地址到内部索引
-        idx = address - self._start_address
-        if idx < 0 or idx + count > len(self.values):
-            return [0] * count
-        values = self.values[idx:idx + count]
-        add_modbus_log('INFO', f'读取 {self.block_name}', {
-            'address': address,
-            'count': count,
-            'values': list(values)[:10] if len(values) > 10 else list(values)
-        })
-        return values
-
-    def setValues(self, address, values):
-        """写入数据时记录日志"""
-        idx = address - self._start_address
-        if idx < 0 or idx + len(values) > len(self.values):
-            return
-        for i, v in enumerate(values):
-            self.values[idx + i] = v
-        add_modbus_log('INFO', f'写入 {self.block_name}', {
-            'address': address,
-            'count': len(values),
-            'values': list(values)[:10] if len(values) > 10 else list(values)
-        })
-
-
 class ModbusServer:
     """Modbus TCP 服务端"""
 
@@ -136,13 +98,13 @@ class ModbusServer:
                     'unit_id': unit_id
                 })
 
-                # 创建带日志的数据存储（使用 address=1 避免 pymodbus 3.x 的地址验证问题）
-                coils = LoggingDataBlock(1, [0] * 10000, '线圈')
-                discrete_inputs = LoggingDataBlock(1, [0] * 10000, '离散输入')
-                holding_registers = LoggingDataBlock(1, [0] * 10000, '保持寄存器')
-                input_registers = LoggingDataBlock(1, [0] * 10000, '输入寄存器')
+                # pymodbus 3.x: 创建数据存储（address=1 避免 0 地址问题）
+                coils = ModbusSequentialDataBlock(1, [0] * 10000)
+                discrete_inputs = ModbusSequentialDataBlock(1, [0] * 10000)
+                holding_registers = ModbusSequentialDataBlock(1, [0] * 10000)
+                input_registers = ModbusSequentialDataBlock(1, [0] * 10000)
 
-                # 创建从站上下文（pymodbus 3.x 使用 di/co/ir/hr 参数名）
+                # pymodbus 3.x: 使用 di/co/ir/hr 参数名
                 slave_context = ModbusDeviceContext(
                     di=discrete_inputs,
                     co=coils,
@@ -150,10 +112,10 @@ class ModbusServer:
                     hr=holding_registers
                 )
 
-                # 创建服务端上下文（pymodbus 3.x 使用 devices 参数）
+                # pymodbus 3.x: 使用 devices 参数
                 server_context = ModbusServerContext(devices=slave_context, single=True)
 
-                # 保存数据存储
+                # 保存数据存储引用（通过 simdata 访问实际数据）
                 self.datastores[server_id] = {
                     'coils': coils,
                     'discrete_inputs': discrete_inputs,
@@ -168,10 +130,9 @@ class ModbusServer:
 
                 # 启动服务端（异步）
                 async def create_and_run_server():
-                    from pymodbus.server import ModbusTcpServer, StartAsyncTcpServer
+                    from pymodbus.server import ModbusTcpServer
                     try:
-                        # pymodbus 3.x 使用 StartAsyncTcpServer 启动
-                        # 创建服务器实例
+                        # pymodbus 3.x 使用 ModbusTcpServer
                         server = ModbusTcpServer(
                             context=server_context,
                             address=(interface, port)
@@ -187,7 +148,7 @@ class ModbusServer:
                             'port': port
                         })
 
-                        # 使用 serve_forever 或 StartAsyncTcpServer
+                        # 开始服务
                         await server.serve_forever()
 
                     except Exception as e:
@@ -195,7 +156,6 @@ class ModbusServer:
                         server_ready.set()
                         add_modbus_log('ERROR', '服务端启动异常', {'error': str(e)})
                     finally:
-                        # 清理
                         if server_id in self.server_instances:
                             del self.server_instances[server_id]
 
@@ -205,7 +165,6 @@ class ModbusServer:
                     asyncio.set_event_loop(loop)
                     self.loops[server_id] = loop
                     try:
-                        # 创建任务并运行
                         loop.run_until_complete(create_and_run_server())
                     except Exception as e:
                         server_error[0] = str(e)
@@ -280,7 +239,7 @@ class ModbusServer:
                     loop = self.loops.get(server_id)
 
                     if loop and loop.is_running():
-                        # 在事件循环中调用 shutdown
+                        # 调用 shutdown
                         async def do_shutdown():
                             try:
                                 if hasattr(server, 'shutdown'):
@@ -336,7 +295,7 @@ class ModbusServer:
             modbus_server_logs.clear()
 
     def get_data(self, server_id: str = 'default', function_code: int = 3,
-                address: int = 0, count: int = 1) -> Tuple[bool, List]:
+                address: int = 1, count: int = 1) -> Tuple[bool, List]:
         """获取数据存储中的数据"""
         with self.lock:
             if server_id not in self.datastores:
@@ -346,32 +305,36 @@ class ModbusServer:
             datastore = self.datastores[server_id]
 
             try:
-                if function_code == 1:  # 线圈
-                    values = datastore['coils'].getValues(address, count)
-                    result = [1 if v else 0 for v in values]
+                # pymodbus 3.x: 通过 simdata[0].values 访问数据
+                block_map = {
+                    1: 'coils',      # FC1 线圈
+                    2: 'discrete_inputs',  # FC2 离散输入
+                    3: 'holding_registers',  # FC3 保持寄存器
+                    4: 'input_registers'  # FC4 输入寄存器
+                }
 
-                elif function_code == 2:  # 离散输入
-                    values = datastore['discrete_inputs'].getValues(address, count)
-                    result = [1 if v else 0 for v in values]
-
-                elif function_code == 3:  # 保持寄存器
-                    values = datastore['holding_registers'].getValues(address, count)
-                    result = list(values)
-
-                elif function_code == 4:  # 输入寄存器
-                    values = datastore['input_registers'].getValues(address, count)
-                    result = list(values)
-
-                else:
-                    add_modbus_log('WARNING', '不支持的功能码', {'function_code': function_code})
+                if function_code not in block_map:
                     return False, []
+
+                block = datastore[block_map[function_code]]
+
+                # pymodbus 3.x: 使用 simdata[0].values 获取数据
+                sim = block.simdata[0]
+                all_values = sim.values
+
+                # 地址调整（起始地址是1）
+                idx = address - 1
+                if idx < 0 or idx + count > len(all_values):
+                    return False, []
+
+                result = all_values[idx:idx + count]
 
                 add_modbus_log('INFO', '获取数据', {
                     'server_id': server_id,
                     'function_code': function_code,
                     'address': address,
                     'count': count,
-                    'result_count': len(result)
+                    'result': result[:10] if len(result) > 10 else result
                 })
                 return True, result
 
@@ -381,7 +344,7 @@ class ModbusServer:
                 return False, []
 
     def set_data(self, server_id: str = 'default', function_code: int = 3,
-                address: int = 0, values: List = []) -> Tuple[bool, str]:
+                address: int = 1, values: List = []) -> Tuple[bool, str]:
         """设置数据存储中的数据"""
         with self.lock:
             if server_id not in self.datastores:
@@ -395,21 +358,34 @@ class ModbusServer:
             datastore = self.datastores[server_id]
 
             try:
-                if function_code == 1:  # 线圈
-                    datastore['coils'].setValues(address, [bool(v) for v in values])
+                block_map = {
+                    1: 'coils',
+                    3: 'holding_registers'
+                }
 
-                elif function_code == 3:  # 保持寄存器
-                    datastore['holding_registers'].setValues(address, [int(v) for v in values])
-
-                else:
+                if function_code not in block_map:
                     add_modbus_log('WARNING', '不支持的功能码', {'function_code': function_code})
                     return False, f"不支持的功能码: {function_code}"
+
+                block = datastore[block_map[function_code]]
+                sim = block.simdata[0]
+                all_values = sim.values
+
+                # 地址调整
+                idx = address - 1
+                if idx < 0 or idx + len(values) > len(all_values):
+                    return False, "地址超出范围"
+
+                # 更新值
+                for i, v in enumerate(values):
+                    all_values[idx + i] = int(v)
 
                 add_modbus_log('INFO', '设置数据成功', {
                     'server_id': server_id,
                     'function_code': function_code,
                     'address': address,
-                    'count': len(values)
+                    'count': len(values),
+                    'values': values[:10] if len(values) > 10 else values
                 })
                 return True, "设置成功"
 
