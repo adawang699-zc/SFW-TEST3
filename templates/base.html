@@ -259,31 +259,41 @@
         .confirm-content {
             background: var(--bg-card);
             border-radius: 16px;
-            padding: 24px;
-            max-width: 400px;
+            padding: 32px 40px;
+            min-width: 450px;
+            max-width: 600px;
             text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
 
         .confirm-icon {
-            font-size: 3rem;
-            margin-bottom: 16px;
+            font-size: 4rem;
+            margin-bottom: 20px;
         }
 
         .confirm-title {
-            font-size: 1.2rem;
+            font-size: 1.4rem;
+            font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 12px;
+            margin-bottom: 16px;
         }
 
         .confirm-message {
+            font-size: 1rem;
             color: var(--text-secondary);
-            margin-bottom: 24px;
+            margin-bottom: 32px;
+            line-height: 1.5;
         }
 
         .confirm-buttons {
             display: flex;
-            gap: 12px;
+            gap: 16px;
             justify-content: center;
+        }
+
+        .confirm-buttons .btn {
+            padding: 12px 32px;
+            font-size: 1rem;
         }
 
         /* 表格 */
