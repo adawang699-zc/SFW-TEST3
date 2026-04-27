@@ -92,8 +92,8 @@ class S7Server:
         # TODO: 实现 snap7 服务端数据获取
         return False, b''
 
-    def set_data(self, server_id: str = 'default', db_number: int = 1,
-                start: int = 0, data: bytes) -> Tuple[bool, str]:
+    def set_data(self, data: bytes, db_number: int = 1,
+                start: int = 0, server_id: str = 'default') -> Tuple[bool, str]:
         """设置数据存储中的数据"""
         # TODO: 实现 snap7 服务端数据设置
         return False, "功能待实现"

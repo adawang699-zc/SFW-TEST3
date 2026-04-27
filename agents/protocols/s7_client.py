@@ -31,8 +31,8 @@ class S7Client:
         self.clients: Dict[str, dict] = {}
         self.lock = threading.Lock()
 
-    def connect(self, client_id: str = 'default', ip: str,
-                port: int = 102, rack: int = 0, slot: int = 1) -> Tuple[bool, str]:
+    def connect(self, ip: str, port: int = 102, client_id: str = 'default',
+                rack: int = 0, slot: int = 1) -> Tuple[bool, str]:
         """连接 S7 PLC"""
         if not SNAP7_AVAILABLE:
             return False, "snap7 未安装"
@@ -122,8 +122,8 @@ class S7Client:
                 logger.exception(f"S7 读异常: {e}")
                 return False, b''
 
-    def write(self, client_id: str = 'default', area: int = 0x84,  # DB
-             db_number: int = 1, start: int = 0, data: bytes) -> Tuple[bool, str]:
+    def write(self, data: bytes, area: int = 0x84,  # DB
+                 db_number: int = 1, start: int = 0, client_id: str = 'default') -> Tuple[bool, str]:
         """写入数据"""
         if not SNAP7_AVAILABLE:
             return False, "snap7 未安装"
