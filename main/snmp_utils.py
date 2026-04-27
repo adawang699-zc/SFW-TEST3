@@ -371,10 +371,10 @@ def start_trap_receiver(port: int = 162, version: str = 'v2c', community: str = 
 
 
 def generate_snmptrapd_config(port: int, version: str = 'v2c', community: str = 'public',
-                               security_username: str,
-                               security_level: str, auth_protocol: str,
-                               auth_password: str, priv_protocol: str,
-                               priv_password: str) -> str:
+                               security_username: str = '',
+                               security_level: str = 'noAuthNoPriv', auth_protocol: str = 'MD5',
+                               auth_password: str = '', priv_protocol: str = 'DES',
+                               priv_password: str = '') -> str:
     """
     生成 snmptrapd 配置内容
     """
