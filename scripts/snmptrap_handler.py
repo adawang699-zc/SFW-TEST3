@@ -4,16 +4,23 @@
 SNMP Trap Handler Script
 用于 snmptrapd traphandle，将 TRAP 数据写入 JSON 文件
 
-snmptrapd stdin 格式:
-  2026-04-27 12:18:39 localhost [UDP: [127.0.0.1]:37795->[127.0.0.1]:162]:
-  OID = TYPE: VALUE\tOID = TYPE: VALUE  (多个 OID 用 Tab 分隔)
+snmptrapd traphandle 参数:
+  $1 = hostname
+  $2 = IP address
+
+stdin 格式 (每行一个 OID 绑定):
+  OID TYPE VALUE
+  例如:
+  .1.3.6.1.2.1.1.3.0 Timeticks "(12345) 0:02:03.45"
+  .1.3.6.1.6.3.1.1.4.1.0 OID ".1.3.6.1.4.1.12345"
+
+参考: http://www.net-snmp.org/docs/man/snmptrapd.conf.html
 """
 
 import sys
 import json
 import datetime
 import os
-import re
 
 # Trap 日志文件
 TRAP_LOG_FILE = '/var/log/snmptraps.json'
@@ -30,65 +37,42 @@ def parse_trap():
     }
 
     # 命令行参数: hostname 和 IP
+    # $1 = hostname, $2 = IP address
     if len(sys.argv) >= 3:
         trap_data['hostname'] = sys.argv[1] if sys.argv[1] else ''
         trap_data['source_ip'] = sys.argv[2]
     elif len(sys.argv) >= 2:
-        trap_data['hostname'] = ''
         trap_data['source_ip'] = sys.argv[1] if sys.argv[1] else 'unknown'
 
-    # 解析 stdin
-    lines = sys.stdin.readlines()
-
-    for line in lines:
+    # 解析 stdin 中的变量绑定
+    # 格式: OID TYPE VALUE (每行一个)
+    for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
 
-        # 解析 UDP 地址行
-        # 格式: 2026-04-27 12:18:39 localhost [UDP: [IP]:port->[IP]:port]:
-        udp_match = re.search(r'\[UDP:\s*\[([^\]]+)\]:(\d+)->\[([^\]]+)\]:(\d+)\]', line)
-        if udp_match:
-            trap_data['source_ip'] = udp_match.group(1)
-            trap_data['source_port'] = int(udp_match.group(2))
+        # 分割为 OID, TYPE, VALUE
+        parts = line.split(None, 2)  # 分割成最多 3 部分
+        if len(parts) >= 3:
+            oid = parts[0]
+            type_str = parts[1]
+            value = parts[2]
+        elif len(parts) == 2:
+            oid = parts[0]
+            type_str = parts[1]
+            value = ''
+        elif len(parts) == 1:
+            oid = parts[0]
+            type_str = ''
+            value = ''
+        else:
             continue
 
-        # OID 数据可能用 Tab 分隔多个
-        # 格式: OID = TYPE: VALUE\tOID = TYPE: VALUE
-        parts = line.split('\t')
-
-        for part in parts:
-            part = part.strip()
-            if not part:
-                continue
-
-            # 解析 OID = TYPE: VALUE
-            match = re.match(r'^(.+?)\s*=\s*(.+)$', part)
-            if match:
-                oid = match.group(1).strip()
-                type_value = match.group(2).strip()
-
-                # 分离 type 和 value
-                # 格式: "TYPE: VALUE" 或 "TYPE VALUE"
-                type_match = re.match(r'^(\w+):\s*(.+)$', type_value)
-                if type_match:
-                    type_str = type_match.group(1)
-                    value = type_match.group(2)
-                else:
-                    # 尝试其他格式
-                    space_match = re.match(r'^(\w+)\s+(.+)$', type_value)
-                    if space_match:
-                        type_str = space_match.group(1)
-                        value = space_match.group(2)
-                    else:
-                        type_str = 'Unknown'
-                        value = type_value
-
-                trap_data['oid_values'].append({
-                    'oid': oid,
-                    'type': type_str,
-                    'value': value
-                })
+        trap_data['oid_values'].append({
+            'oid': oid,
+            'type': type_str,
+            'value': value
+        })
 
     return trap_data
 
