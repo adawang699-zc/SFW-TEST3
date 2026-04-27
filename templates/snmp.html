@@ -9,7 +9,12 @@
 
         <div class="form-group">
             <label class="form-label">设备 IP *</label>
-            <input type="text" id="snmp-ip" class="form-input" placeholder="例如: 192.168.1.100">
+            <div style="display: flex; gap: 8px;">
+                <select id="snmp-ip-select" class="form-input" style="width: 200px;">
+                    <option value="">-- 选择设备 --</option>
+                </select>
+                <input type="text" id="snmp-ip" class="form-input" placeholder="或手动输入 IP" style="flex: 1;">
+            </div>
         </div>
 
         <div class="form-group">
@@ -74,27 +79,98 @@
 
         <div class="form-group">
             <label class="form-label">OID *</label>
-            <div style="display: flex; gap: 8px;">
-                <select id="snmp-oid-select" class="form-input" style="width: 200px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <select id="snmp-oid-select" class="form-input" style="width: 280px;">
                     <option value="">-- 选择常用 OID --</option>
-                    <option value="1.3.6.1.2.1.1.1.0">系统描述 (sysDescr)</option>
-                    <option value="1.3.6.1.2.1.1.3.0">系统运行时间 (sysUpTime)</option>
-                    <option value="1.3.6.1.2.1.1.5.0">系统名称 (sysName)</option>
-                    <option value="1.3.6.1.2.1.1.4.0">系统联系人 (sysContact)</option>
-                    <option value="1.3.6.1.2.1.1.6.0">系统位置 (sysLocation)</option>
-                    <option value="1.3.6.1.2.1.2.1.0">接口数量 (ifNumber)</option>
-                    <option value="1.3.6.1.2.1.2.2.1.2">接口描述 (ifDescr) WALK</option>
-                    <option value="1.3.6.1.2.1.2.2.1.8">接口状态 (ifOperStatus) WALK</option>
-                    <option value="1.3.6.1.2.1.4.20.1.1">IP 地址表 (ipAdEntAddr) WALK</option>
-                    <option value="1.3.6.1.4.1.2021.11.9.0">CPU 使用率 (ssCpuIdle)</option>
-                    <option value="1.3.6.1.4.1.2021.4.5.0">内存总量 (memTotalReal)</option>
-                    <option value="1.3.6.1.4.1.2021.4.6.0">内存可用 (memAvailReal)</option>
-                    <option value="1.3.6.1.4.1.2021.4.11.0">内存总量 (memTotalSwap)</option>
-                    <option value="1.3.6.1.4.1.2021.4.12.0">内存可用 (memAvailSwap)</option>
+                    <!-- 系统信息 -->
+                    <optgroup label="系统信息 (System)">
+                        <option value="1.3.6.1.2.1.1.1.0">系统描述 (sysDescr)</option>
+                        <option value="1.3.6.1.2.1.1.2.0">系统 OID (sysObjectID)</option>
+                        <option value="1.3.6.1.2.1.1.3.0">系统运行时间 (sysUpTime)</option>
+                        <option value="1.3.6.1.2.1.1.4.0">系统联系人 (sysContact)</option>
+                        <option value="1.3.6.1.2.1.1.5.0">系统名称 (sysName)</option>
+                        <option value="1.3.6.1.2.1.1.6.0">系统位置 (sysLocation)</option>
+                        <option value="1.3.6.1.2.1.1.7.0">系统服务 (sysServices)</option>
+                    </optgroup>
+                    <!-- 接口信息 -->
+                    <optgroup label="接口信息 (Interfaces) - WALK">
+                        <option value="1.3.6.1.2.1.2.1.0">接口数量 (ifNumber)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.1">接口索引 (ifIndex)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.2">接口描述 (ifDescr)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.3">接口类型 (ifType)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.5">接口速率 (ifSpeed)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.6">接口 MAC (ifPhysAddress)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.7">接口管理状态 (ifAdminStatus)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.8">接口运行状态 (ifOperStatus)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.10">接口入流量 (ifInOctets)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.16">接口出流量 (ifOutOctets)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.20">接口入错误 (ifInErrors)</option>
+                        <option value="1.3.6.1.2.1.2.2.1.21">接口出错误 (ifOutErrors)</option>
+                    </optgroup>
+                    <!-- IP 信息 -->
+                    <optgroup label="IP 信息 (IP) - WALK">
+                        <option value="1.3.6.1.2.1.4.1.0">IP 转发状态 (ipForwarding)</option>
+                        <option value="1.3.6.1.2.1.4.20.1.1">IP 地址表 (ipAdEntAddr)</option>
+                        <option value="1.3.6.1.2.1.4.20.1.2">IP 子网掩码 (ipAdEntNetMask)</option>
+                        <option value="1.3.6.1.2.1.4.21.1.1">路由目标 (ipRouteDest)</option>
+                        <option value="1.3.6.1.2.1.4.21.1.7">路由下一跳 (ipRouteNextHop)</option>
+                    </optgroup>
+                    <!-- CPU/内存 (Linux/Net-SNMP) -->
+                    <optgroup label="CPU/内存 (Linux)">
+                        <option value="1.3.6.1.4.1.2021.11.9.0">CPU 空闲率 (ssCpuIdle)</option>
+                        <option value="1.3.6.1.4.1.2021.11.10.0">CPU 系统占用 (ssCpuSystem)</option>
+                        <option value="1.3.6.1.4.1.2021.11.11.0">CPU 用户占用 (ssCpuUser)</option>
+                        <option value="1.3.6.1.4.1.2021.4.5.0">物理内存总量 (memTotalReal)</option>
+                        <option value="1.3.6.1.4.1.2021.4.6.0">物理内存可用 (memAvailReal)</option>
+                        <option value="1.3.6.1.4.1.2021.4.11.0">Swap 总量 (memTotalSwap)</option>
+                        <option value="1.3.6.1.4.1.2021.4.12.0">Swap 可用 (memAvailSwap)</option>
+                        <option value="1.3.6.1.4.1.2021.4.13.0">内存共享 (memShared)</option>
+                        <option value="1.3.6.1.4.1.2021.4.14.0">内存缓冲 (memBuffer)</option>
+                        <option value="1.3.6.1.4.1.2021.4.15.0">内存缓存 (memCached)</option>
+                    </optgroup>
+                    <!-- 磁盘信息 -->
+                    <optgroup label="磁盘信息 (Linux) - WALK">
+                        <option value="1.3.6.1.4.1.2021.9.1.1">磁盘索引 (dskIndex)</option>
+                        <option value="1.3.6.1.4.1.2021.9.1.2">磁盘路径 (dskPath)</option>
+                        <option value="1.3.6.1.4.1.2021.9.1.3">磁盘设备 (dskDevice)</option>
+                        <option value="1.3.6.1.4.1.2021.9.1.6">磁盘总量 (dskTotal)</option>
+                        <option value="1.3.6.1.4.1.2021.9.1.7">磁盘可用 (dskAvail)</option>
+                        <option value="1.3.6.1.4.1.2021.9.1.8">磁盘使用率 (dskPercent)</option>
+                    </optgroup>
+                    <!-- 进程信息 -->
+                    <optgroup label="进程信息 (Linux) - WALK">
+                        <option value="1.3.6.1.4.1.2021.2.1.1">进程索引 (prIndex)</option>
+                        <option value="1.3.6.1.4.1.2021.2.1.2">进程名称 (prNames)</option>
+                        <option value="1.3.6.1.4.1.2021.2.1.5">进程 CPU (prCpu)</option>
+                        <option value="1.3.6.1.4.1.2021.2.1.6">进程内存 (prMem)</option>
+                    </optgroup>
+                    <!-- SNMP 统计 -->
+                    <optgroup label="SNMP 统计">
+                        <option value="1.3.6.1.2.1.11.1.0">SNMP 入包数 (snmpInPkts)</option>
+                        <option value="1.3.6.1.2.1.11.2.0">SNMP 出包数 (snmpOutPkts)</option>
+                        <option value="1.3.6.1.2.1.11.3.0">SNMP 错误包 (snmpInBadVersions)</option>
+                        <option value="1.3.6.1.2.1.11.4.0">SNMP 错误社区 (snmpInBadCommunityNames)</option>
+                    </optgroup>
+                    <!-- TCP/UDP -->
+                    <optgroup label="TCP/UDP 统计">
+                        <option value="1.3.6.1.2.1.6.1.0">TCP 连接数 (tcpCurrEstab)</option>
+                        <option value="1.3.6.1.2.1.6.5.0">TCP 活动打开 (tcpActiveOpens)</option>
+                        <option value="1.3.6.1.2.1.6.6.0">TCP 被动打开 (tcpPassiveOpens)</option>
+                        <option value="1.3.6.1.2.1.7.1.0">UDP 入包数 (udpInDatagrams)</option>
+                        <option value="1.3.6.1.2.1.7.2.0">UDP 出包数 (udpOutDatagrams)</option>
+                        <option value="1.3.6.1.2.1.7.3.0">UDP 无端口 (udpNoPorts)</option>
+                    </optgroup>
+                    <!-- ICMP -->
+                    <optgroup label="ICMP 统计">
+                        <option value="1.3.6.1.2.1.5.1.0">ICMP 入消息 (icmpInMsgs)</option>
+                        <option value="1.3.6.1.2.1.5.2.0">ICMP 入错误 (icmpInErrors)</option>
+                        <option value="1.3.6.1.2.1.5.3.0">ICMP 入目的地不可达 (icmpInDestUnreachs)</option>
+                        <option value="1.3.6.1.2.1.5.14.0">ICMP 出消息 (icmpOutMsgs)</option>
+                    </optgroup>
                 </select>
-                <input type="text" id="snmp-oid" class="form-input" placeholder="例如: 1.3.6.1.2.1.1.1.0" style="flex: 1;">
+                <input type="text" id="snmp-oid" class="form-input" placeholder="或手动输入 OID" style="flex: 1; min-width: 200px;">
             </div>
-            <small style="color: var(--text-muted);">选择常用 OID 或手动输入，带 WALK 标记的需要勾选 WALK 选项</small>
+            <small style="color: var(--text-muted);">选择常用 OID 或手动输入，带 WALK 标记的需要勾选 WALK</small>
         </div>
 
         <div class="form-group">
@@ -108,7 +184,7 @@
 
         <div style="margin-top: 20px;">
             <label class="form-label">查询结果</label>
-            <div id="snmp-result" style="background: var(--bg-dark); padding: 16px; border-radius: 10px; min-height: 150px; font-family: monospace; color: var(--text-secondary);">
+            <div id="snmp-result" style="background: var(--bg-dark); padding: 16px; border-radius: 10px; min-height: 150px; max-height: 400px; overflow-x: auto; overflow-y: auto; font-family: monospace; color: var(--text-secondary);">
                 等待查询...
             </div>
         </div>
@@ -125,7 +201,7 @@
 
         <div class="form-group">
             <label class="form-label">安全用户名（V3）</label>
-            <input type="text" id="trap-username" class="form-input" placeholder="留空则接受所有 V3 用户">
+            <input type="text" id="trap-username" class="form-input" placeholder="留空则接受所有用户">
         </div>
 
         <div class="form-group">
@@ -200,6 +276,29 @@ let snmpPrivProtocol = 'DES';
 let trapAuthProtocol = 'MD5';
 let trapPrivProtocol = 'DES';
 let trapUpdateInterval = null;
+
+// 加载设备列表
+async function loadDevices() {
+    const result = await apiRequest('/api/device/list/');
+    const select = document.getElementById('snmp-ip-select');
+    select.innerHTML = '<option value="">-- 选择设备 --</option>';
+
+    if (result.devices && result.devices.length > 0) {
+        result.devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.ip;
+            option.textContent = device.name ? `${device.name} (${device.ip})` : device.ip;
+            select.appendChild(option);
+        });
+    }
+}
+
+// 设备 IP 选择
+document.getElementById('snmp-ip-select').addEventListener('change', function() {
+    if (this.value) {
+        document.getElementById('snmp-ip').value = this.value;
+    }
+});
 
 // SNMP 版本切换
 document.getElementById('btn-v1').addEventListener('click', function() {
@@ -289,13 +388,12 @@ document.getElementById('snmp-oid-select').addEventListener('change', function()
     const selectedOid = this.value;
     if (selectedOid) {
         document.getElementById('snmp-oid').value = selectedOid;
-        // 如果是 WALK 类型，自动勾选 WALK
+        // WALK 类型的 OID 自动勾选
         const walkCheckbox = document.getElementById('snmp-walk');
-        if (selectedOid.includes('WALK') || selectedOid.startsWith('1.3.6.1.2.1.2.2') || selectedOid.startsWith('1.3.6.1.2.1.4.20')) {
-            walkCheckbox.checked = true;
-        } else {
-            walkCheckbox.checked = false;
-        }
+        // 接口、IP、磁盘、进程等需要 WALK
+        const walkOids = ['1.3.6.1.2.1.2.2', '1.3.6.1.2.1.4.20', '1.3.6.1.2.1.4.21', '1.3.6.1.4.1.2021.9', '1.3.6.1.4.1.2021.2'];
+        const needWalk = walkOids.some(prefix => selectedOid.startsWith(prefix));
+        walkCheckbox.checked = needWalk;
     }
 });
 
@@ -336,11 +434,19 @@ document.getElementById('btn-query').addEventListener('click', async function() 
     const result = await apiRequest('/api/snmp/get/', 'POST', payload);
 
     if (result.success && result.data && result.data.length > 0) {
-        let html = '<table class="table" style="margin: 0;"><thead><tr><th>OID</th><th>值</th><th>类型</th></tr></thead><tbody>';
+        // 结果表格固定布局
+        let html = '<table style="width: 100%; table-layout: fixed; margin: 0;"><thead><tr><th style="width: 50%; overflow: hidden; text-overflow: ellipsis;">OID</th><th style="width: 35%; overflow: hidden; text-overflow: ellipsis;">值</th><th style="width: 15%;">类型</th></tr></thead><tbody>';
         result.data.forEach(item => {
-            html += `<tr><td>${escapeHtml(item.oid)}</td><td>${escapeHtml(item.value)}</td><td>${escapeHtml(item.type)}</td></tr>`;
+            html += `<tr>
+                <td style="word-break: break-all; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.oid)}</td>
+                <td style="word-break: break-all; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(item.value)}</td>
+                <td>${escapeHtml(item.type)}</td>
+            </tr>`;
         });
         html += '</tbody></table>';
+        if (result.data.length > 50) {
+            html += `<div style="color: var(--text-muted); margin-top: 8px; font-size: 0.85rem;">共 ${result.data.length} 条结果</div>`;
+        }
         resultDiv.innerHTML = html;
     } else if (result.success) {
         resultDiv.innerHTML = '<span style="color: var(--text-muted);">无数据</span>';
@@ -357,7 +463,7 @@ async function fetchTrapStatus() {
     const btnStop = document.getElementById('btn-trap-stop');
     const portInput = document.getElementById('trap-port');
 
-    if (result.status.running) {
+    if (result.status && result.status.running) {
         badge.className = 'status-badge status-running';
         badge.textContent = `运行中 (端口: ${result.status.port})`;
         btnStart.style.display = 'none';
@@ -380,7 +486,7 @@ async function fetchTrapStatus() {
         }
     }
 
-    document.getElementById('trap-count').textContent = result.status.trap_count;
+    document.getElementById('trap-count').textContent = result.status ? result.status.trap_count : 0;
 }
 
 async function fetchTraps() {
@@ -415,13 +521,10 @@ function renderTraps(traps) {
 }
 
 function escapeHtml(text) {
+    if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-
-function showToast(message, type = 'success') {
-    alert(message);
 }
 
 // 启动 TRAP
@@ -442,7 +545,7 @@ document.getElementById('btn-trap-start').addEventListener('click', async functi
     const result = await apiRequest('/api/snmp/trap/control/', 'POST', payload);
 
     if (result.success) {
-        showToast(result.message);
+        showToast(result.message, 'success');
         fetchTrapStatus();
     } else {
         showToast(result.message || result.error, 'error');
@@ -454,7 +557,7 @@ document.getElementById('btn-trap-stop').addEventListener('click', async functio
     const result = await apiRequest('/api/snmp/trap/control/', 'POST', { action: 'stop' });
 
     if (result.success) {
-        showToast(result.message);
+        showToast(result.message, 'success');
         fetchTrapStatus();
     } else {
         showToast(result.message || result.error, 'error');
@@ -463,18 +566,18 @@ document.getElementById('btn-trap-stop').addEventListener('click', async functio
 
 // 清屏
 document.getElementById('btn-trap-clear').addEventListener('click', async function() {
-    if (!confirm('确定清空所有 TRAP？')) return;
-
-    const result = await apiRequest('/api/snmp/trap/clear/', 'POST');
-
-    if (result.success) {
-        showToast(result.message);
-        fetchTraps();
-    }
+    showConfirm('确定清空所有 TRAP？', async function() {
+        const result = await apiRequest('/api/snmp/trap/clear/', 'POST');
+        if (result.success) {
+            showToast(result.message, 'success');
+            fetchTraps();
+        }
+    });
 });
 
 // 页面初始化
 window.onload = function() {
+    loadDevices();
     fetchTrapStatus();
     fetchTraps();
     setInterval(fetchTrapStatus, 5000);

@@ -299,6 +299,16 @@ def start_trap_receiver(port: int = 162, security_username: str = '',
         except Exception as e:
             logger.warning(f'设置端口权限失败: {e}')
 
+    # 停止 systemd snmptrapd.socket（避免端口冲突）
+    try:
+        subprocess.run(['sudo', 'systemctl', 'stop', 'snmptrapd.socket'],
+                       capture_output=True, check=False, timeout=5)
+        subprocess.run(['sudo', 'systemctl', 'stop', 'snmptrapd.service'],
+                       capture_output=True, check=False, timeout=5)
+        logger.info('已停止 systemd snmptrapd 服务')
+    except Exception as e:
+        logger.warning(f'停止 systemd snmptrapd 失败: {e}')
+
     # 生成配置文件（不持有锁）
     config_content = generate_snmptrapd_config(port, security_username, security_level,
                                                 auth_protocol, auth_password, priv_protocol, priv_password)
@@ -372,10 +382,6 @@ def generate_snmptrapd_config(port: int, security_username: str,
     # traphandle 处理脚本
     handler_script = '/opt/snmptrap_handler.py'
     config.append(f'traphandle default {handler_script}')
-
-    # 输出格式
-    config.append('format1 %V\n%v\n')
-    config.append('format2 %V\n%v\n')
 
     return '\n'.join(config) + '\n'
 
