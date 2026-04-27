@@ -120,6 +120,11 @@ from agents.full_agent_base import (
     # 状态
     client_states
 )
+# 导入 DHCP 客户端模块
+from agents.modules.dhcp_client_module import (
+    api_dhcp_client_start, api_dhcp_client_status,
+    set_log_callback, add_dhcp_log
+)
 
 # ========== 通用 API ==========
 
@@ -845,6 +850,39 @@ def goose_sv_interfaces():
             })
 
     return jsonify({'success': True, 'interfaces': interfaces})
+
+# ========== DHCP 客户端功能 ==========
+
+# 设置 DHCP 模块的日志回调
+set_log_callback(add_service_log)
+
+@app.route('/api/dhcp_client/start', methods=['POST'])
+def api_start_dhcp_client():
+    """启动 DHCP 客户端"""
+    try:
+        data = request.get_json()
+        result = api_dhcp_client_start(data, BIND_INTERFACE)
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        logger.exception(f"DHCP 客户端启动失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/dhcp_client/status', methods=['GET'])
+def api_get_dhcp_client_status():
+    """获取 DHCP 客户端状态"""
+    try:
+        session_id = request.args.get('session_id', '')
+        result = api_dhcp_client_status(session_id)
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify(result), 404 if '会话不存在' in result.get('error', '') else 400
+    except Exception as e:
+        logger.exception(f"获取 DHCP 状态失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== 主入口 ==========
 
