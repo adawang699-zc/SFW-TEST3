@@ -31,7 +31,7 @@ from main.syslog_server import (
 from main.snmp_utils import (
     snmp_get, snmp_walk, start_trap_receiver, stop_trap_receiver,
     get_trap_receiver_status, get_trap_receiver_traps, clear_trap_receiver_traps,
-    PYSNMP_AVAILABLE
+    check_snmp_tools
 )
 
 # 尝试导入设备监控模块
@@ -1904,10 +1904,11 @@ def snmp(request):
     """SNMP 管理页面"""
     trap_status = get_trap_receiver_status()
     devices = TestDevice.objects.all()
+    snmp_available, _ = check_snmp_tools()
     context = {
         'trap_status': trap_status,
         'devices': devices,
-        'pysnmp_available': PYSNMP_AVAILABLE,
+        'snmp_available': snmp_available,
     }
     return render(request, 'snmp.html', context)
 
