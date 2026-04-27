@@ -108,13 +108,13 @@ let selectedAgentId = null;
 let currentSessionId = null;
 let statusInterval = null;
 
-// 加载运行中的 Agent 列表（按 eth1, eth2, eth3... 排序）
+// 加载租用的 Agent 列表（按 eth1, eth2, eth3... 排序）
 async function loadAgents() {
     try {
-        const result = await apiRequest('/api/agents/list/');
+        const result = await apiRequest('/api/agents/my-rented/');
         const container = document.getElementById('agent-selector');
 
-        const agents = result.agents || [];
+        const agents = result.agents || result.rented_agents || [];
 
         // 筛选运行中的 Agent
         const runningAgents = agents.filter(a => a.status === 'running');
@@ -148,7 +148,7 @@ async function loadAgents() {
             });
             container.innerHTML = html;
         } else {
-            container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">没有运行中的 Agent，请先在 Agent 管理页面启动 Agent</p>';
+            container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">没有租用的 Agent，请先在 <a href="/agent-manage/" style="color: var(--primary);">Agent 管理</a> 页面租用 Agent</p>';
         }
     } catch (e) {
         container.innerHTML = '<p style="color: var(--danger); text-align: center;">加载失败: ' + e.message + '</p>';
