@@ -5,25 +5,14 @@
 <div class="card">
     <div class="card-header">DHCP 客户端模拟</div>
     <p style="color: var(--text-secondary); margin-bottom: 20px;">
-        通过远程 Agent 模拟多个 DHCP 客户端同时请求 IP 地址
+        通过远程 Agent 模拟多个 DHCP 客户端同时请求 IP 地址。Agent 已绑定特定网卡，选择 Agent 即选择网卡。
     </p>
 </div>
 
 <div class="card">
     <div class="card-header">选择 Agent</div>
-    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
         <p style="color: var(--text-secondary);">加载中...</p>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">网卡选择</div>
-    <div id="interfacesList" style="color: var(--text-secondary); text-align: center; padding: 30px;">
-        请先选择 Agent 以获取网卡列表
-    </div>
-    <div id="selectedInterfaceInfo" style="display: none; margin-top: 16px; padding: 16px; background: rgba(255, 107, 53, 0.1); border-radius: 12px; border: 1px solid var(--primary);">
-        <div style="color: var(--primary); font-weight: 600;">已选择网卡</div>
-        <div id="selectedInterfaceDetails" style="color: var(--text-secondary); margin-top: 8px;"></div>
     </div>
 </div>
 
@@ -108,61 +97,55 @@
     </div>
 
     <div id="resultsEmpty" style="color: var(--text-muted); text-align: center; padding: 30px;">
-        请先选择 Agent，选择网卡并启动 DHCP 客户端
+        请先选择 Agent 并启动 DHCP 客户端
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let selectedAgentId = null;
-let selectedAgentIp = null;
-let selectedAgentPort = null;
+let selectedAgent = null;
 let agentBaseUrl = null;
 let currentSessionId = null;
 let statusInterval = null;
-let interfacesData = [];
-let targetInterface = '';
 
-// 加载租用的 Agent 列表
+// 加载所有运行中的 Agent
 async function loadAgents() {
     try {
-        const result = await apiRequest('/api/agents/my-rented/');
+        const result = await apiRequest('/api/agents/list/');
         const container = document.getElementById('agent-selector');
 
-        const agents = result.agents || result.rented_agents || [];
+        const agents = result.agents || [];
 
-        if (result.success && agents.length > 0) {
+        // 筛选运行中的 Agent
+        const runningAgents = agents.filter(a => a.status === 'running');
+
+        if (runningAgents.length > 0) {
             let html = '';
-            agents.forEach(agent => {
-                // 只显示运行中的 Agent
-                if (agent.status !== 'running') return;
-
-                const status = agent.status === 'running' ? '运行中' : '已停止';
-                const statusColor = agent.status === 'running' ? 'var(--success)' : 'var(--danger)';
+            runningAgents.forEach(agent => {
+                const interfaceName = agent.interface_name || agent.interface || 'N/A';
+                const ip = agent.ip_address || 'N/A';
                 const port = agent.port || 8888;
 
                 html += `
-                    <div class="agent-card ${agent.status}" onclick="selectAgent('${agent.agent_id}', '${agent.ip_address}', ${port})"
+                    <div class="agent-card running" onclick="selectAgent('${agent.agent_id}', '${interfaceName}', '${ip}', ${port})"
                          data-agent-id="${agent.agent_id}"
-                         style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
-                        <div class="agent-id" style="font-weight: bold; color: var(--primary);">${agent.agent_id}</div>
-                        <div style="color: var(--text-secondary);">${agent.interface_name || agent.interface || 'N/A'} - ${agent.ip_address || 'N/A'}</div>
-                        <div style="color: var(--text-muted); font-size: 0.85rem;">端口: ${port}</div>
-                        <div class="status-badge" style="background: ${statusColor}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-top: 4px;">${status}</div>
+                         style="cursor: pointer; border: 2px solid var(--border); padding: 16px; border-radius: 12px;">
+                        <div class="agent-id" style="font-weight: bold; color: var(--primary); font-size: 1.1rem;">${agent.agent_id}</div>
+                        <div style="color: var(--text-secondary); margin-top: 8px;">
+                            <div>网卡: <span style="color: var(--text-primary);">${interfaceName}</span></div>
+                            <div>IP: <span style="color: var(--text-primary);">${ip}:${port}</span></div>
+                        </div>
+                        <div class="status-badge status-running" style="margin-top: 8px;">运行中</div>
                     </div>
                 `;
             });
-            if (html) {
-                container.innerHTML = html;
-            } else {
-                container.innerHTML = '<p style="color: var(--text-secondary);">没有运行中的 Agent，请先在 Agent 管理页面启动 Agent</p>';
-            }
+            container.innerHTML = html;
         } else {
-            container.innerHTML = '<p style="color: var(--text-secondary);">没有租用的 Agent，请先在 Agent 管理页面租用 Agent</p>';
+            container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">没有运行中的 Agent，请先在 Agent 管理页面启动 Agent</p>';
         }
     } catch (e) {
-        container.innerHTML = '<p style="color: var(--danger);">加载失败: ' + e.message + '</p>';
+        container.innerHTML = '<p style="color: var(--danger); text-align: center;">加载失败: ' + e.message + '</p>';
     }
 }
 
@@ -170,17 +153,20 @@ async function loadAgents() {
 loadAgents();
 
 // 选择 Agent
-async function selectAgent(agentId, ip, port) {
-    selectedAgentId = agentId;
-    selectedAgentIp = ip;
-    selectedAgentPort = port;
+async function selectAgent(agentId, interfaceName, ip, port) {
+    selectedAgent = {
+        agent_id: agentId,
+        interface: interfaceName,
+        ip: ip,
+        port: port
+    };
     agentBaseUrl = `http://${ip}:${port}`;
-    targetInterface = '';
 
     // 更新卡片边框
     document.querySelectorAll('.agent-card').forEach(card => {
-        card.style.borderColor = card.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
-        card.style.background = card.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        const isSelected = card.dataset.agentId === agentId;
+        card.style.borderColor = isSelected ? 'var(--primary)' : 'var(--border)';
+        card.style.background = isSelected ? 'rgba(255, 107, 53, 0.1)' : '';
     });
 
     // 验证 Agent 连接
@@ -191,92 +177,19 @@ async function selectAgent(agentId, ip, port) {
             return;
         }
 
+        document.getElementById('startBtn').disabled = false;
         document.getElementById('refreshStatusBtn').disabled = false;
-        refreshInterfaces();
-        showToast(`已选择 Agent: ${agentId}`, 'success');
+        showToast(`已选择 Agent: ${agentId} (网卡: ${interfaceName})`, 'success');
     } catch (e) {
         showToast('Agent 连接失败: ' + e.message, 'error');
-    }
-}
-
-// 获取网卡列表
-async function refreshInterfaces() {
-    if (!agentBaseUrl) return;
-
-    try {
-        const result = await fetch(`${agentBaseUrl}/api/interfaces`).then(r => r.json());
-        if (result.success && result.interfaces) {
-            interfacesData = result.interfaces;
-            displayInterfaces(result.interfaces);
-        } else {
-            showToast('获取网卡列表失败: ' + (result.error || '未知错误'), 'error');
-        }
-    } catch (e) {
-        showToast('获取网卡列表失败: ' + e.message, 'error');
-    }
-}
-
-// 显示网卡列表
-function displayInterfaces(interfaces) {
-    const container = document.getElementById('interfacesList');
-    if (!interfaces || interfaces.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted); text-align: center;">Agent 未检测到可用网卡</div>';
-        return;
-    }
-
-    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">';
-    interfaces.forEach(iface => {
-        const name = iface.name || iface;
-        const ip = iface.ip || '';
-        const mac = iface.mac || '';
-        const status = iface.status || 'UP';
-
-        html += `
-            <div class="interface-card" onclick="selectInterface('${name}', '${ip}', '${mac}')"
-                 data-interface="${name}" style="cursor: pointer; border: 2px solid var(--border);
-                 ${status !== 'UP' ? 'opacity: 0.6;' : ''}">
-                <div class="interface-name">${name}</div>
-                ${ip ? `<div class="interface-ip">IP: ${ip}</div>` : ''}
-                ${mac ? `<div class="interface-ip">MAC: ${mac}</div>` : ''}
-                <div style="color: ${status === 'UP' || status === '已启用' ? 'var(--success)' : 'var(--text-muted)'}; font-size: 0.8rem;">
-                    ${status === 'UP' || status === '已启用' ? '● 已启用' : '○ 已禁用'}
-                </div>
-            </div>
-        `;
-    });
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-// 选择网卡
-function selectInterface(name, ip, mac) {
-    targetInterface = name;
-
-    // 更新卡片边框
-    document.querySelectorAll('#interfacesList .interface-card').forEach(card => {
-        card.style.borderColor = card.dataset.interface === name ? 'var(--primary)' : 'var(--border)';
-    });
-
-    // 显示选中信息
-    document.getElementById('selectedInterfaceInfo').style.display = 'block';
-    document.getElementById('selectedInterfaceDetails').innerHTML = `
-        <strong>${name}</strong> ${ip ? `| IP: ${ip}` : ''} ${mac ? `| MAC: ${mac}` : ''}
-    `;
-
-    // 启用启动按钮
-    if (selectedAgentId && targetInterface) {
-        document.getElementById('startBtn').disabled = false;
+        document.getElementById('startBtn').disabled = true;
     }
 }
 
 // 启动 DHCP 客户端
 async function startDhcp() {
-    if (!agentBaseUrl) {
+    if (!selectedAgent || !agentBaseUrl) {
         showToast('请先选择 Agent', 'error');
-        return;
-    }
-    if (!targetInterface) {
-        showToast('请先选择网卡', 'error');
         return;
     }
 
@@ -298,6 +211,9 @@ async function startDhcp() {
         return;
     }
 
+    // 使用 Agent 绑定的网卡
+    const interfaceName = selectedAgent.interface;
+
     try {
         const result = await fetch(`${agentBaseUrl}/api/dhcp_client/start`, {
             method: 'POST',
@@ -305,7 +221,7 @@ async function startDhcp() {
             body: JSON.stringify({
                 count: count,
                 start_mac: startMac,
-                interface: targetInterface,
+                interface: interfaceName,
                 timeout: timeout,
                 max_workers: maxWorkers
             })
@@ -321,7 +237,7 @@ async function startDhcp() {
             document.getElementById('resultsTable').style.display = 'block';
             document.getElementById('resultsEmpty').style.display = 'none';
             startStatusPolling();
-            showToast('DHCP 客户端已启动', 'success');
+            showToast(`DHCP 客户端已启动 (网卡: ${interfaceName})`, 'success');
         } else {
             showToast('启动失败: ' + (result.error || '未知错误'), 'error');
         }
