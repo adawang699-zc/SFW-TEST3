@@ -137,10 +137,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-function showToast(message, type = 'success') {
-    alert(message);
-}
-
 // 启动按钮
 document.getElementById('btn-start').addEventListener('click', async function() {
     const port = parseInt(document.getElementById('syslog-port').value);
@@ -174,16 +170,15 @@ document.getElementById('btn-stop').addEventListener('click', async function() {
 
 // 清屏按钮
 document.getElementById('btn-clear').addEventListener('click', async function() {
-    if (!confirm('确定清空所有日志？')) return;
-
-    const result = await apiRequest('/api/syslog/clear/', 'POST');
-
-    if (result.success) {
-        showToast(result.message);
-        fetchLogs();
-    } else {
-        showToast(result.message || result.error, 'error');
-    }
+    showConfirmModal('清空确认', '确定清空所有日志？', async function() {
+        const result = await apiRequest('/api/syslog/clear/', 'POST');
+        if (result.success) {
+            showToast(result.message);
+            fetchLogs();
+        } else {
+            showToast(result.message || result.error, 'error');
+        }
+    });
 });
 
 // IP 过滤变化时应用
