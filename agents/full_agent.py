@@ -50,6 +50,37 @@ except ImportError:
     logger.error("请安装 flask 和 flask-cors: pip install flask flask-cors")
     sys.exit(1)
 
+# 导入网卡获取函数
+try:
+    from agents.full_agent_base import get_interfaces
+except ImportError:
+    # 如果导入失败，定义一个简化版本
+    def get_interfaces():
+        import psutil
+        import socket
+        interfaces = []
+        if_stats = psutil.net_if_stats()
+        if_addrs = psutil.net_if_addrs()
+        for ifname, stats in if_stats.items():
+            if 'Loopback' in ifname:
+                continue
+            addrs = if_addrs.get(ifname, [])
+            ip = None
+            mac = None
+            for addr in addrs:
+                if addr.family == socket.AF_INET and addr.address not in ('127.0.0.1', '0.0.0.0'):
+                    ip = addr.address
+                elif addr.family == psutil.AF_LINK:
+                    mac = addr.address
+            if mac and ip:
+                interfaces.append({
+                    'name': ifname,
+                    'ip': ip,
+                    'mac': mac.replace('-', ':'),
+                    'status': 'UP' if stats.isup else 'DOWN'
+                })
+        return interfaces
+
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
@@ -144,7 +175,21 @@ def get_status():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """健康检查"""
-    return jsonify({'status': 'healthy', 'agent_id': AGENT_ID})
+    return jsonify({'success': True, 'status': 'healthy', 'agent_id': AGENT_ID})
+
+@app.route('/api/interfaces', methods=['GET'])
+def api_interfaces():
+    """获取网卡列表"""
+    try:
+        interfaces = get_interfaces()
+        return jsonify({
+            'success': True,
+            'interfaces': interfaces,
+            'agent_id': AGENT_ID
+        })
+    except Exception as e:
+        logger.exception(f"获取网卡列表失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/interface_info', methods=['GET'])
 def interface_info():

@@ -10,40 +10,39 @@
 </div>
 
 <div class="card">
-    <div class="card-header">连接配置</div>
+    <div class="card-header">Agent 连接配置</div>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
         <div class="form-group">
-            <label class="form-label">设备来源</label>
-            <div style="display: flex; gap: 12px;">
-                <button class="btn btn-primary btn-sm" onclick="setSourceType('env')" id="source-env">测试环境</button>
-                <button class="btn btn-secondary btn-sm" onclick="setSourceType('custom')" id="source-custom">指定 IP</button>
-            </div>
+            <label class="form-label">Agent IP 地址</label>
+            <input type="text" class="form-input" id="agentIp" placeholder="例如: 11.11.11.11">
+            <small style="color: var(--text-muted);">Agent 监听的 IP 地址</small>
         </div>
-        <div class="form-group" id="env-select-group">
-            <label class="form-label">测试环境</label>
-            <select class="form-input" id="testEnvSelect">
-                <option value="">请选择测试环境</option>
-            </select>
-        </div>
-        <div class="form-group" id="custom-ip-group" style="display: none;">
-            <label class="form-label">代理程序 IP</label>
-            <input type="text" class="form-input" id="agentIp" placeholder="例如: 192.168.1.100">
+        <div class="form-group">
+            <label class="form-label">Agent 端口</label>
+            <input type="text" class="form-input" id="agentPort" value="8888">
+            <small style="color: var(--text-muted);">默认端口 8888</small>
         </div>
     </div>
-    <button class="btn btn-primary" onclick="connectAgent()" id="connectBtn">连接 Agent</button>
+    <button class="btn btn-primary" onclick="connectAgent()" id="connectBtn" style="margin-top: 16px;">连接 Agent</button>
+    <div id="agentInfo" style="margin-top: 16px; display: none; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+        <span style="color: var(--success);">● </span>
+        <span id="agentId" style="color: var(--text-primary);">-</span>
+        <span style="color: var(--text-secondary);"> | 网卡: </span>
+        <span id="agentInterface" style="color: var(--text-primary);">-</span>
+        <span style="color: var(--text-secondary);"> | IP: </span>
+        <span id="agentIpDisplay" style="color: var(--text-primary);">-</span>
+    </div>
 </div>
 
 <div class="card">
-    <div class="card-header">网卡信息</div>
-    <button class="btn btn-secondary btn-sm" onclick="refreshInterfaces()" id="refreshInterfacesBtn" disabled style="margin-bottom: 16px;">刷新网卡</button>
+    <div class="card-header">网卡选择</div>
+    <button class="btn btn-secondary btn-sm" onclick="refreshInterfaces()" id="refreshInterfacesBtn" disabled style="margin-bottom: 16px;">刷新网卡列表</button>
     <div id="interfacesList" style="color: var(--text-secondary); text-align: center; padding: 30px;">
-        请先连接远程主机以获取网卡信息
+        请先连接 Agent 以获取网卡列表
     </div>
-    <div id="targetInterfaceSection" style="display: none; margin-top: 16px;">
-        <label class="form-label">已选择网卡</label>
-        <select class="form-input" id="targetInterface" disabled>
-            <option value="">请选择网卡</option>
-        </select>
+    <div id="selectedInterfaceInfo" style="display: none; margin-top: 16px; padding: 16px; background: rgba(255, 107, 53, 0.1); border-radius: 12px; border: 1px solid var(--primary);">
+        <div style="color: var(--primary); font-weight: 600;">已选择网卡</div>
+        <div id="selectedInterfaceDetails" style="color: var(--text-secondary); margin-top: 8px;"></div>
     </div>
 </div>
 
@@ -73,7 +72,7 @@
     </div>
     <div style="display: flex; gap: 12px; margin-top: 16px;">
         <button class="btn btn-success" onclick="startDhcp()" id="startBtn" disabled>启动 DHCP 客户端</button>
-        <button class="btn btn-danger" onclick="stopDhcp()" id="stopBtn" style="display: none;">停止</button>
+        <button class="btn btn-danger" onclick="stopDhcp()" id="stopBtn" style="display: none;">停止监控</button>
     </div>
 </div>
 
@@ -128,7 +127,7 @@
     </div>
 
     <div id="resultsEmpty" style="color: var(--text-muted); text-align: center; padding: 30px;">
-        请先连接 Agent，配置并启动 DHCP 客户端
+        请先连接 Agent，选择网卡并启动 DHCP 客户端
     </div>
 </div>
 {% endblock %}
@@ -141,177 +140,177 @@ let currentSessionId = null;
 let statusInterval = null;
 let interfacesData = [];
 let targetInterface = '';
-let testEnvironments = [];
-
-// 加载测试环境列表
-function loadTestEnvironments() {
-    apiRequest('/api/devices/list/').then(data => {
-        if (data.devices && data.devices.length > 0) {
-            testEnvironments = data.devices;
-            const sel = document.getElementById('testEnvSelect');
-            sel.innerHTML = '<option value="">请选择测试环境</option>';
-            data.devices.forEach(env => {
-                sel.innerHTML += `<option value="${env.ip}">${env.name} (${env.ip})</option>`;
-            });
-        }
-    });
-}
-loadTestEnvironments();
-
-function setSourceType(type) {
-    if (type === 'env') {
-        document.getElementById('env-select-group').style.display = 'block';
-        document.getElementById('custom-ip-group').style.display = 'none';
-        document.getElementById('source-env').className = 'btn btn-primary btn-sm';
-        document.getElementById('source-custom').className = 'btn btn-secondary btn-sm';
-    } else {
-        document.getElementById('env-select-group').style.display = 'none';
-        document.getElementById('custom-ip-group').style.display = 'block';
-        document.getElementById('source-env').className = 'btn btn-secondary btn-sm';
-        document.getElementById('source-custom').className = 'btn btn-primary btn-sm';
-    }
-}
 
 function connectAgent() {
-    const sourceType = document.getElementById('source-env').className.includes('btn-primary') ? 'env' : 'custom';
-    let ip;
+    const ip = document.getElementById('agentIp').value.trim();
+    const port = document.getElementById('agentPort').value.trim() || '8888';
 
-    if (sourceType === 'env') {
-        ip = document.getElementById('testEnvSelect').value;
-        if (!ip) { showToast('请选择测试环境', 'error'); return; }
-    } else {
-        ip = document.getElementById('agentIp').value.trim();
-        if (!ip) { showToast('请输入代理程序 IP', 'error'); return; }
+    if (!ip) {
+        showToast('请输入 Agent IP 地址', 'error');
+        return;
     }
 
-    agentBaseUrl = `http://${ip}:8888`;
+    agentBaseUrl = `http://${ip}:${port}`;
 
-    fetch(`${agentBaseUrl}/api/health`).then(r => r.json()).then(data => {
-        if (data.success) {
-            agentConnected = true;
-            document.getElementById('connectBtn').disabled = true;
-            document.getElementById('connectBtn').textContent = '已连接';
-            document.getElementById('refreshInterfacesBtn').disabled = false;
-            document.getElementById('refreshStatusBtn').disabled = false;
-            refreshInterfaces();
-            showToast('连接成功');
-        } else {
-            showToast('连接失败: ' + (data.error || '未知错误'), 'error');
-        }
-    }).catch(e => showToast('连接失败: ' + e.message, 'error'));
+    fetch(`${agentBaseUrl}/api/health`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.status === 'healthy') {
+                agentConnected = true;
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('connectBtn').textContent = '已连接';
+                document.getElementById('connectBtn').className = 'btn btn-secondary';
+                document.getElementById('refreshInterfacesBtn').disabled = false;
+                document.getElementById('refreshStatusBtn').disabled = false;
+
+                // 显示 Agent 信息
+                document.getElementById('agentInfo').style.display = 'block';
+                document.getElementById('agentId').textContent = data.agent_id || '-';
+                document.getElementById('agentIpDisplay').textContent = ip;
+
+                // 获取 Agent 详细信息
+                fetch(`${agentBaseUrl}/api/interface_info`)
+                    .then(r => r.json())
+                    .then(info => {
+                        document.getElementById('agentInterface').textContent = info.interface || '-';
+                    })
+                    .catch(() => {});
+
+                refreshInterfaces();
+                showToast('Agent 连接成功', 'success');
+            } else {
+                showToast('连接失败: Agent 未响应', 'error');
+            }
+        })
+        .catch(e => {
+            showToast('连接失败: ' + e.message, 'error');
+        });
 }
 
 function refreshInterfaces() {
     if (!agentBaseUrl) return;
 
-    fetch(`${agentBaseUrl}/api/interfaces`).then(r => r.json()).then(data => {
-        if (data.success && data.interfaces) {
-            interfacesData = data.interfaces;
-            displayInterfaces(data.interfaces);
-        } else {
-            showToast('获取网卡列表失败', 'error');
-        }
-    }).catch(e => showToast('获取网卡列表失败: ' + e.message, 'error'));
+    fetch(`${agentBaseUrl}/api/interfaces`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.interfaces) {
+                interfacesData = data.interfaces;
+                displayInterfaces(data.interfaces);
+            } else {
+                showToast('获取网卡列表失败: ' + (data.error || '未知错误'), 'error');
+            }
+        })
+        .catch(e => showToast('获取网卡列表失败: ' + e.message, 'error'));
 }
 
 function displayInterfaces(interfaces) {
     const container = document.getElementById('interfacesList');
     if (!interfaces || interfaces.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-muted); text-align: center;">未检测到可用网卡</div>';
+        container.innerHTML = '<div style="color: var(--text-muted); text-align: center;">Agent 未检测到可用网卡</div>';
         return;
     }
 
     let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">';
     interfaces.forEach(iface => {
-        const name = typeof iface === 'string' ? iface : (iface.name || iface);
-        const ip = typeof iface === 'object' ? (iface.ip || '') : '';
-        const mac = typeof iface === 'object' ? (iface.mac || '') : '';
-        let friendlyName = name;
-        if (name && name.startsWith('\\Device\\NPF_')) {
-            friendlyName = mac ? `网卡 ${mac.replace(/:/g, '').substring(6, 12).toUpperCase()}` : `网卡 ${interfaces.indexOf(iface) + 1}`;
-        }
+        const name = iface.name || iface;
+        const ip = iface.ip || '';
+        const mac = iface.mac || '';
+        const status = iface.status || 'UP';
 
         html += `
-            <div class="interface-card" onclick="selectInterface('${name}')" data-interface="${name}" style="cursor: pointer; border: 2px solid var(--border);">
-                <div class="interface-name">${friendlyName}</div>
+            <div class="interface-card" onclick="selectInterface('${name}', '${ip}', '${mac}')"
+                 data-interface="${name}" style="cursor: pointer; border: 2px solid var(--border);
+                 ${status !== 'UP' ? 'opacity: 0.6;' : ''}">
+                <div class="interface-name">${name}</div>
                 ${ip ? `<div class="interface-ip">IP: ${ip}</div>` : ''}
                 ${mac ? `<div class="interface-ip">MAC: ${mac}</div>` : ''}
+                <div style="color: ${status === 'UP' ? 'var(--success)' : 'var(--text-muted)'}; font-size: 0.8rem;">
+                    ${status === 'UP' ? '● 已启用' : '○ 已禁用'}
+                </div>
             </div>
         `;
     });
     html += '</div>';
     container.innerHTML = html;
-
-    // 更新下拉框
-    const targetSection = document.getElementById('targetInterfaceSection');
-    const select = document.getElementById('targetInterface');
-    select.innerHTML = '<option value="">请选择网卡</option>';
-    interfaces.forEach(iface => {
-        const name = typeof iface === 'string' ? iface : (iface.name || iface);
-        select.innerHTML += `<option value="${name}">${name}</option>`;
-    });
-    targetSection.style.display = 'block';
-    select.disabled = false;
 }
 
-function selectInterface(name) {
+function selectInterface(name, ip, mac) {
     targetInterface = name;
 
+    // 更新卡片边框
     document.querySelectorAll('#interfacesList .interface-card').forEach(card => {
         card.style.borderColor = card.dataset.interface === name ? 'var(--primary)' : 'var(--border)';
     });
 
-    document.getElementById('targetInterface').value = name;
+    // 显示选中信息
+    document.getElementById('selectedInterfaceInfo').style.display = 'block';
+    document.getElementById('selectedInterfaceDetails').innerHTML = `
+        <strong>${name}</strong> ${ip ? `| IP: ${ip}` : ''} ${mac ? `| MAC: ${mac}` : ''}
+    `;
 
+    // 启用启动按钮
     if (agentConnected && targetInterface) {
         document.getElementById('startBtn').disabled = false;
     }
 }
 
-document.getElementById('targetInterface').onchange = function() {
-    targetInterface = this.value;
-    document.querySelectorAll('#interfacesList .interface-card').forEach(card => {
-        card.style.borderColor = card.dataset.interface === targetInterface ? 'var(--primary)' : 'var(--border)';
-    });
-    if (agentConnected && targetInterface) {
-        document.getElementById('startBtn').disabled = false;
-    } else {
-        document.getElementById('startBtn').disabled = true;
-    }
-};
-
 function startDhcp() {
-    if (!agentConnected) { showToast('请先连接 Agent', 'error'); return; }
-    if (!targetInterface) { showToast('请先选择网卡', 'error'); return; }
+    if (!agentConnected) {
+        showToast('请先连接 Agent', 'error');
+        return;
+    }
+    if (!targetInterface) {
+        showToast('请先选择网卡', 'error');
+        return;
+    }
 
     const count = parseInt(document.getElementById('clientCount').value);
     const startMac = document.getElementById('startMac').value.trim();
     const timeout = parseInt(document.getElementById('timeout').value);
     const maxWorkers = parseInt(document.getElementById('maxWorkers').value);
 
+    // MAC 地址格式验证
     const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
-    if (!macRegex.test(startMac)) { showToast('MAC 地址格式不正确', 'error'); return; }
+    if (!macRegex.test(startMac)) {
+        showToast('MAC 地址格式不正确', 'error');
+        return;
+    }
+
+    // 数值验证
+    if (count < 1 || count > 1000) {
+        showToast('客户端数量应在 1-1000 之间', 'error');
+        return;
+    }
 
     fetch(`${agentBaseUrl}/api/dhcp_client/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count, start_mac: startMac, interface: targetInterface, timeout, max_workers: maxWorkers })
-    }).then(r => r.json()).then(data => {
-        if (data.success) {
-            currentSessionId = data.session_id;
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').style.display = 'inline-block';
-            document.getElementById('dhcpStatus').className = 'status-badge status-running';
-            document.getElementById('dhcpStatus').textContent = '运行中';
-            document.getElementById('resultsSummary').style.display = 'block';
-            document.getElementById('resultsTable').style.display = 'block';
-            document.getElementById('resultsEmpty').style.display = 'none';
-            startStatusPolling();
-            showToast('DHCP 客户端已启动');
-        } else {
-            showToast('启动失败: ' + (data.error || '未知错误'), 'error');
-        }
-    }).catch(e => showToast('启动失败: ' + e.message, 'error'));
+        body: JSON.stringify({
+            count: count,
+            start_mac: startMac,
+            interface: targetInterface,
+            timeout: timeout,
+            max_workers: maxWorkers
+        })
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                currentSessionId = data.session_id;
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                document.getElementById('dhcpStatus').className = 'status-badge status-running';
+                document.getElementById('dhcpStatus').textContent = '运行中';
+                document.getElementById('resultsSummary').style.display = 'block';
+                document.getElementById('resultsTable').style.display = 'block';
+                document.getElementById('resultsEmpty').style.display = 'none';
+                startStatusPolling();
+                showToast('DHCP 客户端已启动', 'success');
+            } else {
+                showToast('启动失败: ' + (data.error || '未知错误'), 'error');
+            }
+        })
+        .catch(e => showToast('启动失败: ' + e.message, 'error'));
 }
 
 function stopDhcp() {
@@ -323,7 +322,7 @@ function stopDhcp() {
     document.getElementById('stopBtn').style.display = 'none';
     document.getElementById('dhcpStatus').className = 'status-badge status-stopped';
     document.getElementById('dhcpStatus').textContent = '已停止';
-    showToast('已停止');
+    showToast('已停止状态监控', 'warning');
 }
 
 function startStatusPolling() {
@@ -335,20 +334,24 @@ function startStatusPolling() {
 function fetchStatus() {
     if (!currentSessionId || !agentConnected) return;
 
-    fetch(`${agentBaseUrl}/api/dhcp_client/status?session_id=${currentSessionId}`).then(r => r.json()).then(data => {
-        if (data.success) {
-            updateStatusDisplay(data);
+    fetch(`${agentBaseUrl}/api/dhcp_client/status?session_id=${currentSessionId}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                updateStatusDisplay(data);
 
-            if (data.completed) {
-                if (statusInterval) clearInterval(statusInterval);
-                statusInterval = null;
-                document.getElementById('startBtn').disabled = false;
-                document.getElementById('stopBtn').style.display = 'none';
-                document.getElementById('dhcpStatus').className = 'status-badge status-management';
-                document.getElementById('dhcpStatus').textContent = '已完成';
+                if (data.completed) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').style.display = 'none';
+                    document.getElementById('dhcpStatus').className = 'status-badge status-management';
+                    document.getElementById('dhcpStatus').textContent = '已完成';
+                    showToast('DHCP 测试已完成', 'success');
+                }
             }
-        }
-    }).catch(e => console.error('获取状态失败:', e));
+        })
+        .catch(e => console.error('获取状态失败:', e));
 }
 
 function updateStatusDisplay(data) {
@@ -407,11 +410,17 @@ function refreshStatus() {
 }
 
 function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    toast.style.cssText = `position: fixed; top: 80px; right: 20px; padding: 12px 24px; background: ${type === 'error' ? 'var(--danger)' : 'var(--success)'}; color: white; border-radius: 8px; z-index: 9999;`;
+    toast.className = 'toast ' + type;
     toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2000);
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(100px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 </script>
 {% endblock %}
