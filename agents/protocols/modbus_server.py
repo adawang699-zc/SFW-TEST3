@@ -167,15 +167,15 @@ class ModbusServer:
                 server_error = [None]
 
                 # 启动服务端（异步）
-                async def run_server():
+                async def create_and_run_server():
                     from pymodbus.server import AsyncModbusTcpServer
                     try:
+                        # 创建服务器实例
                         server = AsyncModbusTcpServer(
                             context=server_context,
                             address=(interface, port)
                         )
 
-                        # 保存 server 实例
                         self.server_instances[server_id] = server
 
                         # 通知主线程服务器已准备好
@@ -186,30 +186,39 @@ class ModbusServer:
                             'port': port
                         })
 
+                        # 开始服务（会一直运行直到服务器被关闭）
                         await server.serve_forever()
 
                     except Exception as e:
                         server_error[0] = str(e)
                         server_ready.set()
                         add_modbus_log('ERROR', '服务端启动异常', {'error': str(e)})
+                    finally:
+                        # 清理
+                        if server_id in self.server_instances:
+                            del self.server_instances[server_id]
 
-                # 在后台线程中运行
-                def run_async():
+                # 在后台线程中运行异步服务器
+                def run_async_thread():
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     self.loops[server_id] = loop
                     try:
-                        loop.run_until_complete(run_server())
+                        # 创建任务并运行
+                        loop.run_until_complete(create_and_run_server())
                     except Exception as e:
+                        server_error[0] = str(e)
+                        server_ready.set()
                         add_modbus_log('ERROR', '事件循环异常', {'error': str(e)})
                     finally:
                         loop.close()
-
-                thread = threading.Thread(target=run_async, daemon=True, name=f'modbus-server-{server_id}')
+                        if server_id in self.loops:
+                            del self.loops[server_id]
+                    thread = threading.Thread(target=run_async_thread, daemon=True, name=f'modbus-server-{server_id}')
                 thread.start()
 
-                # 等待服务器准备好（最多5秒）
-                if not server_ready.wait(timeout=5):
+                # 等待服务器准备好（最多10秒）
+                if not server_ready.wait(timeout=10):
                     add_modbus_log('ERROR', '服务端启动超时', {})
                     return False, "服务端启动超时"
 
@@ -218,7 +227,7 @@ class ModbusServer:
 
                 # 验证端口是否真正监听
                 import time
-                time.sleep(0.5)
+                time.sleep(1)
                 try:
                     test_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     test_sock.settimeout(1)
