@@ -613,7 +613,7 @@ document.getElementById('btn-trap-stop').addEventListener('click', async functio
 
 // 清屏
 document.getElementById('btn-trap-clear').addEventListener('click', async function() {
-    showConfirm('确定清空所有 TRAP？', async function() {
+    showConfirmModal('清空确认', '确定清空所有 TRAP？', async function() {
         const result = await apiRequest('/api/snmp/trap/clear/', 'POST');
         if (result.success) {
             showToast(result.message, 'success');
