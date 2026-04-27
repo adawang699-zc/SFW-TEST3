@@ -56,22 +56,33 @@ class LoggingDataBlock(ModbusSequentialDataBlock):
     """带日志记录的数据块"""
 
     def __init__(self, address, values, block_name='unknown'):
+        # pymodbus 3.x: address 是起始地址，values 是数据列表
+        # 使用 address=1 避免 0 地址问题（某些版本可能不支持）
         super().__init__(address, values)
         self.block_name = block_name
+        self._start_address = address
 
     def getValues(self, address, count=1):
         """读取数据时记录日志"""
-        values = super().getValues(address, count)
+        # 调整地址到内部索引
+        idx = address - self._start_address
+        if idx < 0 or idx + count > len(self.values):
+            return [0] * count
+        values = self.values[idx:idx + count]
         add_modbus_log('INFO', f'读取 {self.block_name}', {
             'address': address,
             'count': count,
-            'values': list(values)[:10] if len(values) > 10 else list(values)  # 只记录前10个
+            'values': list(values)[:10] if len(values) > 10 else list(values)
         })
         return values
 
     def setValues(self, address, values):
         """写入数据时记录日志"""
-        super().setValues(address, values)
+        idx = address - self._start_address
+        if idx < 0 or idx + len(values) > len(self.values):
+            return
+        for i, v in enumerate(values):
+            self.values[idx + i] = v
         add_modbus_log('INFO', f'写入 {self.block_name}', {
             'address': address,
             'count': len(values),
@@ -125,11 +136,11 @@ class ModbusServer:
                     'unit_id': unit_id
                 })
 
-                # 创建带日志的数据存储
-                coils = LoggingDataBlock(0, [0] * 10000, '线圈')
-                discrete_inputs = LoggingDataBlock(0, [0] * 10000, '离散输入')
-                holding_registers = LoggingDataBlock(0, [0] * 10000, '保持寄存器')
-                input_registers = LoggingDataBlock(0, [0] * 10000, '输入寄存器')
+                # 创建带日志的数据存储（使用 address=1 避免 pymodbus 3.x 的地址验证问题）
+                coils = LoggingDataBlock(1, [0] * 10000, '线圈')
+                discrete_inputs = LoggingDataBlock(1, [0] * 10000, '离散输入')
+                holding_registers = LoggingDataBlock(1, [0] * 10000, '保持寄存器')
+                input_registers = LoggingDataBlock(1, [0] * 10000, '输入寄存器')
 
                 # 创建从站上下文
                 slave_context = ModbusDeviceContext(
