@@ -5,20 +5,22 @@ SNMP Trap Handler Script
 用于 snmptrapd traphandle，将 TRAP 数据写入 JSON 文件
 
 snmptrapd 传递参数:
-  $1 = hostname
+  $1 = hostname (通常为空或 IP)
   $2 = IP address
 
-stdin 格式:
+stdin 格式 (snmptrapd 默认输出):
+  UDP: [IP]:port->[IP]:port  (第一行是地址信息)
   OID TYPE VALUE
   例如:
-  .1.3.6.1.2.1.1.3.0 Timeticks "(12345) 0:02:03.45"
-  .1.3.6.1.6.3.1.1.4.1.0 OID ".1.3.6.1.4.1.12345.1.1"
+  UDP: [10.40.20.41]:53074->[192.168.81.105]:162
+  DISMAN-EVENT-MIB::sysUpTimeInstance = Timeticks: (77757618) 8 days, 23:59:36.18
 """
 
 import sys
 import json
 import datetime
 import os
+import re
 
 # Trap 日志文件
 TRAP_LOG_FILE = '/var/log/snmptraps.json'
@@ -29,36 +31,69 @@ def parse_trap():
     trap_data = {}
 
     # 命令行参数: hostname 和 IP
+    # snmptrapd 通常传递: $1=hostname(空), $2=IP
     if len(sys.argv) >= 3:
-        trap_data['hostname'] = sys.argv[1]
+        trap_data['hostname'] = sys.argv[1] if sys.argv[1] else ''
         trap_data['source_ip'] = sys.argv[2]
+    elif len(sys.argv) >= 2:
+        trap_data['hostname'] = ''
+        trap_data['source_ip'] = sys.argv[1] if sys.argv[1] else 'unknown'
     else:
         trap_data['hostname'] = ''
-        trap_data['source_ip'] = sys.argv[1] if len(sys.argv) >= 2 else 'unknown'
+        trap_data['source_ip'] = 'unknown'
 
     trap_data['timestamp'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    trap_data['source_port'] = 0  # snmptrapd 不传递端口
+    trap_data['source_port'] = 0
 
     # 解析 stdin 中的变量绑定
     oid_values = []
+    source_ip_from_udp = None
+
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
 
-        # 格式: OID TYPE VALUE
-        parts = line.split(None, 2)  # 分割成最多 3 部分
-        if len(parts) >= 3:
+        # 检查是否是 UDP 地址行
+        # 格式: UDP: [IP]:port->[IP]:port 或 UDP: [IP]:port->[IP]:port]:
+        udp_match = re.match(r'UDP:\s*\[([^\]]+)\]:(\d+)->\[([^\]]+)\]:(\d+)', line)
+        if udp_match:
+            # 提取来源 IP
+            source_ip_from_udp = udp_match.group(1)
+            trap_data['source_ip'] = source_ip_from_udp
+            trap_data['source_port'] = int(udp_match.group(2))
+            continue
+
+        # 解析 OID = TYPE: VALUE 格式
+        # 例如: SNMPv2-MIB::sysUpTimeInstance = Timeticks: (77757618) 8 days, 23:59:36.18
+        # 或: SNMPv2-MIB::snmpTrapOID.0 = OID: SNMPv2-SMI::enterprises.2345
+
+        # 尝试匹配 "OID = TYPE: VALUE" 格式
+        match = re.match(r'^(.+?)\s*=\s*(.+)$', line)
+        if match:
+            oid = match.group(1).strip()
+            type_value = match.group(2).strip()
+
+            # 分离 type 和 value
+            # 格式可能是: "TYPE: VALUE" 或 "TYPE VALUE"
+            type_match = re.match(r'^(\w+):\s*(.+)$', type_value)
+            if type_match:
+                type_str = type_match.group(1)
+                value = type_match.group(2)
+            else:
+                # 可能 TYPE 和 VALUE 没有冒号分隔
+                parts = type_value.split(None, 1)
+                if len(parts) >= 2:
+                    type_str = parts[0]
+                    value = parts[1]
+                else:
+                    type_str = type_value
+                    value = ''
+
             oid_values.append({
-                'oid': parts[0],
-                'type': parts[1],
-                'value': parts[2]
-            })
-        elif len(parts) == 2:
-            oid_values.append({
-                'oid': parts[0],
-                'type': parts[1],
-                'value': ''
+                'oid': oid,
+                'type': type_str,
+                'value': value
             })
 
     trap_data['oid_values'] = oid_values
