@@ -33,7 +33,7 @@ class ModbusClient:
         self.clients: Dict[str, dict] = {}
         self.lock = threading.Lock()
 
-    def connect(self, client_id: str = 'default', ip: str, port: int = 502,
+    def connect(self, ip: str, port: int = 502, client_id: str = 'default',
                 unit_id: int = 1, timeout: int = 3) -> Tuple[bool, str]:
         """连接 Modbus 服务端"""
         if not PYMODBUS_AVAILABLE:
