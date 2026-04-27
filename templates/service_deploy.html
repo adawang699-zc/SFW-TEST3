@@ -1698,31 +1698,29 @@ async function createMailUser() {
 async function deleteMailUser(username) {
     if (!serverAgent) return;
 
-    if (!confirm(`确定要删除用户 "${username}" 吗？`)) {
-        return;
-    }
+    showConfirmModal('删除确认', `确定要删除用户 "${username}" 吗？`, async function() {
+        const config = {
+            agent_id: serverAgent.agent_id,
+            protocol: 'mail',
+            action: 'delete_user',
+            username: username
+        };
 
-    const config = {
-        agent_id: serverAgent.agent_id,
-        protocol: 'mail',
-        action: 'delete_user',
-        username: username
-    };
+        addServerLog(`删除邮件用户: ${username}...`);
 
-    addServerLog(`删除邮件用户: ${username}...`);
-
-    try {
-        const result = await apiRequest('/api/services/listener/', 'POST', config);
-        if (result.success) {
-            showToast('用户已删除');
-            addServerLog(`用户 ${username} 已删除`, 'info');
-            loadMailUsers();
-        } else {
-            showToast('删除失败: ' + (result.error || '未知错误'), 'error');
+        try {
+            const result = await apiRequest('/api/services/listener/', 'POST', config);
+            if (result.success) {
+                showToast('用户已删除');
+                addServerLog(`用户 ${username} 已删除`, 'info');
+                loadMailUsers();
+            } else {
+                showToast('删除失败: ' + (result.error || '未知错误'), 'error');
+            }
+        } catch (e) {
+            addServerLog('请求失败: ' + e.message, 'error');
         }
-    } catch (e) {
-        addServerLog('请求失败: ' + e.message, 'error');
-    }
+    }, '🗑️');
 }
 
 // ========== 客户端操作 ==========

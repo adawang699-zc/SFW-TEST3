@@ -454,15 +454,16 @@ function loadTemplate() {
 function deleteTemplate() {
     const name = document.getElementById('savedTemplates').value;
     if (!name) { addLog('请选择要删除的模板', 'warning'); return; }
-    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
 
-    apiRequest('/api/knowledge/templates/delete/', 'POST', { name }).then(data => {
-        if (data.success) {
-            addLog(`已删除模板: ${name}`, 'success');
-            loadTemplateList();
-            if (document.getElementById('templateName').value === name) clearFile();
-        } else { addLog(`删除失败: ${data.error}`, 'error'); }
-    });
+    showConfirmModal('删除确认', `确定要删除模板 "${name}" 吗？`, function() {
+        apiRequest('/api/knowledge/templates/delete/', 'POST', { name }).then(data => {
+            if (data.success) {
+                addLog(`已删除模板: ${name}`, 'success');
+                loadTemplateList();
+                if (document.getElementById('templateName').value === name) clearFile();
+            } else { addLog(`删除失败: ${data.error}`, 'error'); }
+        });
+    }, '🗑️');
 }
 
 function saveTemplate() {
@@ -589,12 +590,13 @@ function loadVulTemplate() {
 function deleteVulTemplate() {
     const name = document.getElementById('savedVulTemplates').value;
     if (!name) { addLog('请选择要删除的模板', 'warning'); return; }
-    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
 
-    apiRequest('/api/knowledge/vul/templates/delete/', 'POST', { name }).then(data => {
-        if (data.success) { addLog(`已删除漏洞库模板: ${name}`, 'success'); loadVulTemplateList(); }
-        else { addLog(`删除失败: ${data.error}`, 'error'); }
-    });
+    showConfirmModal('删除确认', `确定要删除模板 "${name}" 吗？`, function() {
+        apiRequest('/api/knowledge/vul/templates/delete/', 'POST', { name }).then(data => {
+            if (data.success) { addLog(`已删除漏洞库模板: ${name}`, 'success'); loadVulTemplateList(); }
+            else { addLog(`删除失败: ${data.error}`, 'error'); }
+        });
+    }, '🗑️');
 }
 
 function saveVulTemplate() {
@@ -779,12 +781,13 @@ function loadVirusTemplate() {
 function deleteVirusTemplate() {
     const name = document.getElementById('savedVirusTemplates').value;
     if (!name) { addLog('请选择要删除的模板', 'warning'); return; }
-    if (!confirm(`确定要删除模板 "${name}" 吗？`)) return;
 
-    apiRequest('/api/knowledge/virus/templates/delete/', 'POST', { name }).then(data => {
-        if (data.success) { addLog(`已删除病毒库模板: ${name}`, 'success'); loadVirusTemplateList(); }
-        else { addLog(`删除失败: ${data.error}`, 'error'); }
-    });
+    showConfirmModal('删除确认', `确定要删除模板 "${name}" 吗？`, function() {
+        apiRequest('/api/knowledge/virus/templates/delete/', 'POST', { name }).then(data => {
+            if (data.success) { addLog(`已删除病毒库模板: ${name}`, 'success'); loadVirusTemplateList(); }
+            else { addLog(`删除失败: ${data.error}`, 'error'); }
+        });
+    }, '🗑️');
 }
 
 function saveVirusTemplate() {
