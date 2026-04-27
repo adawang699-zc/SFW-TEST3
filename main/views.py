@@ -2030,6 +2030,68 @@ def dhcp_client(request):
     return render(request, 'dhcp_client.html', context)
 
 
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_dhcp_client_start(request):
+    """启动 DHCP 客户端（代理转发到 Agent）"""
+    try:
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+        count = data.get('count', 1)
+        start_mac = data.get('start_mac', '00:11:22:33:44:01')
+        timeout = data.get('timeout', 30)
+        max_workers = data.get('max_workers', 10)
+
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+        interface_name = agent.interface.name  # Agent 绑定的网卡
+
+        resp = requests.post(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/dhcp_client/start",
+            json={
+                'count': count,
+                'start_mac': start_mac,
+                'interface': interface_name,
+                'timeout': timeout,
+                'max_workers': max_workers
+            },
+            timeout=10
+        )
+
+        return JsonResponse(resp.json())
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+@csrf_exempt
+def api_dhcp_client_status(request):
+    """获取 DHCP 客户端状态（代理转发到 Agent）"""
+    try:
+        agent_id = request.GET.get('agent_id')
+        session_id = request.GET.get('session_id')
+
+        if not agent_id or not session_id:
+            return JsonResponse({'success': False, 'error': '缺少 agent_id 或 session_id'})
+
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        resp = requests.get(
+            f"http://{agent.interface.ip_address}:{agent.port}/api/dhcp_client/status",
+            params={'session_id': session_id},
+            timeout=10
+        )
+
+        return JsonResponse(resp.json())
+
+    except LocalAgent.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Agent 不存在'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
 # ========== 知识库管理 ==========
 
 import os

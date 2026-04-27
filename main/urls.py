@@ -103,6 +103,8 @@ urlpatterns = [
 
     # ========== DHCP 客户端 ==========
     path('dhcp-client/', views.dhcp_client, name='dhcp_client'),
+    path('api/dhcp_client/start/', views.api_dhcp_client_start, name='api_dhcp_client_start'),
+    path('api/dhcp_client/status/', views.api_dhcp_client_status, name='api_dhcp_client_status'),
 
     # ========== 知识库管理 ==========
     path('knowledge-base/', views.knowledge_base, name='knowledge_base'),

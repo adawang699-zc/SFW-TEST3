@@ -11,7 +11,7 @@
 
 <div class="card">
     <div class="card-header">选择 Agent</div>
-    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px;">
+    <div id="agent-selector" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
         <p style="color: var(--text-secondary);">加载中...</p>
     </div>
 </div>
@@ -104,12 +104,11 @@
 
 {% block extra_js %}
 <script>
-let selectedAgent = null;
-let agentBaseUrl = null;
+let selectedAgentId = null;
 let currentSessionId = null;
 let statusInterval = null;
 
-// 加载所有运行中的 Agent
+// 加载运行中的 Agent 列表（按 eth1, eth2, eth3... 排序）
 async function loadAgents() {
     try {
         const result = await apiRequest('/api/agents/list/');
@@ -120,6 +119,15 @@ async function loadAgents() {
         // 筛选运行中的 Agent
         const runningAgents = agents.filter(a => a.status === 'running');
 
+        // 按 eth1, eth2, eth3... 排序（提取网卡编号）
+        runningAgents.sort((a, b) => {
+            const getEthNum = (agentId) => {
+                const match = agentId.match(/eth(\d+)/);
+                return match ? parseInt(match[1]) : 999;
+            };
+            return getEthNum(a.agent_id) - getEthNum(b.agent_id);
+        });
+
         if (runningAgents.length > 0) {
             let html = '';
             runningAgents.forEach(agent => {
@@ -128,15 +136,13 @@ async function loadAgents() {
                 const port = agent.port || 8888;
 
                 html += `
-                    <div class="agent-card running" onclick="selectAgent('${agent.agent_id}', '${interfaceName}', '${ip}', ${port})"
+                    <div class="agent-card ${agent.status}" onclick="selectAgent('${agent.agent_id}', '${interfaceName}')"
                          data-agent-id="${agent.agent_id}"
-                         style="cursor: pointer; border: 2px solid var(--border); padding: 16px; border-radius: 12px;">
-                        <div class="agent-id" style="font-weight: bold; color: var(--primary); font-size: 1.1rem;">${agent.agent_id}</div>
-                        <div style="color: var(--text-secondary); margin-top: 8px;">
-                            <div>网卡: <span style="color: var(--text-primary);">${interfaceName}</span></div>
-                            <div>IP: <span style="color: var(--text-primary);">${ip}:${port}</span></div>
-                        </div>
-                        <div class="status-badge status-running" style="margin-top: 8px;">运行中</div>
+                         style="cursor: pointer; border: 2px solid var(--border); padding: 12px; border-radius: 8px;">
+                        <div class="agent-id" style="font-weight: bold; color: var(--primary);">${agent.agent_id}</div>
+                        <div style="color: var(--text-secondary);">网卡: ${interfaceName}</div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">IP: ${ip}:${port}</div>
+                        <div class="status-badge status-running" style="margin-top: 4px;">运行中</div>
                     </div>
                 `;
             });
@@ -152,15 +158,9 @@ async function loadAgents() {
 // 页面加载时获取 Agent 列表
 loadAgents();
 
-// 选择 Agent
-async function selectAgent(agentId, interfaceName, ip, port) {
-    selectedAgent = {
-        agent_id: agentId,
-        interface: interfaceName,
-        ip: ip,
-        port: port
-    };
-    agentBaseUrl = `http://${ip}:${port}`;
+// 选择 Agent（不需要直接连接，通过后端代理转发）
+function selectAgent(agentId, interfaceName) {
+    selectedAgentId = agentId;
 
     // 更新卡片边框
     document.querySelectorAll('.agent-card').forEach(card => {
@@ -169,26 +169,15 @@ async function selectAgent(agentId, interfaceName, ip, port) {
         card.style.background = isSelected ? 'rgba(255, 107, 53, 0.1)' : '';
     });
 
-    // 验证 Agent 连接
-    try {
-        const healthResult = await fetch(`${agentBaseUrl}/api/health`).then(r => r.json());
-        if (!healthResult.success || healthResult.status !== 'healthy') {
-            showToast('Agent 连接失败', 'error');
-            return;
-        }
-
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('refreshStatusBtn').disabled = false;
-        showToast(`已选择 Agent: ${agentId} (网卡: ${interfaceName})`, 'success');
-    } catch (e) {
-        showToast('Agent 连接失败: ' + e.message, 'error');
-        document.getElementById('startBtn').disabled = true;
-    }
+    // 启用按钮
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('refreshStatusBtn').disabled = false;
+    showToast(`已选择 Agent: ${agentId} (网卡: ${interfaceName})`, 'success');
 }
 
-// 启动 DHCP 客户端
+// 启动 DHCP 客户端（通过后端代理转发）
 async function startDhcp() {
-    if (!selectedAgent || !agentBaseUrl) {
+    if (!selectedAgentId) {
         showToast('请先选择 Agent', 'error');
         return;
     }
@@ -211,21 +200,15 @@ async function startDhcp() {
         return;
     }
 
-    // 使用 Agent 绑定的网卡
-    const interfaceName = selectedAgent.interface;
-
     try {
-        const result = await fetch(`${agentBaseUrl}/api/dhcp_client/start`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                count: count,
-                start_mac: startMac,
-                interface: interfaceName,
-                timeout: timeout,
-                max_workers: maxWorkers
-            })
-        }).then(r => r.json());
+        // 通过后端代理 API 发送请求
+        const result = await apiRequest('/api/dhcp_client/start/', 'POST', {
+            agent_id: selectedAgentId,
+            count: count,
+            start_mac: startMac,
+            timeout: timeout,
+            max_workers: maxWorkers
+        });
 
         if (result.success) {
             currentSessionId = result.session_id;
@@ -237,7 +220,7 @@ async function startDhcp() {
             document.getElementById('resultsTable').style.display = 'block';
             document.getElementById('resultsEmpty').style.display = 'none';
             startStatusPolling();
-            showToast(`DHCP 客户端已启动 (网卡: ${interfaceName})`, 'success');
+            showToast('DHCP 客户端已启动', 'success');
         } else {
             showToast('启动失败: ' + (result.error || '未知错误'), 'error');
         }
@@ -266,12 +249,13 @@ function startStatusPolling() {
     statusInterval = setInterval(fetchStatus, 2000);
 }
 
-// 获取状态
+// 获取状态（通过后端代理转发）
 async function fetchStatus() {
-    if (!currentSessionId || !agentBaseUrl) return;
+    if (!currentSessionId || !selectedAgentId) return;
 
     try {
-        const result = await fetch(`${agentBaseUrl}/api/dhcp_client/status?session_id=${currentSessionId}`).then(r => r.json());
+        // 通过后端代理 API 获取状态
+        const result = await apiRequest(`/api/dhcp_client/status/?agent_id=${selectedAgentId}&session_id=${currentSessionId}`);
 
         if (result.success) {
             updateStatusDisplay(result);
