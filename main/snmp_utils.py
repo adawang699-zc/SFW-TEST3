@@ -39,9 +39,14 @@ def check_snmp_tools() -> Tuple[bool, str]:
     missing = []
 
     for tool in tools:
-        try:
-            subprocess.run(['which', tool], capture_output=True, check=True)
-        except subprocess.CalledProcessError:
+        # snmptrapd 在 /usr/sbin/
+        tool_paths = ['/usr/bin/' + tool, '/usr/sbin/' + tool]
+        found = False
+        for path in tool_paths:
+            if os.path.exists(path):
+                found = True
+                break
+        if not found:
             missing.append(tool)
 
     if missing:
