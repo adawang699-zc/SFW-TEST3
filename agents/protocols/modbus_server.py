@@ -142,16 +142,16 @@ class ModbusServer:
                 holding_registers = LoggingDataBlock(1, [0] * 10000, '保持寄存器')
                 input_registers = LoggingDataBlock(1, [0] * 10000, '输入寄存器')
 
-                # 创建从站上下文
+                # 创建从站上下文（pymodbus 3.x 使用 di/co/ir/hr 参数名）
                 slave_context = ModbusDeviceContext(
-                    coils=coils,
-                    discrete_inputs=discrete_inputs,
-                    holding_registers=holding_registers,
-                    input_registers=input_registers
+                    di=discrete_inputs,
+                    co=coils,
+                    ir=input_registers,
+                    hr=holding_registers
                 )
 
-                # 创建服务端上下文
-                server_context = ModbusServerContext(slaves=slave_context, single=True)
+                # 创建服务端上下文（pymodbus 3.x 使用 devices 参数）
+                server_context = ModbusServerContext(devices=slave_context, single=True)
 
                 # 保存数据存储
                 self.datastores[server_id] = {
