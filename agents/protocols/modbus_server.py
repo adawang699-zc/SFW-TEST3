@@ -25,6 +25,46 @@ except ImportError:
     logger.warning("pymodbus 未安装，Modbus 服务端功能将不可用")
 
 
+# 自定义 DataBlock - 解决 pymodbus 3.x simdata 数据同步问题
+class CustomDataBlock:
+    """自定义数据块，直接存储数据避免 simdata 问题"""
+
+    def __init__(self, address: int, values: List):
+        self.address = address
+        self.values = list(values)  # 使用普通列表存储
+        self._simdata = None
+
+    @property
+    def simdata(self):
+        """返回 simdata 格式的数据"""
+        if self._simdata is None:
+            from pymodbus.datastore import ModbusSequentialDataBlock
+            block = ModbusSequentialDataBlock(self.address, self.values.copy())
+            self._simdata = block.simdata
+        return self._simdata
+
+    def get_values(self, start: int, count: int) -> List:
+        """获取值"""
+        idx = start - self.address
+        if idx < 0 or idx + count > len(self.values):
+            return []
+        return self.values[idx:idx + count]
+
+    def set_values(self, start: int, values: List) -> bool:
+        """设置值"""
+        idx = start - self.address
+        if idx < 0 or idx + len(values) > len(self.values):
+            return False
+        for i, v in enumerate(values):
+            self.values[idx + i] = int(v)
+        # 同步 simdata
+        if self._simdata:
+            sim_vals = self._simdata[0].values
+            for i, v in enumerate(values):
+                sim_vals[idx + i] = int(v)
+        return True
+
+
 # Modbus 操作日志存储
 modbus_server_logs = deque(maxlen=1000)
 modbus_server_log_lock = threading.Lock()
