@@ -174,53 +174,41 @@ class ModbusServer:
                     'pymodbus_version': PYMODBUS_VERSION
                 })
 
-                # 1. 创建数据块（pymodbus 3.13.0 要求地址 >= 1）
-                # 使用地址 1 作为起始地址
-                coils = ModbusSequentialDataBlock(1, [0] * 65536)
-                discrete_inputs = ModbusSequentialDataBlock(1, [0] * 65536)
+                # 1. 创建数据块（pymodbus 3.13.0 地址映射）
+                # ModbusSequentialDataBlock(address, values) → SimData.address=address-1
+                # Client 发送 PDU address=0 → Server 需要匹配 SimData.address=0
+                # 所以数据块参数 address=1 → SimData.address=0
+                # 所有数据块从 PDU address 0 开始覆盖
+                coils = ModbusSequentialDataBlock(1, [False] * 65536)
+                discrete_inputs = ModbusSequentialDataBlock(1, [False] * 65536)
                 holding_registers = ModbusSequentialDataBlock(1, [0] * 65536)
                 input_registers = ModbusSequentialDataBlock(1, [0] * 65536)
 
                 add_modbus_log('DEBUG', '数据块创建完成', {
+                    'coils_simdata_address': coils.simdata[0].address,
+                    'hr_simdata_address': holding_registers.simdata[0].address,
                     'coils_size': 65536,
                     'holding_registers_size': 65536
                 })
 
-                # 2. 创建从站上下文 - 关键：使用 zero_mode=True
-                try:
-                    store = ModbusDeviceContext(
-                        di=discrete_inputs,
-                        co=coils,
-                        hr=holding_registers,
-                        ir=input_registers,
-                        zero_mode=True  # 启用零地址模式，确保地址映射正确
-                    )
-                    add_modbus_log('INFO', 'ModbusDeviceContext 初始化成功', {'zero_mode': True})
-                except TypeError:
-                    # 如果不支持 zero_mode 参数
-                    store = ModbusDeviceContext(
-                        di=discrete_inputs,
-                        co=coils,
-                        hr=holding_registers,
-                        ir=input_registers
-                    )
-                    store.zero_mode = False  # 标记实际模式
-                    add_modbus_log('WARNING', 'ModbusDeviceContext 不支持 zero_mode 参数', {})
+                # 2. 创建从站上下文
+                store = ModbusDeviceContext(
+                    di=discrete_inputs,
+                    co=coils,
+                    hr=holding_registers,
+                    ir=input_registers
+                )
+                add_modbus_log('INFO', 'ModbusDeviceContext 初始化成功', {
+                    'hr_simdata_address': holding_registers.simdata[0].address
+                })
 
-                # 3. 创建服务器上下文
-                if PYMODBUS_MAJOR_VERSION >= 3:
-                    try:
-                        context = ModbusServerContext(slaves={unit_id: store}, single=False)
-                        add_modbus_log('INFO', 'ModbusServerContext 初始化成功', {'slaves': {unit_id: store}})
-                    except TypeError:
-                        try:
-                            context = ModbusServerContext(devices=store, single=True)
-                            add_modbus_log('INFO', 'ModbusServerContext 使用 devices 参数', {})
-                        except TypeError:
-                            context = ModbusServerContext(slaves=store, single=True)
-                            add_modbus_log('INFO', 'ModbusServerContext 使用 single=True', {})
-                else:
-                    context = ModbusServerContext(slaves=store, single=True)
+                # 3. 创建服务器上下文（pymodbus 3.x 使用 devices 参数）
+                try:
+                    context = ModbusServerContext(devices={unit_id: store}, single=False)
+                    add_modbus_log('INFO', 'ModbusServerContext 初始化成功', {'unit_id': unit_id})
+                except TypeError:
+                    context = ModbusServerContext(devices=store, single=True)
+                    add_modbus_log('INFO', 'ModbusServerContext 使用 single=True', {})
 
                 # 用于传递 server 实例的事件
                 server_ready = threading.Event()
