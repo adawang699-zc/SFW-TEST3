@@ -174,12 +174,12 @@ class ModbusServer:
                     'pymodbus_version': PYMODBUS_VERSION
                 })
 
-                # 1. 创建数据块（标准 Modbus 地址空间，从地址 0 开始）
-                # 使用大容量数据块支持完整地址空间
-                coils = ModbusSequentialDataBlock(0, [0] * 65536)
-                discrete_inputs = ModbusSequentialDataBlock(0, [0] * 65536)
-                holding_registers = ModbusSequentialDataBlock(0, [0] * 65536)
-                input_registers = ModbusSequentialDataBlock(0, [0] * 65536)
+                # 1. 创建数据块（pymodbus 3.13.0 要求地址 >= 1）
+                # 使用地址 1 作为起始地址
+                coils = ModbusSequentialDataBlock(1, [0] * 65536)
+                discrete_inputs = ModbusSequentialDataBlock(1, [0] * 65536)
+                holding_registers = ModbusSequentialDataBlock(1, [0] * 65536)
+                input_registers = ModbusSequentialDataBlock(1, [0] * 65536)
 
                 add_modbus_log('DEBUG', '数据块创建完成', {
                     'coils_size': 65536,
@@ -383,6 +383,7 @@ class ModbusServer:
 
             try:
                 # 地址映射：前端地址转 Modbus 内部地址
+                # 数据块起始地址为 1，所以需要减 1
                 # FC1: 地址 1-9999 -> 内部地址 0-9998
                 # FC2: 地址 10001-19999 -> 内部地址 0-9998
                 # FC3: 地址 40001-49999 -> 内部地址 0-9998
@@ -390,21 +391,24 @@ class ModbusServer:
 
                 actual_address = address
                 if function_code == 1:
-                    if address >= 1:
-                        actual_address = address - 1
+                    # 线圈地址从 1 开始，映射到内部地址 0
+                    actual_address = address - 1
                 elif function_code == 2:
+                    # 离散输入地址从 10001 开始
                     if address >= 10001:
                         actual_address = address - 10001
                 elif function_code == 3:
+                    # 保持寄存器地址从 40001 开始
                     if address >= 40001:
                         actual_address = address - 40001
                 elif function_code == 4:
+                    # 输入寄存器地址从 30001 开始
                     if address >= 30001:
                         actual_address = address - 30001
 
-                # 确保地址不小于 0
-                if actual_address < 0:
-                    actual_address = 0
+                # 确保 address 参数符合 pymodbus 要求（从 1 开始）
+                # getValues/setValues 内部使用 simdata，地址需要加 1
+                internal_address = actual_address + 1
 
                 # 使用 getValues 方法获取数据
                 values = store.getValues(function_code, actual_address, count)
