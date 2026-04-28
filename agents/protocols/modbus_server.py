@@ -208,6 +208,45 @@ class ModbusServer:
                         )
 
                         server_instance[0] = server
+
+                        # 在后台启动 serve_forever，然后验证端口是否真正开始监听
+                        serve_task = asyncio.ensure_future(server.serve_forever())
+
+                        # 让出事件循环，让 serve_forever 有机会初始化
+                        await asyncio.sleep(1)
+
+                        # 验证端口是否真正开始监听（通过连接测试）
+                        def _verify_port():
+                            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                            s.settimeout(2)
+                            try:
+                                s.connect((interface, port))
+                                s.close()
+                                return True
+                            except (ConnectionRefusedError, OSError, TimeoutError):
+                                try:
+                                    s.close()
+                                except Exception:
+                                    pass
+                                return False
+
+                        loop = asyncio.get_event_loop()
+                        is_listening = await loop.run_in_executor(None, _verify_port)
+
+                        if not is_listening:
+                            # 再等一次，确认不是时序问题
+                            await asyncio.sleep(1)
+                            is_listening = await loop.run_in_executor(None, _verify_port)
+
+                        if not is_listening:
+                            server_error[0] = "服务端启动后端口未能开始监听（可能被防火墙或权限阻止）"
+                            server_ready.set()
+                            add_modbus_log('ERROR', '端口监听验证失败', {
+                                'interface': interface,
+                                'port': port
+                            })
+                            return
+
                         server_ready.set()
 
                         add_modbus_log('INFO', 'Modbus 服务端开始监听', {
@@ -215,13 +254,16 @@ class ModbusServer:
                             'port': port
                         })
 
-                        await server.serve_forever()
+                        await serve_task
 
                     except Exception as e:
-                        server_error[0] = str(e)
-                        server_ready.set()
-                        add_modbus_log('ERROR', '服务端启动异常', {'error': str(e)})
+                        if not server_ready.is_set():
+                            server_error[0] = str(e)
+                            server_ready.set()
+                            add_modbus_log('ERROR', '服务端启动异常', {'error': str(e)})
                     finally:
+                        if not server_ready.is_set():
+                            server_ready.set()
                         if server_instance[0]:
                             add_modbus_log('INFO', '服务端停止', {'server_id': server_id})
 
