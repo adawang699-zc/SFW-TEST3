@@ -2048,10 +2048,6 @@ def api_stop_replay(request):
         if success:
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
-            timeout=5
-        )
-
-        return JsonResponse(resp.json())
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
