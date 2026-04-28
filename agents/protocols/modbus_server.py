@@ -132,31 +132,32 @@ class ModbusServer:
 
                 # 1. 创建 SimData 数据块（pymodbus 3.13.0 新 API）
                 # address=0 表示覆盖 PDU address 0 开始的请求
+                # 注意：减少数据块大小避免 OOM
                 coils_data = SimData(
                     address=0,
-                    count=65536,
-                    values=[False] * 65536,
+                    count=10000,
+                    values=[False] * 10000,
                     datatype=DataType.BITS,
                     readonly=False
                 )
                 discrete_inputs_data = SimData(
                     address=0,
-                    count=65536,
-                    values=[False] * 65536,
+                    count=10000,
+                    values=[False] * 10000,
                     datatype=DataType.BITS,
                     readonly=False
                 )
                 holding_registers_data = SimData(
                     address=0,
-                    count=65536,
-                    values=[0] * 65536,
+                    count=10000,
+                    values=[0] * 10000,
                     datatype=DataType.REGISTERS,
                     readonly=False
                 )
                 input_registers_data = SimData(
                     address=0,
-                    count=65536,
-                    values=[0] * 65536,
+                    count=10000,
+                    values=[0] * 10000,
                     datatype=DataType.REGISTERS,
                     readonly=False
                 )
