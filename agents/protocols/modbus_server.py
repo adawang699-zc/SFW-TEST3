@@ -168,10 +168,11 @@ class ModbusServer:
                 })
 
                 # 2. 创建 SimDevice（使用 4 块分离模式）
-                # simdata=(coils, discrete_inputs, input_registers, holding_registers)
+                # simdata=(coils_list, discrete_inputs_list, input_registers_list, holding_registers_list)
+                # 每个元素必须是列表
                 device = SimDevice(
                     id=unit_id,
-                    simdata=(coils_data, discrete_inputs_data, input_registers_data, holding_registers_data),
+                    simdata=([coils_data], [discrete_inputs_data], [input_registers_data], [holding_registers_data]),
                     use_bit_addressing=True
                 )
 
