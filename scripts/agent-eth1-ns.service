@@ -11,8 +11,9 @@ Requires=network-namespace.service
 
 [Service]
 Type=exec
+WorkingDirectory=/opt/SFW-TEST3
 # 使用 ip netns exec 在指定 namespace 内运行
-ExecStart=/usr/bin/ip netns exec ns-eth1 /opt/SFW-TEST3/sfw/bin/python /opt/SFW-TEST3/agents/run_agent.py eth1
+ExecStart=/usr/bin/ip netns exec ns-eth1 /opt/SFW-TEST3/sfw/bin/python -m gunicorn -w 1 -b 192.168.11.100:8888 --preload --timeout 30 agents.full_agent:app
 ExecStop=/usr/bin/ip netns exec ns-eth1 /opt/SFW-TEST3/sfw/bin/python -c "import sys; sys.exit(0)"
 Restart=always
 RestartSec=5
