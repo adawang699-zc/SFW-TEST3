@@ -3,7 +3,7 @@
 """
 Modbus TCP 服务端
 使用 pymodbus 实现 Modbus TCP 服务端
-pymodbus 3.13.0 使用新的 SimData/SimDevice API
+支持 pymodbus 2.x 和 3.x 版本（使用旧 API）
 """
 
 import logging
@@ -23,9 +23,9 @@ PYMODBUS_VERSION = "0.0.0"
 # pymodbus 类
 ModbusTcpServer = None
 ModbusServerContext = None
-SimData = None
-SimDevice = None
-DataType = None
+ModbusSequentialDataBlock = None
+ModbusDeviceContext = None
+ModbusException = None
 
 try:
     import pymodbus
@@ -35,7 +35,17 @@ try:
 except ImportError:
     logger.warning("pymodbus 未安装，Modbus 服务端功能将不可用")
 
-# 导入具体类（pymodbus 3.x）
+# 解析版本号
+def get_pymodbus_version_major() -> int:
+    """获取 pymodbus 主版本号"""
+    try:
+        return int(PYMODBUS_VERSION.split('.')[0])
+    except (IndexError, ValueError):
+        return 2
+
+PYMODBUS_MAJOR_VERSION = get_pymodbus_version_major() if PYMODBUS_AVAILABLE else 2
+
+# 导入具体类
 if PYMODBUS_AVAILABLE:
     # 服务器导入
     try:
@@ -49,15 +59,32 @@ if PYMODBUS_AVAILABLE:
             logger.warning(f"ModbusTcpServer 导入失败: {e}")
             PYMODBUS_AVAILABLE = False
 
-    # 数据存储导入
+    # 数据存储导入（旧 API）
     try:
-        from pymodbus.datastore import ModbusServerContext
-        from pymodbus.simulator.simdata import SimData, DataType
-        from pymodbus.simulator.simdevice import SimDevice
-        logger.info("SimData, SimDevice, ModbusServerContext 导入成功")
-    except ImportError as e:
-        logger.warning(f"数据存储导入失败: {e}")
-        PYMODBUS_AVAILABLE = False
+        from pymodbus.datastore import (
+            ModbusServerContext,
+            ModbusSequentialDataBlock,
+            ModbusDeviceContext
+        )
+        logger.info("ModbusDeviceContext, ModbusServerContext, ModbusSequentialDataBlock 导入成功")
+    except ImportError:
+        try:
+            from pymodbus.datastore.context import (
+                ModbusServerContext,
+                ModbusDeviceContext
+            )
+            from pymodbus.datastore.store import ModbusSequentialDataBlock
+            logger.info("数据存储导入成功 (备用路径)")
+        except ImportError as e:
+            logger.warning(f"数据存储导入失败: {e}")
+            PYMODBUS_AVAILABLE = False
+
+    # 异常类导入
+    try:
+        from pymodbus.exceptions import ModbusException
+        logger.info("ModbusException 导入成功")
+    except ImportError:
+        ModbusException = Exception
 
 
 # Modbus 操作日志存储
@@ -130,32 +157,53 @@ class ModbusServer:
                     'pymodbus_version': PYMODBUS_VERSION
                 })
 
-                # 1. 创建 SimData 列表（使用 shared block 模式）
-                # 所有数据类型共享同一个地址空间，使用 REGISTERS 类型
-                # 注意：use_bit_addressing=False 只支持 shared block 模式
-                combined_simdata = [
-                    SimData(address=i, count=1, values=0, datatype=DataType.REGISTERS, readonly=False)
-                    for i in range(1000)
-                ]
+                # 1. 创建数据块（旧 API）
+                # ModbusSequentialDataBlock(address, values)
+                # address=1 表示从 Modbus address 1 开始覆盖
+                coils = ModbusSequentialDataBlock(1, [False] * 10000)
+                discrete_inputs = ModbusSequentialDataBlock(1, [False] * 10000)
+                holding_registers = ModbusSequentialDataBlock(1, [0] * 10000)
+                input_registers = ModbusSequentialDataBlock(1, [0] * 10000)
 
-                add_modbus_log('DEBUG', 'SimData 列表创建完成', {
-                    'count': len(combined_simdata),
-                    'datatype': combined_simdata[0].datatype
+                add_modbus_log('DEBUG', '数据块创建完成', {
+                    'coils_size': 10000,
+                    'holding_registers_size': 10000
                 })
 
-                # 2. 创建 SimDevice（使用 shared block 模式）
-                device = SimDevice(
-                    id=unit_id,
-                    simdata=combined_simdata,  # shared block（单个列表）
-                    use_bit_addressing=False
-                )
-
-                add_modbus_log('INFO', 'SimDevice 初始化成功', {'unit_id': unit_id})
+                # 2. 创建从站上下文
+                # pymodbus 3.x: zero_mode=True 让 address 请求正确映射
+                try:
+                    store = ModbusDeviceContext(
+                        di=discrete_inputs,
+                        co=coils,
+                        hr=holding_registers,
+                        ir=input_registers,
+                        zero_mode=True
+                    )
+                    add_modbus_log('INFO', 'ModbusDeviceContext 初始化成功', {'zero_mode': True})
+                except TypeError:
+                    # 如果不支持 zero_mode 参数
+                    store = ModbusDeviceContext(
+                        di=discrete_inputs,
+                        co=coils,
+                        hr=holding_registers,
+                        ir=input_registers
+                    )
+                    add_modbus_log('WARNING', 'ModbusDeviceContext 不支持 zero_mode', {})
 
                 # 3. 创建服务器上下文
-                context = ModbusServerContext(devices={unit_id: device}, single=False)
-
-                add_modbus_log('INFO', 'ModbusServerContext 初始化成功', {'unit_id': unit_id})
+                # pymodbus 3.7.4: 使用 slaves 参数
+                try:
+                    context = ModbusServerContext(slaves={unit_id: store}, single=False)
+                    add_modbus_log('INFO', 'ModbusServerContext 初始化成功', {'slaves': {unit_id: store}})
+                except TypeError:
+                    # pymodbus 3.x 使用 devices 参数
+                    try:
+                        context = ModbusServerContext(devices={unit_id: store}, single=False)
+                        add_modbus_log('INFO', 'ModbusServerContext 使用 devices 参数', {})
+                    except TypeError:
+                        context = ModbusServerContext(slaves=store, single=True)
+                        add_modbus_log('INFO', 'ModbusServerContext 使用 single=True', {})
 
                 # 用于传递 server 实例的事件
                 server_ready = threading.Event()
@@ -214,15 +262,14 @@ class ModbusServer:
                 if server_error[0]:
                     return False, server_error[0]
 
-                # 保存服务器信息和 SimData 列表引用
+                # 保存服务器信息和数据块引用
                 self.servers[server_id] = {
                     'running': True,
                     'port': port,
                     'interface': interface,
                     'unit_id': unit_id,
                     'context': context,
-                    'device': device,
-                    'combined_simdata': combined_simdata,  # 所有数据共享
+                    'store': store,  # ModbusDeviceContext 引用
                     'loop': server_loop[0],
                     'server': server_instance[0],
                     'thread': thread,
@@ -308,16 +355,17 @@ class ModbusServer:
 
     def get_data(self, server_id: str = 'default', function_code: int = 3,
                 address: int = 0, count: int = 1) -> Tuple[bool, List]:
-        """获取数据存储中的数据 - pymodbus 3.13.0 shared block"""
+        """获取数据存储中的数据 - 使用 getValues 方法"""
         with self.lock:
             if server_id not in self.servers:
                 add_modbus_log('WARNING', '获取数据失败: 服务端不存在', {'server_id': server_id})
                 return False, []
 
             server_info = self.servers[server_id]
+            store = server_info['store']
 
             try:
-                # 地址映射
+                # 地址映射：前端地址转 Modbus 内部地址
                 actual_address = address
                 if function_code == 1:
                     actual_address = address - 1
@@ -331,16 +379,12 @@ class ModbusServer:
                 if actual_address < 0:
                     actual_address = 0
 
-                simdata_list = server_info['combined_simdata']
+                # 使用 getValues 方法获取数据
+                values = store.getValues(function_code, actual_address, count)
 
-                # 从 SimData 列表获取值
-                values = []
-                for i in range(count):
-                    addr = actual_address + i
-                    if addr < len(simdata_list):
-                        values.append(int(simdata_list[addr].values))
-                    else:
-                        values.append(0)
+                # 线圈/离散输入返回布尔值转为整数
+                if function_code in [1, 2]:
+                    values = [1 if v else 0 for v in values]
 
                 add_modbus_log('INFO', '获取数据成功', {
                     'server_id': server_id,
@@ -348,9 +392,9 @@ class ModbusServer:
                     'frontend_address': address,
                     'actual_address': actual_address,
                     'count': count,
-                    'result': values[:10]
+                    'result': list(values)[:10]
                 })
-                return True, values
+                return True, list(values)
 
             except Exception as e:
                 add_modbus_log('ERROR', '获取数据异常', {'error': str(e)})
@@ -359,7 +403,7 @@ class ModbusServer:
 
     def set_data(self, server_id: str = 'default', function_code: int = 3,
                 address: int = 0, values: List = []) -> Tuple[bool, str]:
-        """设置数据存储中的数据 - pymodbus 3.13.0 shared block"""
+        """设置数据存储中的数据 - 使用 setValues 方法"""
         with self.lock:
             if server_id not in self.servers:
                 add_modbus_log('WARNING', '设置数据失败: 服务端不存在', {'server_id': server_id})
@@ -370,6 +414,7 @@ class ModbusServer:
                 return False, "值不能为空"
 
             server_info = self.servers[server_id]
+            store = server_info['store']
 
             try:
                 # 地址映射
@@ -386,17 +431,17 @@ class ModbusServer:
                 if actual_address < 0:
                     actual_address = 0
 
-                processed_values = [int(v) for v in values]
-                simdata_list = server_info['combined_simdata']
+                # 处理值类型
+                if function_code in [1, 2]:
+                    processed_values = [bool(int(v)) for v in values]
+                else:
+                    processed_values = [int(v) for v in values]
 
-                # 设置值到 SimData
-                for i, val in enumerate(processed_values):
-                    addr = actual_address + i
-                    if addr < len(simdata_list):
-                        simdata_list[addr].values = val
+                # 使用 setValues 方法设置数据
+                store.setValues(function_code, actual_address, processed_values)
 
-                # 验证
-                verify_val = simdata_list[actual_address].values if actual_address < len(simdata_list) else None
+                # 验证设置是否成功
+                verify_values = store.getValues(function_code, actual_address, min(5, len(processed_values)))
 
                 add_modbus_log('INFO', '设置数据成功', {
                     'server_id': server_id,
@@ -405,7 +450,7 @@ class ModbusServer:
                     'actual_address': actual_address,
                     'count': len(values),
                     'values': processed_values[:10],
-                    'verify_value': verify_val
+                    'verify_values': list(verify_values)
                 })
                 return True, "设置成功"
 
