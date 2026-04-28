@@ -181,7 +181,7 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px; align-items: center;">
-                        <button class="btn btn-primary" onclick="modbusClientRefresh()">刷新</button>
+                        <button class="btn btn-primary" onclick="modbusClientRefresh()">读取</button>
                         <button class="btn btn-outline-primary" onclick="showWriteMultipleModal()">FC15/16 写入</button>
                         <label style="color: var(--text-muted); margin-left: auto;">刷新间隔(秒):</label>
                         <input type="number" id="modbus-client-interval" class="form-input" style="width: 60px;" value="1" min="0.5" max="60" step="0.5">
@@ -822,6 +822,9 @@
 <script>
 let selectedClientAgentId = null;
 let selectedServerAgentId = null;
+let selectedClientAgentIp = null;
+let selectedServerAgentIp = null;
+let agentsData = [];  // 保存 Agent 数据
 
 // 加载租用的 Agent 列表（按 eth1, eth2, eth3... 排序）
 async function loadAgents() {
@@ -840,6 +843,9 @@ async function loadAgents() {
             };
             return getEthNum(a.agent_id) - getEthNum(b.agent_id);
         });
+
+        // 保存 Agent 数据供后续使用
+        agentsData = runningAgents;
 
         if (runningAgents.length > 0) {
             // 为 Modbus Client 和 Server 分别渲染 Agent 选择器
@@ -862,8 +868,8 @@ function renderAgentSelector(containerId, agents, type) {
     agents.forEach(agent => {
         const ip = agent.ip_address || 'N/A';
         html += `
-            <div class="agent-selector-btn" onclick="selectAgent('${agent.agent_id}', '${type}')"
-                 data-agent-id="${agent.agent_id}" data-type="${type}"
+            <div class="agent-selector-btn" onclick="selectAgent('${agent.agent_id}', '${type}', '${ip}')"
+                 data-agent-id="${agent.agent_id}" data-type="${type}" data-ip="${ip}"
                  style="cursor: pointer; border: 2px solid var(--border); padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 2px;">
                 <span style="font-weight: bold; color: var(--primary);">${agent.agent_id}</span>
                 <span style="color: var(--text-muted); font-size: 0.8rem;">(${ip})</span>
@@ -873,23 +879,25 @@ function renderAgentSelector(containerId, agents, type) {
     container.innerHTML = html;
 }
 
-function selectAgent(agentId, type) {
+function selectAgent(agentId, type, ip) {
     if (type === 'client') {
         selectedClientAgentId = agentId;
+        selectedClientAgentIp = ip;
         // 更新 Client 卡片边框
         document.querySelectorAll('#modbus-client-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
-        showToast(`已选择 ${agentId} 作为 Client Agent`, 'success');
+        showToast(`已选择 ${agentId} (${ip}) 作为 Client Agent`, 'success');
     } else if (type === 'server') {
         selectedServerAgentId = agentId;
+        selectedServerAgentIp = ip;
         // 更新 Server 卡片边框
         document.querySelectorAll('#modbus-server-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
-        showToast(`已选择 ${agentId} 作为 Server Agent`, 'success');
+        showToast(`已选择 ${agentId} (${ip}) 作为 Server Agent`, 'success');
     }
 }
 
@@ -1112,18 +1120,19 @@ async function modbusServerToggle() {
             showToast('停止失败: ' + result.error, 'error');
         }
     } else {
-        // 启动
+        // 启动 - 使用 Agent IP 作为 interface 参数
         const data = {
             agent_id: selectedServerAgentId,
             port: parseInt(document.getElementById('modbus-server-port').value),
-            unit_id: parseInt(document.getElementById('modbus-server-unit-id').value)
+            unit_id: parseInt(document.getElementById('modbus-server-unit-id').value),
+            interface: selectedServerAgentIp || '0.0.0.0'  // 绑定到 Agent 所在网卡
         };
 
         const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
         if (result.success) {
             modbusServerRunning = true;
             updateServerButtonState(true);
-            showToast('Modbus Server 启动成功', 'success');
+            showToast(`Modbus Server 启动成功，监听 ${selectedServerAgentIp}:${data.port}`, 'success');
             modbusServerRefresh();
         } else {
             showToast('启动失败: ' + result.error, 'error');
@@ -1312,6 +1321,10 @@ async function saveCellValue() {
             currentEditCell.textContent = `${String(displayAddr).padStart(5, '0')}：${value}`;
             showToast('写入成功', 'success');
             closeEditModal();
+            // 写入后自动刷新服务端数据
+            if (selectedServerAgentId && modbusServerRunning) {
+                modbusServerRefresh();
+            }
         } else {
             showToast('写入失败: ' + result.error, 'error');
         }
@@ -1395,6 +1408,10 @@ async function executeWriteMultiple() {
         showToast('写入成功', 'success');
         closeWriteMultipleModal();
         modbusClientRefresh();
+        // 写入后自动刷新服务端数据
+        if (selectedServerAgentId && modbusServerRunning) {
+            modbusServerRefresh();
+        }
     } else {
         showToast('写入失败: ' + result.error, 'error');
     }
