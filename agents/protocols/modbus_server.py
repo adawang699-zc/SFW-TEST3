@@ -130,37 +130,24 @@ class ModbusServer:
                     'pymodbus_version': PYMODBUS_VERSION
                 })
 
-                # 1. 创建 SimData 列表（手动创建，指定 DataType）
-                # BITS 类型：线圈和离散输入
-                coils_simdata = [
-                    SimData(address=i, count=1, values=False, datatype=DataType.BITS, readonly=False)
-                    for i in range(1000)
-                ]
-                discrete_inputs_simdata = [
-                    SimData(address=i, count=1, values=False, datatype=DataType.BITS, readonly=False)
-                    for i in range(1000)
-                ]
-                # REGISTERS 类型：输入寄存器和保持寄存器
-                input_registers_simdata = [
-                    SimData(address=i, count=1, values=0, datatype=DataType.REGISTERS, readonly=False)
-                    for i in range(1000)
-                ]
-                holding_registers_simdata = [
+                # 1. 创建 SimData 列表（使用 shared block 模式）
+                # 所有数据类型共享同一个地址空间，使用 REGISTERS 类型
+                # 注意：use_bit_addressing=False 只支持 shared block 模式
+                combined_simdata = [
                     SimData(address=i, count=1, values=0, datatype=DataType.REGISTERS, readonly=False)
                     for i in range(1000)
                 ]
 
                 add_modbus_log('DEBUG', 'SimData 列表创建完成', {
-                    'coils_count': len(coils_simdata),
-                    'hr_count': len(holding_registers_simdata),
-                    'hr_datatype': holding_registers_simdata[0].datatype
+                    'count': len(combined_simdata),
+                    'datatype': combined_simdata[0].datatype
                 })
 
-                # 2. 创建 SimDevice（使用 4 块分离模式）
+                # 2. 创建 SimDevice（使用 shared block 模式）
                 device = SimDevice(
                     id=unit_id,
-                    simdata=(coils_simdata, discrete_inputs_simdata, input_registers_simdata, holding_registers_simdata),
-                    use_bit_addressing=True
+                    simdata=combined_simdata,  # shared block（单个列表）
+                    use_bit_addressing=False
                 )
 
                 add_modbus_log('INFO', 'SimDevice 初始化成功', {'unit_id': unit_id})
@@ -235,10 +222,7 @@ class ModbusServer:
                     'unit_id': unit_id,
                     'context': context,
                     'device': device,
-                    'coils_simdata': coils_simdata,  # 线圈 SimData 列表
-                    'discrete_inputs_simdata': discrete_inputs_simdata,  # 离散输入 SimData 列表
-                    'holding_registers_simdata': holding_registers_simdata,  # 保持寄存器 SimData 列表
-                    'input_registers_simdata': input_registers_simdata,  # 输入寄存器 SimData 列表
+                    'combined_simdata': combined_simdata,  # 所有数据共享
                     'loop': server_loop[0],
                     'server': server_instance[0],
                     'thread': thread,
@@ -324,7 +308,7 @@ class ModbusServer:
 
     def get_data(self, server_id: str = 'default', function_code: int = 3,
                 address: int = 0, count: int = 1) -> Tuple[bool, List]:
-        """获取数据存储中的数据 - pymodbus 3.13.0 SimData 列表"""
+        """获取数据存储中的数据 - pymodbus 3.13.0 shared block"""
         with self.lock:
             if server_id not in self.servers:
                 add_modbus_log('WARNING', '获取数据失败: 服务端不存在', {'server_id': server_id})
@@ -347,28 +331,14 @@ class ModbusServer:
                 if actual_address < 0:
                     actual_address = 0
 
-                # 根据功能码选择 SimData 列表
-                if function_code == 1:
-                    simdata_list = server_info['coils_simdata']
-                elif function_code == 2:
-                    simdata_list = server_info['discrete_inputs_simdata']
-                elif function_code == 3:
-                    simdata_list = server_info['holding_registers_simdata']
-                elif function_code == 4:
-                    simdata_list = server_info['input_registers_simdata']
-                else:
-                    return False, []
+                simdata_list = server_info['combined_simdata']
 
-                # 从 SimData 列表获取值（按地址索引）
+                # 从 SimData 列表获取值
                 values = []
                 for i in range(count):
                     addr = actual_address + i
                     if addr < len(simdata_list):
-                        val = simdata_list[addr].values
-                        if function_code in [1, 2]:
-                            values.append(1 if val else 0)
-                        else:
-                            values.append(int(val))
+                        values.append(int(simdata_list[addr].values))
                     else:
                         values.append(0)
 
@@ -389,7 +359,7 @@ class ModbusServer:
 
     def set_data(self, server_id: str = 'default', function_code: int = 3,
                 address: int = 0, values: List = []) -> Tuple[bool, str]:
-        """设置数据存储中的数据 - pymodbus 3.13.0 SimData 列表"""
+        """设置数据存储中的数据 - pymodbus 3.13.0 shared block"""
         with self.lock:
             if server_id not in self.servers:
                 add_modbus_log('WARNING', '设置数据失败: 服务端不存在', {'server_id': server_id})
@@ -416,31 +386,16 @@ class ModbusServer:
                 if actual_address < 0:
                     actual_address = 0
 
-                # 处理值类型
-                if function_code in [1, 2]:
-                    processed_values = [bool(int(v)) for v in values]
-                else:
-                    processed_values = [int(v) for v in values]
+                processed_values = [int(v) for v in values]
+                simdata_list = server_info['combined_simdata']
 
-                # 根据功能码选择 SimData 列表
-                if function_code == 1:
-                    simdata_list = server_info['coils_simdata']
-                elif function_code == 2:
-                    simdata_list = server_info['discrete_inputs_simdata']
-                elif function_code == 3:
-                    simdata_list = server_info['holding_registers_simdata']
-                elif function_code == 4:
-                    simdata_list = server_info['input_registers_simdata']
-                else:
-                    return False, f"不支持的功能码: {function_code}"
-
-                # 设置值到 SimData（按地址索引）
+                # 设置值到 SimData
                 for i, val in enumerate(processed_values):
                     addr = actual_address + i
                     if addr < len(simdata_list):
                         simdata_list[addr].values = val
 
-                # 验证设置是否成功
+                # 验证
                 verify_val = simdata_list[actual_address].values if actual_address < len(simdata_list) else None
 
                 add_modbus_log('INFO', '设置数据成功', {
