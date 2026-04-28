@@ -186,6 +186,84 @@ def check_namespace_agent_status(namespace, ip_address, port, service_name=None)
         pass
     return 'stopped'
 
+
+def namespace_http_request(namespace, ip_address, port, method='GET', endpoint='', data=None, timeout=10):
+    """在 namespace 内执行 HTTP 请求
+
+    Args:
+        namespace: namespace 名称（如 ns-eth1）
+        ip_address: Agent IP 地址
+        port: Agent 端口
+        method: HTTP 方法（GET/POST）
+        endpoint: API 路径（如 /api/status）
+        data: POST 数据（JSON dict）
+        timeout: 超时时间（秒）
+
+    Returns:
+        tuple: (success, response_data, error_message)
+    """
+    import json
+
+    url = f'http://{ip_address}:{port}{endpoint}'
+    cmd = ['sudo', 'ip', 'netns', 'exec', namespace, 'curl', '-s', '--max-time', str(timeout)]
+
+    if method == 'POST':
+        cmd.extend(['-X', 'POST', '-H', 'Content-Type: application/json'])
+        if data:
+            cmd.extend(['-d', json.dumps(data)])
+
+    cmd.append(url)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 5)
+        if result.returncode == 0 and result.stdout:
+            return True, json.loads(result.stdout), None
+        return False, None, result.stderr or 'HTTP request failed'
+    except subprocess.TimeoutExpired:
+        return False, None, 'Timeout'
+    except json.JSONDecodeError:
+        return False, None, 'Invalid JSON response'
+    except Exception as e:
+        return False, None, str(e)
+
+
+def forward_to_agent(agent, method='GET', endpoint='', data=None, timeout=10):
+    """转发请求到 Agent（支持 namespace）
+
+    Args:
+        agent: LocalAgent 对象
+        method: HTTP 方法
+        endpoint: API 路径
+        data: POST 数据
+        timeout: 超时时间
+
+    Returns:
+        tuple: (success, response_data, error_message)
+    """
+    ns = agent.interface.namespace
+    ip = agent.interface.ip_address
+    port = agent.port
+
+    if ns:
+        # namespace 内 Agent
+        return namespace_http_request(ns, ip, port, method, endpoint, data, timeout)
+    else:
+        # 主 namespace Agent
+        try:
+            url = f'http://{ip}:{port}{endpoint}'
+            if method == 'GET':
+                resp = requests.get(url, timeout=timeout)
+            else:
+                resp = requests.post(url, json=data, timeout=timeout)
+
+            if resp.status_code == 200:
+                return True, resp.json(), None
+            return False, None, f'HTTP {resp.status_code}'
+        except requests.exceptions.Timeout:
+            return False, None, 'Timeout'
+        except Exception as e:
+            return False, None, str(e)
+
 # ========== 系统信息 API ==========
 
 @require_http_methods(["GET"])
@@ -1571,23 +1649,29 @@ def api_agents_my_rented(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_send_packet(request):
-    """发送报文（代理到指定 Agent）"""
+    """发送报文（代理到指定 Agent，支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        if agent.status != 'running':
+        # 检查 Agent 状态（支持 namespace）
+        ns = agent.interface.namespace
+        if ns:
+            service_name = agent.get_namespace_service_name()
+            status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
+        else:
+            status = agent.status
+
+        if status != 'running':
             return JsonResponse({'success': False, 'error': 'Agent 未运行'})
 
         packet_config = data.get('packet_config', {})
         send_config = data.get('send_config', {})
 
         # 转换前端格式到 Agent 格式
-        # 1. 添加 protocol 字段（前端使用 currentProtocol，需要从发送逻辑传递）
         if 'protocol' not in packet_config:
-            # 根据 tcp_flags 或其他字段推断协议
             if 'tcp_flags' in packet_config:
                 packet_config['protocol'] = 'tcp'
             elif 'icmp_type' in packet_config:
@@ -1597,9 +1681,8 @@ def api_send_packet(request):
             elif 'udp_type' in packet_config:
                 packet_config['protocol'] = 'udp'
             else:
-                packet_config['protocol'] = 'tcp'  # 默认
+                packet_config['protocol'] = 'tcp'
 
-        # 2. 转换 tcp_flags 对象格式为 flags 数组格式
         if 'tcp_flags' in packet_config:
             tcp_flags = packet_config['tcp_flags']
             flags = []
@@ -1616,32 +1699,27 @@ def api_send_packet(request):
             if tcp_flags.get('urg'):
                 flags.append('URG')
             packet_config['flags'] = flags
-            del packet_config['tcp_flags']  # 移除旧格式
+            del packet_config['tcp_flags']
 
-        # 3. 转换 UDP/ICMP type 字段名称
         if 'udp_type' in packet_config:
             udp_type = packet_config['udp_type']
             if udp_type == 'udp_normal':
                 packet_config['udp_type'] = 'udp'
             elif udp_type == 'teardrop':
                 packet_config['udp_type'] = 'teardrop'
-            # icmp_type 和 arp_type 名称匹配，无需转换
 
-        # 构造转发请求
         forward_data = {
             'interface': agent.interface.name,
             'packet_config': packet_config,
             'send_config': send_config
         }
 
-        # 转发请求到 Agent
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/send_packet",
-            json=forward_data,
-            timeout=10
-        )
+        # 使用统一的转发函数（支持 namespace）
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/send_packet', forward_data, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1653,21 +1731,19 @@ def api_send_packet(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_stop_send(request):
-    """停止发送报文"""
+    """停止发送报文（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        # 转发请求到 Agent
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/stop",
-            json={},
-            timeout=10
-        )
+        # 使用统一的转发函数（支持 namespace）
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/stop', {}, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -2311,7 +2387,7 @@ def dhcp_client(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_dhcp_client_start(request):
-    """启动 DHCP 客户端（代理转发到 Agent）"""
+    """启动 DHCP 客户端（代理转发到 Agent，支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
@@ -2321,21 +2397,21 @@ def api_dhcp_client_start(request):
         max_workers = data.get('max_workers', 10)
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
-        interface_name = agent.interface.name  # Agent 绑定的网卡
+        interface_name = agent.interface.name
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/dhcp_client/start",
-            json={
-                'count': count,
-                'start_mac': start_mac,
-                'interface': interface_name,
-                'timeout': timeout,
-                'max_workers': max_workers
-            },
-            timeout=10
-        )
+        forward_data = {
+            'count': count,
+            'start_mac': start_mac,
+            'interface': interface_name,
+            'timeout': timeout,
+            'max_workers': max_workers
+        }
 
-        return JsonResponse(resp.json())
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/dhcp_client/start', forward_data, timeout=10)
+
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -2346,7 +2422,7 @@ def api_dhcp_client_start(request):
 @require_http_methods(["GET"])
 @csrf_exempt
 def api_dhcp_client_status(request):
-    """获取 DHCP 客户端状态（代理转发到 Agent）"""
+    """获取 DHCP 客户端状态（代理转发到 Agent，支持 namespace）"""
     try:
         agent_id = request.GET.get('agent_id')
         session_id = request.GET.get('session_id')
@@ -2356,13 +2432,12 @@ def api_dhcp_client_status(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.get(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/dhcp_client/status",
-            params={'session_id': session_id},
-            timeout=10
-        )
+        endpoint = f'/api/dhcp_client/status?session_id={session_id}'
+        success, resp_data, error = forward_to_agent(agent, 'GET', endpoint, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -3584,7 +3659,7 @@ def api_device_coredump_list(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_services_listener(request):
-    """监听服务下发API - 转发到指定Agent"""
+    """监听服务下发API - 转发到指定Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
         logger.info(f"收到服务下发请求 - 完整: {data}")
@@ -3606,14 +3681,13 @@ def api_services_listener(request):
         if not agent.interface.ip_address:
             return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
 
-        # 转发请求到Agent
-        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/listener"
-        resp = requests.post(agent_url, json=data, timeout=10)
+        # 使用统一的转发函数（支持 namespace）
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/services/listener', data, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
-    except requests.exceptions.Timeout:
-        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
     except Exception as e:
         logger.exception(f"监听服务下发失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
@@ -3622,18 +3696,16 @@ def api_services_listener(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_services_client(request):
-    """客户端服务下发API - 转发到指定Agent"""
+    """客户端服务下发API - 转发到指定Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
-        # DEBUG: 记录请求参数
         logger.info(f'客户端服务请求: agent_id={agent_id}, protocol={data.get("protocol")}, action={data.get("action")}')
 
         if not agent_id:
             return JsonResponse({'success': False, 'error': '缺少 agent_id'})
 
-        # 获取Agent信息
         from .models import LocalAgent
         agent = LocalAgent.objects.filter(agent_id=agent_id).first()
         if not agent:
@@ -3642,14 +3714,13 @@ def api_services_client(request):
         if not agent.interface.ip_address:
             return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
 
-        # 转发请求到Agent
-        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/client"
-        resp = requests.post(agent_url, json=data, timeout=10)
+        # 使用统一的转发函数（支持 namespace）
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/services/client', data, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
-    except requests.exceptions.Timeout:
-        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
     except Exception as e:
         logger.exception(f"客户端服务下发失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
@@ -3657,7 +3728,7 @@ def api_services_client(request):
 
 @require_http_methods(["GET"])
 def api_services_status(request):
-    """获取Agent服务状态"""
+    """获取Agent服务状态（支持 namespace）"""
     try:
         agent_id = request.GET.get('agent_id')
         detail = request.GET.get('detail', '')
@@ -3665,7 +3736,6 @@ def api_services_status(request):
         if not agent_id:
             return JsonResponse({'success': False, 'error': '缺少 agent_id'})
 
-        # 获取Agent信息
         from .models import LocalAgent
         agent = LocalAgent.objects.filter(agent_id=agent_id).first()
         if not agent:
@@ -3674,29 +3744,23 @@ def api_services_status(request):
         if not agent.interface.ip_address:
             return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
 
-        # 转发请求到Agent
-        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/status"
-        resp = requests.get(agent_url, timeout=5)
-        result = resp.json()
+        # 使用统一的转发函数（支持 namespace）
+        success, result, error = forward_to_agent(agent, 'GET', '/api/services/status', timeout=5)
+
+        if not success:
+            return JsonResponse({'success': False, 'error': error})
 
         # 如果请求邮件用户详情，额外获取用户列表
         if detail == 'mail_users' and result.get('success'):
-            try:
-                users_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/listener"
-                users_resp = requests.post(users_url, json={
-                    'protocol': 'mail',
-                    'action': 'list_users'
-                }, timeout=5)
-                users_result = users_resp.json()
-                if users_result.get('success'):
-                    result['mail_users'] = users_result.get('mail_users', [])
-            except:
-                pass  # 静默处理获取用户失败
+            success2, users_result, _ = forward_to_agent(agent, 'POST', '/api/services/listener', {
+                'protocol': 'mail',
+                'action': 'list_users'
+            }, timeout=5)
+            if success2 and users_result.get('success'):
+                result['mail_users'] = users_result.get('mail_users', [])
 
         return JsonResponse(result)
 
-    except requests.exceptions.Timeout:
-        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
     except Exception as e:
         logger.exception(f"获取服务状态失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
@@ -3704,7 +3768,7 @@ def api_services_status(request):
 
 @require_http_methods(["GET"])
 def api_services_logs(request):
-    """获取Agent服务日志"""
+    """获取Agent服务日志（支持 namespace）"""
     try:
         agent_id = request.GET.get('agent_id')
         protocol = request.GET.get('protocol', '')
@@ -3713,7 +3777,6 @@ def api_services_logs(request):
         if not agent_id:
             return JsonResponse({'success': False, 'error': '缺少 agent_id'})
 
-        # 获取Agent信息
         from .models import LocalAgent
         agent = LocalAgent.objects.filter(agent_id=agent_id).first()
         if not agent:
@@ -3722,17 +3785,17 @@ def api_services_logs(request):
         if not agent.interface.ip_address:
             return JsonResponse({'success': False, 'error': 'Agent未配置IP'})
 
-        # 转发请求到Agent
-        agent_url = f"http://{agent.interface.ip_address}:{agent.port}/api/services/logs"
-        params = {'limit': limit}
+        # 构建 endpoint 带参数
+        endpoint = f'/api/services/logs?limit={limit}'
         if protocol:
-            params['protocol'] = protocol
-        resp = requests.get(agent_url, params=params, timeout=5)
+            endpoint += f'&protocol={protocol}'
 
-        return JsonResponse(resp.json())
+        success, resp_data, error = forward_to_agent(agent, 'GET', endpoint, timeout=5)
 
-    except requests.exceptions.Timeout:
-        return JsonResponse({'success': False, 'error': 'Agent响应超时'})
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
+
     except Exception as e:
         logger.exception(f"获取服务日志失败: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
