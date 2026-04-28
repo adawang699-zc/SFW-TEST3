@@ -991,7 +991,7 @@ async function modbusClientToggleConnect() {
             updateClientButtonState(false);
             showToast('已断开连接', 'success');
         } else {
-            showToast('断开失败: ' + result.error, 'error');
+            showToast('断开失败: ' + (result.message || result.error), 'error');
         }
     } else {
         // 连接 - 使用 Client Agent 的接口名称（SO_BINDTODEVICE 强制走物理网口）
@@ -1014,7 +1014,7 @@ async function modbusClientToggleConnect() {
             showToast('Modbus 连接成功', 'success');
             modbusClientRefresh();
         } else {
-            showToast('连接失败: ' + result.error, 'error');
+            showToast('连接失败: ' + (result.message || result.error), 'error');
         }
     }
 }
@@ -1055,7 +1055,7 @@ async function modbusClientRefresh() {
     if (result.success && result.values) {
         updateTableValues('modbus-client-data-tbody', result.values, start);
     } else if (!result.success) {
-        showToast('读取失败: ' + result.error, 'error');
+        showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1121,7 +1121,7 @@ async function modbusServerToggle() {
             updateServerButtonState(false);
             showToast('已停止', 'success');
         } else {
-            showToast('停止失败: ' + result.error, 'error');
+            showToast('停止失败: ' + (result.message || result.error), 'error');
         }
     } else {
         // 启动 - 使用 Agent IP 作为 interface 参数
@@ -1133,13 +1133,16 @@ async function modbusServerToggle() {
         };
 
         const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
-        if (result.success) {
+        if (result.success || (result.message && result.message.indexOf('已在运行') !== -1)) {
             modbusServerRunning = true;
             updateServerButtonState(true);
-            showToast(`Modbus Server 启动成功，监听 ${selectedServerAgentIp}:${data.port}`, 'success');
+            const msg = result.success
+                ? `Modbus Server 启动成功，监听 ${selectedServerAgentIp}:${data.port}`
+                : `Modbus Server ${selectedServerAgentIp}:${data.port} ${result.message}`;
+            showToast(msg, result.success ? 'success' : 'info');
             modbusServerRefresh();
         } else {
-            showToast('启动失败: ' + result.error, 'error');
+            showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     }
 }
@@ -1180,7 +1183,7 @@ async function modbusServerRefresh() {
     if (result.success && result.values) {
         updateTableValues('modbus-server-data-tbody', result.values, start);
     } else if (!result.success) {
-        showToast('获取失败: ' + result.error, 'error');
+        showToast('获取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1206,7 +1209,7 @@ async function modbusServerReset() {
         updateTableValues('modbus-server-data-tbody', values, start);
         showToast('已重置为0', 'success');
     } else {
-        showToast('重置失败: ' + result.error, 'error');
+        showToast('重置失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1233,7 +1236,7 @@ async function modbusServerRandom() {
         updateTableValues('modbus-server-data-tbody', values, start);
         showToast('已随机生成', 'success');
     } else {
-        showToast('随机失败: ' + result.error, 'error');
+        showToast('随机失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1329,7 +1332,7 @@ async function saveCellValue() {
                 modbusServerRefresh();
             }
         } else {
-            showToast('写入失败: ' + result.error, 'error');
+            showToast('写入失败: ' + (result.message || result.error), 'error');
         }
     } else {
         // 服务端设置
@@ -1347,7 +1350,7 @@ async function saveCellValue() {
             showToast('设置成功', 'success');
             closeEditModal();
         } else {
-            showToast('设置失败: ' + result.error, 'error');
+            showToast('设置失败: ' + (result.message || result.error), 'error');
         }
     }
 }
@@ -1416,7 +1419,7 @@ async function executeWriteMultiple() {
             modbusServerRefresh();
         }
     } else {
-        showToast('写入失败: ' + result.error, 'error');
+        showToast('写入失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1438,7 +1441,7 @@ async function s7ClientConnect() {
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
         showToast('S7 连接成功', 'success');
     } else {
-        showToast('连接失败: ' + result.error, 'error');
+        showToast('连接失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1450,7 +1453,7 @@ async function s7ClientDisconnect() {
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
         showToast('已断开', 'success');
     } else {
-        showToast('断开失败: ' + result.error, 'error');
+        showToast('断开失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1480,7 +1483,7 @@ async function s7ClientRead() {
         `;
         showToast('读取成功', 'success');
     } else {
-        showToast('读取失败: ' + result.error, 'error');
+        showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1502,21 +1505,21 @@ async function s7PlcColdStart() {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/plc_cold_start/', 'POST', { agent_id: selectedAgentId });
-    showToast(result.success ? '冷启动成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '冷启动成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7PlcHotStart() {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/plc_hot_start/', 'POST', { agent_id: selectedAgentId });
-    showToast(result.success ? '热启动成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '热启动成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7PlcStop() {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/plc_stop/', 'POST', { agent_id: selectedAgentId });
-    showToast(result.success ? '停止成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '停止成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 // ========== S7 Server ==========
@@ -1533,7 +1536,7 @@ async function s7ServerStart() {
         document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('S7 Server 启动成功', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1545,7 +1548,7 @@ async function s7ServerStop() {
         document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1571,7 +1574,7 @@ async function s7ServerSetData() {
     };
 
     const result = await apiRequest('/api/industrial/s7_server/set_data/', 'POST', data);
-    showToast(result.success ? '设置成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '设置成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7ServerGetData() {
@@ -1589,7 +1592,7 @@ async function s7ServerGetData() {
     if (result.success) {
         document.getElementById('s7-server-status').innerHTML = `<div class="hex-display">${JSON.stringify(result.data)}</div>`;
     } else {
-        showToast('获取失败: ' + result.error, 'error');
+        showToast('获取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1605,7 +1608,7 @@ async function loadGooseSvInterfaces() {
             select.innerHTML += `<option value="${iface}">${iface}</option>`;
         });
     } else {
-        showToast('获取网卡失败: ' + result.error, 'error');
+        showToast('获取网卡失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1623,7 +1626,7 @@ async function gooseStart() {
         document.getElementById('goose-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
         showToast('GOOSE 接收已启动', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1635,7 +1638,7 @@ async function gooseStop() {
         document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1646,7 +1649,7 @@ async function gooseStatus() {
     if (result.success) {
         document.getElementById('goose-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
     } else {
-        showToast('获取状态失败: ' + result.error, 'error');
+        showToast('获取状态失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1664,7 +1667,7 @@ async function svStart() {
         document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
         showToast('SV 接收已启动', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1676,7 +1679,7 @@ async function svStop() {
         document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1687,7 +1690,7 @@ async function svStatus() {
     if (result.success) {
         document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
     } else {
-        showToast('获取状态失败: ' + result.error, 'error');
+        showToast('获取状态失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1708,7 +1711,7 @@ async function dnp3ClientConnect() {
         document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
         showToast('DNP3 连接成功', 'success');
     } else {
-        showToast('连接失败: ' + result.error, 'error');
+        showToast('连接失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1720,7 +1723,7 @@ async function dnp3ClientDisconnect() {
         document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
         showToast('已断开', 'success');
     } else {
-        showToast('断开失败: ' + result.error, 'error');
+        showToast('断开失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1746,7 +1749,7 @@ async function dnp3ClientRead() {
         document.getElementById('dnp3-read-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.values)}</div>`;
         showToast('读取成功', 'success');
     } else {
-        showToast('读取失败: ' + result.error, 'error');
+        showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1765,7 +1768,7 @@ async function dnp3ServerStart() {
         document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('DNP3 Server 启动成功', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1777,7 +1780,7 @@ async function dnp3ServerStop() {
         document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1805,7 +1808,7 @@ async function bacnetClientRead() {
         document.getElementById('bacnet-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.value)}</div>`;
         showToast('读取成功', 'success');
     } else {
-        showToast('读取失败: ' + result.error, 'error');
+        showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1822,7 +1825,7 @@ async function bacnetClientWrite() {
     };
 
     const result = await apiRequest('/api/industrial/bacnet_client/write/', 'POST', data);
-    showToast(result.success ? '写入成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '写入成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 // ========== BACnet Server ==========
@@ -1840,7 +1843,7 @@ async function bacnetServerStart() {
         document.getElementById('bacnet-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('BACnet Server 启动成功', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1852,7 +1855,7 @@ async function bacnetServerStop() {
         document.getElementById('bacnet-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1877,7 +1880,7 @@ async function enipClientConnect() {
         document.getElementById('enip-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
         showToast('ENIP 连接成功', 'success');
     } else {
-        showToast('连接失败: ' + result.error, 'error');
+        showToast('连接失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1889,7 +1892,7 @@ async function enipClientDisconnect() {
         document.getElementById('enip-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
         showToast('已断开', 'success');
     } else {
-        showToast('断开失败: ' + result.error, 'error');
+        showToast('断开失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1907,7 +1910,7 @@ async function enipGetIdentity() {
     if (result.success) {
         document.getElementById('enip-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.identity || result)}</div>`;
     } else {
-        showToast('获取失败: ' + result.error, 'error');
+        showToast('获取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1926,7 +1929,7 @@ async function enipClientRead() {
         document.getElementById('enip-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.value)}</div>`;
         showToast('读取成功', 'success');
     } else {
-        showToast('读取失败: ' + result.error, 'error');
+        showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1942,7 +1945,7 @@ async function enipClientWrite() {
     };
 
     const result = await apiRequest('/api/industrial/enip_client/write/', 'POST', data);
-    showToast(result.success ? '写入成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '写入成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 // ========== ENIP Server ==========
@@ -1959,7 +1962,7 @@ async function enipServerStart() {
         document.getElementById('enip-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('ENIP Server 启动成功', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1971,7 +1974,7 @@ async function enipServerStop() {
         document.getElementById('enip-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -1993,7 +1996,7 @@ async function mmsClientConnect() {
     };
 
     const result = await apiRequest('/api/industrial/mms_client/connect/', 'POST', data);
-    showToast(result.success ? 'MMS 连接成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? 'MMS 连接成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function mmsGetDomains() {
@@ -2003,7 +2006,7 @@ async function mmsGetDomains() {
     if (result.success) {
         document.getElementById('mms-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.domains || result)}</div>`;
     } else {
-        showToast('获取失败: ' + result.error, 'error');
+        showToast('获取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2021,7 +2024,7 @@ async function mmsClientRead() {
         document.getElementById('mms-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.value)}</div>`;
         showToast('读取成功', 'success');
     } else {
-        showToast('读取失败: ' + result.error, 'error');
+        showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2036,7 +2039,7 @@ async function mmsClientWrite() {
     };
 
     const result = await apiRequest('/api/industrial/mms_client/write/', 'POST', data);
-    showToast(result.success ? '写入成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '写入成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 // ========== MMS Server ==========
@@ -2053,7 +2056,7 @@ async function mmsServerStart() {
         document.getElementById('mms-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('MMS Server 启动成功', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2065,7 +2068,7 @@ async function mmsServerStop() {
         document.getElementById('mms-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2087,7 +2090,7 @@ async function httpClientTestConnection() {
     };
 
     const result = await apiRequest('/api/industrial/http_client/test_connection/', 'POST', data);
-    showToast(result.success ? '连接测试成功' : '失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '连接测试成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function httpClientSend() {
@@ -2120,7 +2123,7 @@ async function httpClientSend() {
         `;
         showToast('请求成功', 'success');
     } else {
-        showToast('请求失败: ' + result.error, 'error');
+        showToast('请求失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2139,7 +2142,7 @@ async function httpServerStart() {
         document.getElementById('http-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('HTTP Server 启动成功', 'success');
     } else {
-        showToast('启动失败: ' + result.error, 'error');
+        showToast('启动失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2151,7 +2154,7 @@ async function httpServerStop() {
         document.getElementById('http-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
-        showToast('停止失败: ' + result.error, 'error');
+        showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2169,7 +2172,7 @@ async function httpServerLogs() {
     if (result.success) {
         document.getElementById('http-files-list').innerHTML = `<div class="hex-display">${JSON.stringify(result.logs)}</div>`;
     } else {
-        showToast('获取日志失败: ' + result.error, 'error');
+        showToast('获取日志失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2191,7 +2194,7 @@ async function httpFilesList() {
         html += '</table>';
         document.getElementById('http-files-list').innerHTML = html;
     } else {
-        showToast('获取文件列表失败: ' + result.error, 'error');
+        showToast('获取文件列表失败: ' + (result.message || result.error), 'error');
     }
 }
 
@@ -2199,7 +2202,7 @@ async function httpFileDownload(filename) {
     if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/http_files/download/' + filename + '/', 'POST', { agent_id: selectedAgentId });
-    showToast(result.success ? '文件内容已获取' : '下载失败: ' + result.error, result.success ? 'success' : 'error');
+    showToast(result.success ? '文件内容已获取' : '下载失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
     if (result.success) {
         document.getElementById('http-files-list').innerHTML += `<div class="hex-display">${result.content || JSON.stringify(result)}</div>`;
     }

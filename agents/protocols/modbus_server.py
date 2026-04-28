@@ -140,8 +140,19 @@ class ModbusServer:
 
         with self.lock:
             if server_id in self.servers and self.servers[server_id].get('running'):
-                add_modbus_log('WARNING', '服务端已在运行', {'server_id': server_id})
-                return False, "服务端已在运行"
+                old_port = self.servers[server_id].get('port')
+                old_interface = self.servers[server_id].get('interface')
+                # 如果端口或接口变了，自动停止旧的再启动新的
+                if old_port != port or old_interface != interface:
+                    add_modbus_log('INFO', '配置变更，自动重启', {
+                        'server_id': server_id,
+                        'old': f'{old_interface}:{old_port}',
+                        'new': f'{interface}:{port}'
+                    })
+                    self._stop_locked(server_id)
+                else:
+                    add_modbus_log('WARNING', '服务端已在运行', {'server_id': server_id})
+                    return False, "服务端已在运行"
 
             # 检查端口
             if not self._check_port_available(interface, port):
@@ -318,46 +329,50 @@ class ModbusServer:
                 logger.exception(f"Modbus 服务端启动异常: {e}")
                 return False, str(e)
 
+    def _stop_locked(self, server_id: str) -> Tuple[bool, str]:
+        """停止服务端（调用方已持有 self.lock）"""
+        if server_id not in self.servers:
+            add_modbus_log('WARNING', '服务端不存在', {'server_id': server_id})
+            return False, "服务端不存在"
+
+        try:
+            add_modbus_log('INFO', '开始停止 Modbus 服务端', {'server_id': server_id})
+
+            server_info = self.servers[server_id]
+            server_info['running'] = False
+
+            server = server_info.get('server')
+            loop = server_info.get('loop')
+
+            if loop and loop.is_running() and server:
+                async def do_shutdown():
+                    try:
+                        if hasattr(server, 'shutdown'):
+                            await server.shutdown()
+                    except Exception as e:
+                        add_modbus_log('WARNING', 'shutdown 异常', {'error': str(e)})
+
+                asyncio.run_coroutine_threadsafe(do_shutdown(), loop)
+
+            # 等待线程结束
+            thread = server_info.get('thread')
+            if thread and thread.is_alive():
+                thread.join(timeout=3)
+
+            del self.servers[server_id]
+
+            add_modbus_log('INFO', 'Modbus 服务端已停止', {'server_id': server_id})
+            return True, "服务端已停止"
+
+        except Exception as e:
+            add_modbus_log('ERROR', '服务端停止异常', {'error': str(e)})
+            logger.exception(f"Modbus 服务端停止异常: {e}")
+            return False, str(e)
+
     def stop(self, server_id: str = 'default') -> Tuple[bool, str]:
         """停止服务端"""
         with self.lock:
-            if server_id not in self.servers:
-                add_modbus_log('WARNING', '服务端不存在', {'server_id': server_id})
-                return False, "服务端不存在"
-
-            try:
-                add_modbus_log('INFO', '开始停止 Modbus 服务端', {'server_id': server_id})
-
-                server_info = self.servers[server_id]
-                server_info['running'] = False
-
-                server = server_info.get('server')
-                loop = server_info.get('loop')
-
-                if loop and loop.is_running() and server:
-                    async def do_shutdown():
-                        try:
-                            if hasattr(server, 'shutdown'):
-                                await server.shutdown()
-                        except Exception as e:
-                            add_modbus_log('WARNING', 'shutdown 异常', {'error': str(e)})
-
-                    asyncio.run_coroutine_threadsafe(do_shutdown(), loop)
-
-                # 等待线程结束
-                thread = server_info.get('thread')
-                if thread and thread.is_alive():
-                    thread.join(timeout=3)
-
-                del self.servers[server_id]
-
-                add_modbus_log('INFO', 'Modbus 服务端已停止', {'server_id': server_id})
-                return True, "服务端已停止"
-
-            except Exception as e:
-                add_modbus_log('ERROR', '服务端停止异常', {'error': str(e)})
-                logger.exception(f"Modbus 服务端停止异常: {e}")
-                return False, str(e)
+            return self._stop_locked(server_id)
 
     def status(self, server_id: str = 'default') -> Dict:
         """获取服务端状态"""
