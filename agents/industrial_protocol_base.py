@@ -1109,7 +1109,7 @@ def modbus_client_connect():
     """连接Modbus客户端"""
     if not PYMODBUS_AVAILABLE:
         return jsonify({'success': False, 'error': 'pymodbus未安装'}), 500
-    
+
     try:
         data = request.json
         client_id = data.get('client_id', 'default')
@@ -1117,10 +1117,11 @@ def modbus_client_connect():
         port = data.get('port', 502)
         unit_id = data.get('unit_id', 1)
         timeout = data.get('timeout', 3)
-        
+        source_ip = data.get('source_ip')  # 源 IP，强制使用指定网卡出口
+
         if not ip:
             return jsonify({'success': False, 'error': 'IP地址不能为空'}), 400
-        
+
         with modbus_client_lock:
             # 如果已存在连接，先断开
             if client_id in modbus_clients:
@@ -1129,26 +1130,37 @@ def modbus_client_connect():
                 except:
                     pass
                 del modbus_clients[client_id]
-            
-            # 创建新连接
-            client = ModbusTcpClient(host=ip, port=port, timeout=timeout)
+
+            # 创建新连接，绑定源 IP 以强制使用指定网卡
+            if source_ip:
+                client = ModbusTcpClient(
+                    host=ip,
+                    port=port,
+                    timeout=timeout,
+                    source=(source_ip, 0)  # 绑定源 IP，端口随机
+                )
+                add_log('INFO', f'Modbus Client 绑定源 IP: {source_ip} -> {ip}:{port}')
+            else:
+                client = ModbusTcpClient(host=ip, port=port, timeout=timeout)
+
             result = client.connect()
-            
+
             if result:
                 modbus_clients[client_id] = {
                     'client': client,
                     'ip': ip,
                     'port': port,
                     'unit_id': unit_id,
+                    'source_ip': source_ip,
                     'connected': True,
                     'connect_time': datetime.now().isoformat()
                 }
-                add_log('INFO', f'Modbus客户端连接成功: {ip}:{port} (从站地址: {unit_id})')
+                add_log('INFO', f'Modbus客户端连接成功: {source_ip or "default"} -> {ip}:{port} (从站地址: {unit_id})')
                 return jsonify({'success': True, 'message': '连接成功'})
             else:
                 add_log('ERROR', f'Modbus客户端连接失败: {ip}:{port}')
                 return jsonify({'success': False, 'error': '连接失败'}), 500
-                
+
     except Exception as e:
         add_log('ERROR', f'Modbus客户端连接异常: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
