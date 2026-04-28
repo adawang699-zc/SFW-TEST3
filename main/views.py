@@ -159,12 +159,24 @@ def exec_in_namespace(namespace, command):
         return subprocess.run(command, capture_output=True, text=True, timeout=30)
 
 
-def check_namespace_agent_status(namespace, ip_address, port):
-    """检查 namespace 内 Agent 状态"""
+def check_namespace_agent_status(namespace, ip_address, port, service_name=None):
+    """检查 namespace 内 Agent 状态
+
+    优先使用 systemd 服务状态检查（更可靠），其次用 HTTP 健康检查
+    """
     try:
-        # 使用 ip netns exec curl 来访问 namespace 内 IP
+        # 方法1: 使用 systemctl 检查服务状态（需要 sudo，已配置免密码）
+        if service_name:
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'is-active', service_name],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.stdout.strip() == 'active':
+                return 'running'
+
+        # 方法2: 使用 ip netns exec curl 健康检查（备用）
         result = subprocess.run(
-            ['ip', 'netns', 'exec', namespace, 'curl', '-s', '--max-time', '3',
+            ['sudo', 'ip', 'netns', 'exec', namespace, 'curl', '-s', '--max-time', '3',
              f'http://{ip_address}:{port}/api/health'],
             capture_output=True, text=True, timeout=10
         )
@@ -530,7 +542,8 @@ def api_agent_list(request):
         if agent.interface.ip_address:
             if ns:
                 # ========== namespace 内 Agent 状态检查 ==========
-                actual_agent_status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port)
+                service_name = agent.get_namespace_service_name()
+                actual_agent_status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
                 agent.status = actual_agent_status
                 agent.save()
             else:
@@ -777,7 +790,8 @@ WantedBy=multi-user.target
             if result.returncode == 0:
                 time.sleep(3)
                 # 通过 namespace 检查状态
-                status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port)
+                service_name = agent.get_namespace_service_name()
+                status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
                 if status == 'running':
                     agent.status = 'running'
                     agent.last_start_time = datetime.now()
