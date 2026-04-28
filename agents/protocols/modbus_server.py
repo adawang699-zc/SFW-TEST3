@@ -279,14 +279,18 @@ class ModbusServer:
                 if server_error[0]:
                     return False, server_error[0]
 
-                # 保存服务器信息
+                # 保存服务器信息和数据块引用
                 self.servers[server_id] = {
                     'running': True,
                     'port': port,
                     'interface': interface,
                     'unit_id': unit_id,
                     'context': context,
-                    'store': store,  # 保存 store 引用以便直接访问数据
+                    'store': store,  # ModbusDeviceContext 引用
+                    'coils': coils,  # 线圈数据块 - 直接访问 simdata[0].values
+                    'discrete_inputs': discrete_inputs,  # 离散输入数据块
+                    'holding_registers': holding_registers,  # 保持寄存器数据块
+                    'input_registers': input_registers,  # 输入寄存器数据块
                     'loop': server_loop[0],
                     'server': server_instance[0],
                     'thread': thread,
@@ -372,46 +376,53 @@ class ModbusServer:
 
     def get_data(self, server_id: str = 'default', function_code: int = 3,
                 address: int = 0, count: int = 1) -> Tuple[bool, List]:
-        """获取数据存储中的数据 - 使用 getValues 方法"""
+        """获取数据存储中的数据 - pymodbus 3.13.0 直接访问 simdata"""
         with self.lock:
             if server_id not in self.servers:
                 add_modbus_log('WARNING', '获取数据失败: 服务端不存在', {'server_id': server_id})
                 return False, []
 
             server_info = self.servers[server_id]
-            store = server_info['store']
 
             try:
-                # 地址映射：前端地址转 Modbus 内部地址
-                # 数据块起始地址为 1，所以需要减 1
-                # FC1: 地址 1-9999 -> 内部地址 0-9998
-                # FC2: 地址 10001-19999 -> 内部地址 0-9998
-                # FC3: 地址 40001-49999 -> 内部地址 0-9998
-                # FC4: 地址 30001-39999 -> 内部地址 0-9998
+                # 地址映射：前端地址转内部 simdata 索引
+                # simdata[0].values 的索引从 0 开始
+                # FC1: 地址 1-9999 -> 索引 0-9998 (address - 1)
+                # FC2: 地址 10001-19999 -> 索引 0-9998 (address - 10001)
+                # FC3: 地址 40001-49999 -> 索引 0-9998 (address - 40001)
+                # FC4: 地址 30001-39999 -> 索引 0-9998 (address - 30001)
 
                 actual_address = address
                 if function_code == 1:
-                    # 线圈地址从 1 开始，映射到内部地址 0
                     actual_address = address - 1
                 elif function_code == 2:
-                    # 离散输入地址从 10001 开始
-                    if address >= 10001:
-                        actual_address = address - 10001
+                    actual_address = address - 10001
                 elif function_code == 3:
-                    # 保持寄存器地址从 40001 开始
-                    if address >= 40001:
-                        actual_address = address - 40001
+                    actual_address = address - 40001
                 elif function_code == 4:
-                    # 输入寄存器地址从 30001 开始
-                    if address >= 30001:
-                        actual_address = address - 30001
+                    actual_address = address - 30001
 
-                # 确保 address 参数符合 pymodbus 要求（从 1 开始）
-                # getValues/setValues 内部使用 simdata，地址需要加 1
-                internal_address = actual_address + 1
+                if actual_address < 0:
+                    actual_address = 0
 
-                # 使用 getValues 方法获取数据
-                values = store.getValues(function_code, actual_address, count)
+                # 根据功能码选择数据块
+                if function_code == 1:
+                    data_block = server_info['coils']
+                elif function_code == 2:
+                    data_block = server_info['discrete_inputs']
+                elif function_code == 3:
+                    data_block = server_info['holding_registers']
+                elif function_code == 4:
+                    data_block = server_info['input_registers']
+                else:
+                    return False, []
+
+                # pymodbus 3.13.0: 直接访问 simdata[0].values
+                values = data_block.simdata[0].values[actual_address:actual_address + count]
+
+                # 线圈/离散输入返回布尔值转为整数
+                if function_code in [1, 2]:
+                    values = [1 if v else 0 for v in values]
 
                 add_modbus_log('INFO', '获取数据成功', {
                     'server_id': server_id,
@@ -419,7 +430,7 @@ class ModbusServer:
                     'frontend_address': address,
                     'actual_address': actual_address,
                     'count': count,
-                    'result': values[:10] if len(values) > 10 else values
+                    'result': list(values)[:10]
                 })
                 return True, list(values)
 
@@ -430,7 +441,7 @@ class ModbusServer:
 
     def set_data(self, server_id: str = 'default', function_code: int = 3,
                 address: int = 0, values: List = []) -> Tuple[bool, str]:
-        """设置数据存储中的数据 - 使用 setValues 方法"""
+        """设置数据存储中的数据 - pymodbus 3.13.0 直接访问 simdata"""
         with self.lock:
             if server_id not in self.servers:
                 add_modbus_log('WARNING', '设置数据失败: 服务端不存在', {'server_id': server_id})
@@ -441,39 +452,46 @@ class ModbusServer:
                 return False, "值不能为空"
 
             server_info = self.servers[server_id]
-            store = server_info['store']
 
             try:
                 # 地址映射
                 actual_address = address
                 if function_code == 1:
-                    if address >= 1:
-                        actual_address = address - 1
+                    actual_address = address - 1
                 elif function_code == 2:
-                    if address >= 10001:
-                        actual_address = address - 10001
+                    actual_address = address - 10001
                 elif function_code == 3:
-                    if address >= 40001:
-                        actual_address = address - 40001
+                    actual_address = address - 40001
                 elif function_code == 4:
-                    if address >= 30001:
-                        actual_address = address - 30001
+                    actual_address = address - 30001
 
                 if actual_address < 0:
                     actual_address = 0
 
                 # 处理值类型
-                processed_values = []
                 if function_code in [1, 2]:
                     processed_values = [bool(int(v)) for v in values]
                 else:
                     processed_values = [int(v) for v in values]
 
-                # 使用 setValues 方法设置数据
-                store.setValues(function_code, actual_address, processed_values)
+                # 根据功能码选择数据块
+                if function_code == 1:
+                    data_block = server_info['coils']
+                elif function_code == 2:
+                    data_block = server_info['discrete_inputs']
+                elif function_code == 3:
+                    data_block = server_info['holding_registers']
+                elif function_code == 4:
+                    data_block = server_info['input_registers']
+                else:
+                    return False, f"不支持的功能码: {function_code}"
+
+                # pymodbus 3.13.0: 直接设置 simdata[0].values
+                for i, val in enumerate(processed_values):
+                    data_block.simdata[0].values[actual_address + i] = val
 
                 # 验证设置是否成功
-                verify_values = store.getValues(function_code, actual_address, min(5, len(processed_values)))
+                verify_values = data_block.simdata[0].values[actual_address:actual_address + min(5, len(processed_values))]
 
                 add_modbus_log('INFO', '设置数据成功', {
                     'server_id': server_id,
@@ -481,7 +499,7 @@ class ModbusServer:
                     'frontend_address': address,
                     'actual_address': actual_address,
                     'count': len(values),
-                    'values': processed_values[:10] if len(processed_values) > 10 else processed_values,
+                    'values': processed_values[:10],
                     'verify_values': list(verify_values)
                 })
                 return True, "设置成功"
