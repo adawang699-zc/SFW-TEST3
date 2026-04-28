@@ -994,12 +994,13 @@ async function modbusClientToggleConnect() {
             showToast('断开失败: ' + result.error, 'error');
         }
     } else {
-        // 连接
+        // 连接 - 使用 Client Agent IP 作为 source_ip，强制流量经过物理网口
         const data = {
             agent_id: selectedClientAgentId,
             ip: document.getElementById('modbus-client-ip').value,
             port: parseInt(document.getElementById('modbus-client-port').value),
-            unit_id: parseInt(document.getElementById('modbus-unit-id').value)
+            unit_id: parseInt(document.getElementById('modbus-unit-id').value),
+            source_ip: selectedClientAgentIp  // 绑定源 IP，强制从指定网卡出口
         };
 
         const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);

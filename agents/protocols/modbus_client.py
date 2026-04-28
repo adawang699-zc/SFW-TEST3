@@ -34,8 +34,17 @@ class ModbusClient:
         self.lock = threading.Lock()
 
     def connect(self, ip: str, port: int = 502, client_id: str = 'default',
-                unit_id: int = 1, timeout: int = 3) -> Tuple[bool, str]:
-        """连接 Modbus 服务端"""
+                unit_id: int = 1, timeout: int = 3, source_ip: str = None) -> Tuple[bool, str]:
+        """连接 Modbus 服务端
+
+        Args:
+            ip: 目标 IP
+            port: 目标端口
+            client_id: 客户端 ID
+            unit_id: Modbus 单元 ID
+            timeout: 超时时间
+            source_ip: 源 IP（绑定到指定网卡出口，强制流量经过物理网口）
+        """
         if not PYMODBUS_AVAILABLE:
             return False, "pymodbus 未安装"
 
@@ -52,7 +61,18 @@ class ModbusClient:
                 del self.clients[client_id]
 
             try:
-                client = ModbusTcpClient(host=ip, port=port, timeout=timeout)
+                # 创建客户端，绑定源 IP 以强制使用指定网卡
+                if source_ip:
+                    client = ModbusTcpClient(
+                        host=ip,
+                        port=port,
+                        timeout=timeout,
+                        source=(source_ip, 0)  # 绑定源 IP，端口随机
+                    )
+                    logger.info(f"Modbus Client 绑定源 IP: {source_ip} -> {ip}:{port}")
+                else:
+                    client = ModbusTcpClient(host=ip, port=port, timeout=timeout)
+
                 result = client.connect()
 
                 if result:
@@ -61,10 +81,11 @@ class ModbusClient:
                         'ip': ip,
                         'port': port,
                         'unit_id': unit_id,
+                        'source_ip': source_ip,
                         'connected': True,
                         'connect_time': datetime.now().isoformat()
                     }
-                    logger.info(f"Modbus 连接成功: {ip}:{port}")
+                    logger.info(f"Modbus 连接成功: {source_ip or 'default'} -> {ip}:{port}")
                     return True, "连接成功"
                 else:
                     logger.error(f"Modbus 连接失败: {ip}:{port}")
@@ -97,6 +118,7 @@ class ModbusClient:
                     'ip': client_info['ip'],
                     'port': client_info['port'],
                     'unit_id': client_info['unit_id'],
+                    'source_ip': client_info.get('source_ip'),
                     'connect_time': client_info['connect_time']
                 }
             return {'connected': False}
