@@ -994,13 +994,17 @@ async function modbusClientToggleConnect() {
             showToast('断开失败: ' + result.error, 'error');
         }
     } else {
-        // 连接 - 使用 Client Agent IP 作为 source_ip，强制流量经过物理网口
+        // 连接 - 使用 Client Agent 的接口名称（SO_BINDTODEVICE 强制走物理网口）
+        // 从 agent_id 提取接口名称：agent_eth1 -> eth1
+        const interfaceName = selectedClientAgentId ? selectedClientAgentId.replace('agent_', '') : null;
+
         const data = {
             agent_id: selectedClientAgentId,
             ip: document.getElementById('modbus-client-ip').value,
             port: parseInt(document.getElementById('modbus-client-port').value),
             unit_id: parseInt(document.getElementById('modbus-unit-id').value),
-            source_ip: selectedClientAgentIp  // 绑定源 IP，强制从指定网卡出口
+            source_ip: selectedClientAgentIp,  // 绑定源 IP
+            interface: interfaceName  // SO_BINDTODEVICE 绑定接口（eth1/eth2 等）
         };
 
         const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);

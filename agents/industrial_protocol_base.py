@@ -1106,7 +1106,7 @@ def add_modbus_server_log(level: str, message: str, extra_info: dict = None):
 
 @app.route('/api/industrial_protocol/modbus_client/connect', methods=['POST'])
 def modbus_client_connect():
-    """连接Modbus客户端"""
+    """连接Modbus客户端 - 支持 SO_BINDTODEVICE 强制走物理网口"""
     if not PYMODBUS_AVAILABLE:
         return jsonify({'success': False, 'error': 'pymodbus未安装'}), 500
 
@@ -1117,7 +1117,8 @@ def modbus_client_connect():
         port = data.get('port', 502)
         unit_id = data.get('unit_id', 1)
         timeout = data.get('timeout', 3)
-        source_ip = data.get('source_ip')  # 源 IP，强制使用指定网卡出口
+        source_ip = data.get('source_ip')  # 源 IP
+        interface = data.get('interface')  # 网络接口名称（如 eth1），使用 SO_BINDTODEVICE
 
         if not ip:
             return jsonify({'success': False, 'error': 'IP地址不能为空'}), 400
@@ -1126,40 +1127,84 @@ def modbus_client_connect():
             # 如果已存在连接，先断开
             if client_id in modbus_clients:
                 try:
-                    modbus_clients[client_id].close()
+                    modbus_clients[client_id]['client'].close()
                 except:
                     pass
                 del modbus_clients[client_id]
 
-            # 创建新连接，绑定源 IP 以强制使用指定网卡
-            if source_ip:
+            # 创建 Modbus 客户端
+            if interface:
+                # 使用 SO_BINDTODEVICE 强制绑定到物理接口（不走 lo）
+                # 先创建自定义 socket
+                import socket as sock_module
+                custom_socket = sock_module.socket(sock_module.AF_INET, sock_module.SOCK_STREAM)
+                custom_socket.settimeout(timeout)
+
+                # SO_BINDTODEVICE 需要进程有 CAP_NET_RAW 权限（root 或设置 capability）
+                try:
+                    custom_socket.setsockopt(sock_module.SOL_SOCKET, sock_module.SO_BINDTODEVICE, interface.encode())
+                    add_log('INFO', f'Modbus Client SO_BINDTODEVICE: {interface}')
+                except PermissionError:
+                    add_log('WARNING', f'SO_BINDTODEVICE 需要 CAP_NET_RAW 权限，尝试使用 source IP 绑定')
+                except Exception as e:
+                    add_log('WARNING', f'SO_BINDTODEVICE 失败: {e}')
+
+                # 绑定源 IP（如果指定）
+                if source_ip:
+                    custom_socket.bind((source_ip, 0))
+                    add_log('INFO', f'Modbus Client 绑定源 IP: {source_ip}')
+
+                # 连接目标
+                custom_socket.connect((ip, port))
+
+                # pymodbus 3.x 不直接支持传入 socket，需要使用 comm 参数
+                # 创建 ModbusTcpClient 并替换其 socket
+                client = ModbusTcpClient(host=ip, port=port, timeout=timeout)
+                # 替换内部 socket
+                if hasattr(client, 'socket'):
+                    client.socket.close()
+                    client.socket = custom_socket
+                elif hasattr(client, 'comm'):
+                    client.comm.close()
+                    client.comm = custom_socket
+
+                # 标记为已连接
+                client._connected = True
+
+                add_log('INFO', f'Modbus客户端连接成功(interface={interface}): {source_ip or "default"} -> {ip}:{port}')
+
+            elif source_ip:
+                # 仅绑定源 IP（可能仍然走 lo）
                 client = ModbusTcpClient(
                     host=ip,
                     port=port,
                     timeout=timeout,
-                    source=(source_ip, 0)  # 绑定源 IP，端口随机
+                    source=(source_ip, 0)
                 )
+                result = client.connect()
+                if not result:
+                    add_log('ERROR', f'Modbus客户端连接失败: {ip}:{port}')
+                    return jsonify({'success': False, 'error': '连接失败'}), 500
                 add_log('INFO', f'Modbus Client 绑定源 IP: {source_ip} -> {ip}:{port}')
             else:
                 client = ModbusTcpClient(host=ip, port=port, timeout=timeout)
+                result = client.connect()
+                if not result:
+                    add_log('ERROR', f'Modbus客户端连接失败: {ip}:{port}')
+                    return jsonify({'success': False, 'error': '连接失败'}), 500
 
-            result = client.connect()
-
-            if result:
-                modbus_clients[client_id] = {
-                    'client': client,
-                    'ip': ip,
-                    'port': port,
-                    'unit_id': unit_id,
-                    'source_ip': source_ip,
-                    'connected': True,
-                    'connect_time': datetime.now().isoformat()
-                }
-                add_log('INFO', f'Modbus客户端连接成功: {source_ip or "default"} -> {ip}:{port} (从站地址: {unit_id})')
-                return jsonify({'success': True, 'message': '连接成功'})
-            else:
-                add_log('ERROR', f'Modbus客户端连接失败: {ip}:{port}')
-                return jsonify({'success': False, 'error': '连接失败'}), 500
+            modbus_clients[client_id] = {
+                'client': client,
+                'ip': ip,
+                'port': port,
+                'unit_id': unit_id,
+                'source_ip': source_ip,
+                'interface': interface,
+                'connected': True,
+                'connect_time': datetime.now().isoformat()
+            }
+            add_log('INFO', f'Modbus客户端连接成功: {source_ip or "default"} -> {ip}:{port} (从站地址: {unit_id})')
+            return jsonify({'success': True, 'message': '连接成功'})
 
     except Exception as e:
         add_log('ERROR', f'Modbus客户端连接异常: {str(e)}')
