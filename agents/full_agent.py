@@ -818,30 +818,75 @@ def api_get_protocols():
 @app.route('/api/industrial_protocol/modbus_client/connect', methods=['POST'])
 def modbus_client_connect():
     """连接 Modbus 客户端"""
-    from agents.protocols.modbus_client import ModbusClient
-    # TODO: 实现连接逻辑
-    data = request.get_json()
-    return jsonify({'success': True, 'message': 'Modbus 客户端连接功能待实现'})
+    from agents.protocols.modbus_client import modbus_client, PYMODBUS_AVAILABLE
+    if not PYMODBUS_AVAILABLE:
+        return jsonify({'success': False, 'error': 'pymodbus 未安装'})
+
+    data = request.get_json() or {}
+    ip = data.get('ip', '')
+    port = int(data.get('port', 502))
+    unit_id = int(data.get('unit_id', 1))
+    client_id = data.get('client_id', 'default')
+    timeout = int(data.get('timeout', 3))
+
+    if not ip:
+        return jsonify({'success': False, 'error': 'IP 地址不能为空'})
+
+    success, message = modbus_client.connect(ip, port, client_id, unit_id, timeout)
+    return jsonify({'success': success, 'message': message})
 
 @app.route('/api/industrial_protocol/modbus_client/disconnect', methods=['POST'])
 def modbus_client_disconnect():
     """断开 Modbus 客户端"""
-    return jsonify({'success': True, 'message': '断开成功'})
+    from agents.protocols.modbus_client import modbus_client
+    data = request.get_json() or {}
+    client_id = data.get('client_id', 'default')
 
-@app.route('/api/industrial_protocol/modbus_client/status', methods=['GET'])
+    success, message = modbus_client.disconnect(client_id)
+    return jsonify({'success': success, 'message': message})
+
+@app.route('/api/industrial_protocol/modbus_client/status', methods=['GET', 'POST'])
 def modbus_client_status():
     """Modbus 客户端状态"""
-    return jsonify({'success': True, 'connected': False})
+    from agents.protocols.modbus_client import modbus_client
+    data = request.get_json() or {}
+    client_id = data.get('client_id', 'default')
+
+    status = modbus_client.status(client_id)
+    status['success'] = True
+    return jsonify(status)
 
 @app.route('/api/industrial_protocol/modbus_client/read', methods=['POST'])
 def modbus_client_read():
     """读取 Modbus 数据"""
-    return jsonify({'success': True, 'data': []})
+    from agents.protocols.modbus_client import modbus_client, PYMODBUS_AVAILABLE
+    if not PYMODBUS_AVAILABLE:
+        return jsonify({'success': False, 'error': 'pymodbus 未安装'})
+
+    data = request.get_json() or {}
+    client_id = data.get('client_id', 'default')
+    function_code = int(data.get('function_code', 3))
+    address = int(data.get('address', 0))
+    count = int(data.get('count', 1))
+
+    success, values = modbus_client.read(client_id, function_code, address, count)
+    return jsonify({'success': success, 'values': values})
 
 @app.route('/api/industrial_protocol/modbus_client/write', methods=['POST'])
 def modbus_client_write():
     """写入 Modbus 数据"""
-    return jsonify({'success': True})
+    from agents.protocols.modbus_client import modbus_client, PYMODBUS_AVAILABLE
+    if not PYMODBUS_AVAILABLE:
+        return jsonify({'success': False, 'error': 'pymodbus 未安装'})
+
+    data = request.get_json() or {}
+    client_id = data.get('client_id', 'default')
+    function_code = int(data.get('function_code', 6))
+    address = int(data.get('address', 0))
+    values = data.get('values', [])
+
+    success, message = modbus_client.write(client_id, function_code, address, values)
+    return jsonify({'success': success, 'message': message})
 
 # Modbus 服务端 API
 @app.route('/api/industrial_protocol/modbus_server/start', methods=['POST'])
