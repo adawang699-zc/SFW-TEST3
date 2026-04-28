@@ -66,12 +66,16 @@ configure_namespace_network() {
     log "配置 namespace 内网络..."
 
     # 配置 ns-eth1
+    # 启用 loopback 接口（关键！否则本地连接不可达）
+    ip netns exec "$NS_CLIENT" ip link set lo up
     ip netns exec "$NS_CLIENT" ip link set "$ETH1" up
     ip netns exec "$NS_CLIENT" ip addr add "$ETH1_IP" dev "$ETH1"
     # 添加默认路由（如果需要出网）
     # ip netns exec "$NS_CLIENT" ip route add default via 192.168.11.1
 
     # 配置 ns-eth2
+    # 启用 loopback 接口
+    ip netns exec "$NS_SERVER" ip link set lo up
     ip netns exec "$NS_SERVER" ip link set "$ETH2" up
     ip netns exec "$NS_SERVER" ip addr add "$ETH2_IP" dev "$ETH2"
 
