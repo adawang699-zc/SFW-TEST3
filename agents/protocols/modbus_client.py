@@ -117,25 +117,25 @@ class ModbusClient:
 
             try:
                 if function_code == 1:  # 读线圈
-                    response = client.read_coils(address=address, count=count, unit=unit_id)
+                    response = client.read_coils(address=address, count=count, device_id=unit_id)
                     if response.isError():
                         return False, []
                     result = [1 if bit else 0 for bit in (response.bits[:count] if response.bits else [])]
 
                 elif function_code == 2:  # 读离散输入
-                    response = client.read_discrete_inputs(address=address, count=count, unit=unit_id)
+                    response = client.read_discrete_inputs(address=address, count=count, device_id=unit_id)
                     if response.isError():
                         return False, []
                     result = [1 if bit else 0 for bit in (response.bits[:count] if response.bits else [])]
 
                 elif function_code == 3:  # 读保持寄存器
-                    response = client.read_holding_registers(address=address, count=count, unit=unit_id)
+                    response = client.read_holding_registers(address=address, count=count, device_id=unit_id)
                     if response.isError():
                         return False, []
                     result = response.registers[:count] if response.registers else []
 
                 elif function_code == 4:  # 读输入寄存器
-                    response = client.read_input_registers(address=address, count=count, unit=unit_id)
+                    response = client.read_input_registers(address=address, count=count, device_id=unit_id)
                     if response.isError():
                         return False, []
                     result = response.registers[:count] if response.registers else []
@@ -173,19 +173,19 @@ class ModbusClient:
             try:
                 if function_code == 5:  # 写单个线圈
                     value = bool(values[0])
-                    response = client.write_coil(address=address, value=value, unit=unit_id)
+                    response = client.write_coil(address=address, value=value, device_id=unit_id)
 
                 elif function_code == 6:  # 写单个寄存器
                     value = int(values[0])
-                    response = client.write_register(address=address, value=value, unit=unit_id)
+                    response = client.write_register(address=address, value=value, device_id=unit_id)
 
                 elif function_code == 15:  # 写多个线圈
                     values_bool = [bool(v) for v in values]
-                    response = client.write_coils(address=address, values=values_bool, unit=unit_id)
+                    response = client.write_coils(address=address, values=values_bool, device_id=unit_id)
 
                 elif function_code == 16:  # 写多个寄存器
                     values_int = [int(v) for v in values]
-                    response = client.write_registers(address=address, values=values_int, unit=unit_id)
+                    response = client.write_registers(address=address, values=values_int, device_id=unit_id)
 
                 else:
                     return False, f"不支持的功能码: {function_code}"
