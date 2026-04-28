@@ -1,0 +1,28 @@
+# agent-eth1-ns.service - Agent 在 Network Namespace 内运行
+# 文件位置: /etc/systemd/system/agent-eth1-ns.service
+#
+# 此服务在 ns-eth1 namespace 内运行 agent
+# 需要先启动 network-namespace.service
+
+[Unit]
+Description=Packet Agent eth1 (in network namespace ns-eth1)
+After=network-namespace.service
+Requires=network-namespace.service
+
+[Service]
+Type=exec
+# 使用 ip netns exec 在指定 namespace 内运行
+ExecStart=/usr/bin/ip netns exec ns-eth1 /opt/SFW-TEST3/sfw/bin/python /opt/SFW-TEST3/agents/run_agent.py eth1
+ExecStop=/usr/bin/ip netns exec ns-eth1 /opt/SFW-TEST3/sfw/bin/python -c "import sys; sys.exit(0)"
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/SFW-TEST3/logs/agent_eth1_ns.log
+StandardError=append:/opt/SFW-TEST3/logs/agent_eth1_ns.log
+
+# 资源限制
+LimitNOFILE=65535
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

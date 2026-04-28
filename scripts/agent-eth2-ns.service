@@ -1,0 +1,26 @@
+# agent-eth2-ns.service - Agent 在 Network Namespace 内运行
+# 文件位置: /etc/systemd/system/agent-eth2-ns.service
+#
+# 此服务在 ns-eth2 namespace 内运行 agent
+# 需要先启动 network-namespace.service
+
+[Unit]
+Description=Packet Agent eth2 (in network namespace ns-eth2)
+After=network-namespace.service
+Requires=network-namespace.service
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/ip netns exec ns-eth2 /opt/SFW-TEST3/sfw/bin/python /opt/SFW-TEST3/agents/run_agent.py eth2
+ExecStop=/usr/bin/ip netns exec ns-eth2 /opt/SFW-TEST3/sfw/bin/python -c "import sys; sys.exit(0)"
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/SFW-TEST3/logs/agent_eth2_ns.log
+StandardError=append:/opt/SFW-TEST3/logs/agent_eth2_ns.log
+
+LimitNOFILE=65535
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

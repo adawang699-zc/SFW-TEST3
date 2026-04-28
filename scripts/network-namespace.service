@@ -1,0 +1,29 @@
+# network-namespace.service - Network Namespace 开机启动服务
+# 文件位置: /etc/systemd/system/network-namespace.service
+#
+# 安装方法:
+#   sudo cp network-namespace.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable network-namespace.service
+#
+# 使用方法:
+#   sudo systemctl start network-namespace.service   # 启动
+#   sudo systemctl stop network-namespace.service    # 停止（会恢复原配置）
+#   sudo systemctl status network-namespace.service  # 查看状态
+
+[Unit]
+Description=Network Namespace Setup for eth1/eth2 isolation
+After=network.target
+Before=agent-eth1.service agent-eth2.service
+Conflicts=agent-eth1.service agent-eth2.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/SFW-TEST3/scripts/network-namespace-setup.sh setup
+ExecStop=/opt/SFW-TEST3/scripts/network-namespace-setup.sh restore
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
