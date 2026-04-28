@@ -201,30 +201,48 @@ ip netns exec ns-eth2 tcpdump -i eth2 -nn icmp
 ### 5. 测试 Modbus
 
 ```bash
-# 在 ns-eth2 启动 Modbus Server
-ip netns exec ns-eth2 python -c "
-import sys
-sys.path.insert(0, '/opt/SFW-TEST3')
-from agents.industrial_protocol_base import modbus_server
-modbus_server.start('test', port=502, interface='192.168.12.100')
-"
+# 方法1: 通过 Agent API（推荐）
+# 启动 Modbus Server (in ns-eth2)
+sudo ip netns exec ns-eth2 curl -s -X POST 'http://192.168.12.100:8888/api/industrial_protocol/modbus_server/start' -H 'Content-Type: application/json' -d '{"config_id":"test","interface":"192.168.12.100","port":502}'
 
-# 在 ns-eth1 连接并读取
-ip netns exec ns-eth1 python -c "
-import sys
-sys.path.insert(0, '/opt/SFW-TEST3')
-from agents.protocols.modbus_client import modbus_client
-modbus_client.connect('192.168.12.100', 502, 'test')
-result = modbus_client.read('test', 3, 0, 5)
-print(f'Read result: {result}')
-"
+# 连接 Modbus Client (in ns-eth1)
+sudo ip netns exec ns-eth1 curl -s -X POST 'http://192.168.11.100:8888/api/industrial_protocol/modbus_client/connect' -H 'Content-Type: application/json' -d '{"ip":"192.168.12.100","port":502,"client_id":"test"}'
 
-# 验证：抓包应显示 Modbus TCP 流量
+# 读取数据
+sudo ip netns exec ns-eth1 curl -s -X POST 'http://192.168.11.100:8888/api/industrial_protocol/modbus_client/read' -H 'Content-Type: application/json' -d '{"client_id":"test","address":0,"count":5}'
+
+# 抓包验证流量走物理网口
+sudo ip netns exec ns-eth1 tcpdump -i eth1 -nn port 502 -c 10
+sudo ip netns exec ns-eth2 tcpdump -i eth2 -nn port 502 -c 10
+# 应看到 Modbus TCP 流量（192.168.11.100 > 192.168.12.100:502）
 ```
+
+## 验证结果
+
+**已验证成功（2026-04-28）：**
+- ICMP Ping 流量：eth1 和 eth2 均抓到 5 packets
+- Modbus TCP 流量：eth1 和 eth2 均抓到 20 packets
+- 流量路径：192.168.11.100.端口 > 192.168.12.100.502 (请求) → 192.168.12.100.502 > 192.168.11.100.端口 (响应)
+- **结论：流量走物理网口，不走 loopback！**
 
 ## 故障排查
 
-### 问题1：ping 不通
+### 问题0：本地连接不可达
+
+**现象：**
+```
+curl: (7) Couldn't connect to server - 网络不可达
+```
+
+**原因：** namespace 内 loopback 接口未启用
+
+**解决：**
+```bash
+sudo ip netns exec ns-eth1 ip link set lo up
+sudo ip netns exec ns-eth2 ip link set lo up
+```
+
+**注意：** network-namespace-setup.sh 已添加 loopback 启用配置
 
 **检查：**
 ```bash
