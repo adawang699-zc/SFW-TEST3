@@ -24,7 +24,7 @@ PYMODBUS_VERSION = "0.0.0"
 ModbusTcpServer = None
 ModbusServerContext = None
 ModbusSequentialDataBlock = None
-ModbusDeviceContext = None
+ModbusSlaveContext = None
 ModbusException = None
 
 try:
@@ -59,19 +59,19 @@ if PYMODBUS_AVAILABLE:
             logger.warning(f"ModbusTcpServer 导入失败: {e}")
             PYMODBUS_AVAILABLE = False
 
-    # 数据存储导入（旧 API）
+    # 数据存储导入（pymodbus 3.7.4 API）
     try:
         from pymodbus.datastore import (
             ModbusServerContext,
             ModbusSequentialDataBlock,
-            ModbusDeviceContext
+            ModbusSlaveContext
         )
-        logger.info("ModbusDeviceContext, ModbusServerContext, ModbusSequentialDataBlock 导入成功")
+        logger.info("ModbusSlaveContext, ModbusServerContext, ModbusSequentialDataBlock 导入成功")
     except ImportError:
         try:
             from pymodbus.datastore.context import (
                 ModbusServerContext,
-                ModbusDeviceContext
+                ModbusSlaveContext
             )
             from pymodbus.datastore.store import ModbusSequentialDataBlock
             logger.info("数据存储导入成功 (备用路径)")
@@ -157,39 +157,27 @@ class ModbusServer:
                     'pymodbus_version': PYMODBUS_VERSION
                 })
 
-                # 1. 创建数据块（旧 API）
+                # 1. 创建数据块（pymodbus 3.7.4 API）
                 # ModbusSequentialDataBlock(address, values)
-                # address=1 表示从 Modbus address 1 开始覆盖
-                coils = ModbusSequentialDataBlock(1, [False] * 10000)
-                discrete_inputs = ModbusSequentialDataBlock(1, [False] * 10000)
-                holding_registers = ModbusSequentialDataBlock(1, [0] * 10000)
-                input_registers = ModbusSequentialDataBlock(1, [0] * 10000)
+                # address=0 表示 zero mode，地址直接映射
+                coils = ModbusSequentialDataBlock(0, [False] * 10000)
+                discrete_inputs = ModbusSequentialDataBlock(0, [False] * 10000)
+                holding_registers = ModbusSequentialDataBlock(0, [0] * 10000)
+                input_registers = ModbusSequentialDataBlock(0, [0] * 10000)
 
                 add_modbus_log('DEBUG', '数据块创建完成', {
                     'coils_size': 10000,
                     'holding_registers_size': 10000
                 })
 
-                # 2. 创建从站上下文
-                # pymodbus 3.x: zero_mode=True 让 address 请求正确映射
-                try:
-                    store = ModbusDeviceContext(
-                        di=discrete_inputs,
-                        co=coils,
-                        hr=holding_registers,
-                        ir=input_registers,
-                        zero_mode=True
-                    )
-                    add_modbus_log('INFO', 'ModbusDeviceContext 初始化成功', {'zero_mode': True})
-                except TypeError:
-                    # 如果不支持 zero_mode 参数
-                    store = ModbusDeviceContext(
-                        di=discrete_inputs,
-                        co=coils,
-                        hr=holding_registers,
-                        ir=input_registers
-                    )
-                    add_modbus_log('WARNING', 'ModbusDeviceContext 不支持 zero_mode', {})
+                # 2. 创建从站上下文（pymodbus 3.7.4 使用 ModbusSlaveContext）
+                store = ModbusSlaveContext(
+                    di=discrete_inputs,
+                    co=coils,
+                    hr=holding_registers,
+                    ir=input_registers
+                )
+                add_modbus_log('INFO', 'ModbusSlaveContext 初始化成功', {})
 
                 # 3. 创建服务器上下文
                 # pymodbus 3.7.4: 使用 slaves 参数
@@ -365,17 +353,8 @@ class ModbusServer:
             store = server_info['store']
 
             try:
-                # 地址映射：前端地址转 Modbus 内部地址
+                # zero mode 下地址直接映射，不需要偏移
                 actual_address = address
-                if function_code == 1:
-                    actual_address = address - 1
-                elif function_code == 2:
-                    actual_address = address - 10001
-                elif function_code == 3:
-                    actual_address = address - 40001
-                elif function_code == 4:
-                    actual_address = address - 30001
-
                 if actual_address < 0:
                     actual_address = 0
 
@@ -417,17 +396,8 @@ class ModbusServer:
             store = server_info['store']
 
             try:
-                # 地址映射
+                # zero mode 下地址直接映射，不需要偏移
                 actual_address = address
-                if function_code == 1:
-                    actual_address = address - 1
-                elif function_code == 2:
-                    actual_address = address - 10001
-                elif function_code == 3:
-                    actual_address = address - 40001
-                elif function_code == 4:
-                    actual_address = address - 30001
-
                 if actual_address < 0:
                     actual_address = 0
 
@@ -442,22 +412,6 @@ class ModbusServer:
 
                 # 验证设置是否成功
                 verify_values = store.getValues(function_code, actual_address, min(5, len(processed_values)))
-
-                add_modbus_log('INFO', '设置数据成功', {
-                    'server_id': server_id,
-                    'function_code': function_code,
-                    'frontend_address': address,
-                    'actual_address': actual_address,
-                    'count': len(values),
-                    'values': processed_values[:10],
-                    'verify_values': list(verify_values)
-                })
-                return True, "设置成功"
-
-            except Exception as e:
-                add_modbus_log('ERROR', '设置数据异常', {'error': str(e)})
-                logger.exception(f"设置数据异常: {e}")
-                return False, str(e)
 
                 add_modbus_log('INFO', '设置数据成功', {
                     'server_id': server_id,
