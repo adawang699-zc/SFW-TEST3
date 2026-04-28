@@ -1448,29 +1448,50 @@ def api_agents_my_rented(request):
             is_sending = False
             send_rate = 0
             send_total = 0
+            ns = agent.interface.namespace
 
             if agent.interface.ip_address:
-                try:
-                    # 查询 Agent 状态（timeout=3秒）
-                    resp = requests.get(
-                        f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                        timeout=3
-                    )
-                    if resp.status_code == 200:
-                        actual_status = 'running'
+                if ns:
+                    # ========== namespace 内 Agent 状态检查 ==========
+                    service_name = agent.get_namespace_service_name()
+                    actual_status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
 
-                        # 获取发送统计
-                        stats_resp = requests.get(
-                            f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
+                    # 使用 namespace 内 curl 查询统计数据
+                    if actual_status == 'running':
+                        try:
+                            result = subprocess.run(
+                                ['sudo', 'ip', 'netns', 'exec', ns, 'curl', '-s', '--max-time', '3',
+                                 f'http://{agent.interface.ip_address}:{agent.port}/api/statistics'],
+                                capture_output=True, text=True, timeout=10
+                            )
+                            if result.returncode == 0:
+                                stats = json.loads(result.stdout).get('statistics', {})
+                                send_rate = stats.get('rate', 0)
+                                send_total = stats.get('total_sent', 0)
+                                is_sending = stats.get('sending', False)
+                        except:
+                            pass
+                else:
+                    # ========== 主 namespace Agent 状态检查 ==========
+                    try:
+                        resp = requests.get(
+                            f"http://{agent.interface.ip_address}:{agent.port}/api/status",
                             timeout=3
                         )
-                        if stats_resp.status_code == 200:
-                            stats = stats_resp.json().get('statistics', {})
-                            send_rate = stats.get('rate', 0)
-                            send_total = stats.get('total_sent', 0)
-                            is_sending = stats.get('sending', False)
-                except:
-                    actual_status = 'stopped'
+                        if resp.status_code == 200:
+                            actual_status = 'running'
+
+                            stats_resp = requests.get(
+                                f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
+                                timeout=3
+                            )
+                            if stats_resp.status_code == 200:
+                                stats = stats_resp.json().get('statistics', {})
+                                send_rate = stats.get('rate', 0)
+                                send_total = stats.get('total_sent', 0)
+                                is_sending = stats.get('sending', False)
+                    except:
+                        actual_status = 'stopped'
 
             return {
                 'agent_id': agent.agent_id,
@@ -1483,6 +1504,7 @@ def api_agents_my_rented(request):
                 'send_rate': send_rate,
                 'send_total': send_total,
                 'has_ip': bool(agent.interface.ip_address),
+                'namespace': ns,
             }
 
         rented_agents = []
