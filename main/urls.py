@@ -42,6 +42,12 @@ urlpatterns = [
     path('api/agents/my-rented/', views.api_agents_my_rented, name='api_agents_my_rented'),
     path('api/agents/keepalive/', views.api_agents_keepalive, name='api_agents_keepalive'),
 
+    # ========== Network Namespace 管理 API ==========
+    path('api/namespace/list/', views.api_namespace_list, name='api_namespace_list'),
+    path('api/namespace/setup-interface/', views.api_namespace_setup_interface, name='api_namespace_setup_interface'),
+    path('api/namespace/restore-interface/', views.api_namespace_restore_interface, name='api_namespace_restore_interface'),
+    path('api/namespace/status/', views.api_namespace_status, name='api_namespace_status'),
+
     # ========== 功能 API（代理到 Agent）==========
     path('api/send_packet/', views.api_send_packet, name='api_send_packet'),
     path('api/stop_send/', views.api_stop_send, name='api_stop_send'),

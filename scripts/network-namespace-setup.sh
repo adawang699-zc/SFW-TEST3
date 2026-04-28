@@ -1,125 +1,196 @@
 #!/bin/bash
-# network-namespace-setup.sh - Network Namespace 配置脚本
-# 功能：创建独立的网络 namespace，让 eth1 和 eth2 像两台独立机器
+# network-namespace-setup.sh - Network Namespace 动态管理脚本
+# 功能：为任意网卡创建独立的网络 namespace
 # 用法：
-#   sudo ./network-namespace-setup.sh setup    # 设置 namespace
-#   sudo ./network-namespace-setup.sh start    # 启动 namespace 内的服务
-#   sudo ./network-namespace-setup.sh stop     # 停止 namespace 内的服务
-#   sudo ./network-namespace-setup.sh status   # 查看状态
-#   sudo ./network-namespace-setup.sh restore  # 恢复原配置
+#   sudo ./network-namespace-setup.sh setup-interface <网卡名> <IP/掩码>  # 设置单个网卡
+#   sudo ./network-namespace-setup.sh remove-interface <网卡名>            # 移除网卡namespace
+#   sudo ./network-namespace-setup.sh start-agent <网卡名>                 # 启动namespace内Agent
+#   sudo ./network-namespace-setup.sh stop-agent <网卡名>                  # 停止namespace内Agent
+#   sudo ./network-namespace-setup.sh status                               # 查看所有namespace状态
+#   sudo ./network-namespace-setup.sh list                                 # 列出所有namespace
+#   sudo ./network-namespace-setup.sh setup-all                            # 设置所有业务网卡
+#   sudo ./network-namespace-setup.sh restore-all                          # 恢复所有网卡到主namespace
 
 set -e
 
 # 配置
-NS_CLIENT="ns-eth1"
-NS_SERVER="ns-eth2"
-ETH1="eth1"
-ETH2="eth2"
-ETH1_IP="192.168.11.100/16"
-ETH2_IP="192.168.12.100/16"
 PROJECT_PATH="/opt/SFW-TEST3"
 PYTHON_PATH="/opt/SFW-TEST3/sfw/bin/python"
+AGENT_PORT=8888
+LOG_DIR="/opt/SFW-TEST3/logs"
 
 # 日志
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
-# 创建 namespace
-create_namespace() {
-    log "创建 network namespace..."
+# 获取namespace名称
+get_namespace_name() {
+    local interface="$1"
+    echo "ns-${interface}"
+}
 
-    # 创建 namespace（如果不存在）
-    if ! ip netns list | grep -q "$NS_CLIENT"; then
-        ip netns add "$NS_CLIENT"
-        log "创建 namespace: $NS_CLIENT"
+# 获取服务名称
+get_service_name() {
+    local interface="$1"
+    echo "agent-${interface}-ns"
+}
+
+# 检查网卡是否存在（主namespace）
+interface_exists_in_main() {
+    local interface="$1"
+    ip link show "$interface" 2>/dev/null | grep -q "link/ether"
+}
+
+# 检查网卡是否在namespace内
+interface_in_namespace() {
+    local interface="$1"
+    ! interface_exists_in_main "$interface"
+}
+
+# 创建单个网卡的namespace
+setup_interface() {
+    local interface="$1"
+    local ip_cidr="$2"
+    local ns=$(get_namespace_name "$interface")
+
+    log "=== 设置网卡 $interface 到 namespace $ns ==="
+
+    # 检查网卡是否在主namespace
+    if ! interface_exists_in_main "$interface"; then
+        log "警告: 网卡 $interface 不在主namespace，可能已在其他namespace"
+        # 尝试从其他namespace移回
+        for existing_ns in $(ip netns list | awk '{print $1}'); do
+            if ip netns exec "$existing_ns" ip link show "$interface" 2>/dev/null | grep -q "link/ether"; then
+                log "从 $existing_ns 移回主namespace"
+                ip netns exec "$existing_ns" ip link set "$interface" down
+                ip netns exec "$existing_ns" ip link set "$interface" netns 1
+                break
+            fi
+        done
+        sleep 1
     fi
 
-    if ! ip netns list | grep -q "$NS_SERVER"; then
-        ip netns add "$NS_SERVER"
-        log "创建 namespace: $NS_SERVER"
-    fi
-}
-
-# 将物理接口移入 namespace
-move_interfaces() {
-    log "将接口移入 namespace..."
-
-    # 检查接口是否在主 namespace
-    if ip link show "$ETH1" 2>/dev/null | grep -q "link/ether"; then
-        # 先关闭接口
-        ip link set "$ETH1" down
-        # 移入 namespace
-        ip link set "$ETH1" netns "$NS_CLIENT"
-        log "移入 $ETH1 -> $NS_CLIENT"
+    # 创建namespace（如果不存在）
+    if ! ip netns list | grep -q "^$ns"; then
+        ip netns add "$ns"
+        log "创建 namespace: $ns"
     fi
 
-    if ip link show "$ETH2" 2>/dev/null | grep -q "link/ether"; then
-        ip link set "$ETH2" down
-        ip link set "$ETH2" netns "$NS_SERVER"
-        log "移入 $ETH2 -> $NS_SERVER"
+    # 将网卡移入namespace
+    if interface_exists_in_main "$interface"; then
+        ip link set "$interface" down
+        ip link set "$interface" netns "$ns"
+        log "移入 $interface -> $ns"
     fi
+
+    # 配置namespace内网络
+    # 启用loopback（关键！）
+    ip netns exec "$ns" ip link set lo up
+    log "启用 $ns 的 loopback"
+
+    # 启用网卡并配置IP
+    ip netns exec "$ns" ip link set "$interface" up
+    ip netns exec "$ns" ip addr add "$ip_cidr" dev "$interface"
+    log "配置 $interface IP: $ip_cidr"
+
+    # 创建Agent服务文件
+    create_agent_service "$interface" "$ns" "$ip_cidr"
+
+    log "=== $interface 设置完成 ==="
 }
 
-# 配置 namespace 内的网络
-configure_namespace_network() {
-    log "配置 namespace 内网络..."
+# 创建Agent systemd服务文件
+create_agent_service() {
+    local interface="$1"
+    local ns="$2"
+    local ip_cidr="$3"
+    local service_name=$(get_service_name "$interface")
+    local ip=$(echo "$ip_cidr" | cut -d'/' -f1)
+    local service_file="/etc/systemd/system/${service_name}.service"
 
-    # 配置 ns-eth1
-    # 启用 loopback 接口（关键！否则本地连接不可达）
-    ip netns exec "$NS_CLIENT" ip link set lo up
-    ip netns exec "$NS_CLIENT" ip link set "$ETH1" up
-    ip netns exec "$NS_CLIENT" ip addr add "$ETH1_IP" dev "$ETH1"
-    # 添加默认路由（如果需要出网）
-    # ip netns exec "$NS_CLIENT" ip route add default via 192.168.11.1
+    log "创建服务文件: $service_file"
 
-    # 配置 ns-eth2
-    # 启用 loopback 接口
-    ip netns exec "$NS_SERVER" ip link set lo up
-    ip netns exec "$NS_SERVER" ip link set "$ETH2" up
-    ip netns exec "$NS_SERVER" ip addr add "$ETH2_IP" dev "$ETH2"
+    cat > "$service_file" << EOF
+[Unit]
+Description=Packet Agent $interface (in namespace $ns)
+After=network.target
+Requires=network.target
 
-    log "网络配置完成"
+[Service]
+Type=simple
+WorkingDirectory=$PROJECT_PATH
+ExecStart=/usr/bin/ip netns exec $ns $PYTHON_PATH -m gunicorn -w 1 -b $ip:$AGENT_PORT --preload --timeout 30 agents.full_agent:app
+ExecStop=/usr/bin/ip netns exec $ns $PYTHON_PATH -c "import sys; sys.exit(0)"
+Restart=always
+RestartSec=5
+StandardOutput=append:$LOG_DIR/agent_${interface}_ns.log
+StandardError=append:$LOG_DIR/agent_${interface}_ns.log
+
+LimitNOFILE=65535
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    log "服务文件已创建: $service_name"
 }
 
-# 启动 namespace 内的服务
-start_services() {
-    log "启动 namespace 内的服务..."
+# 移除网卡的namespace
+remove_interface() {
+    local interface="$1"
+    local ns=$(get_namespace_name "$interface")
+    local service_name=$(get_service_name "$interface")
 
-    # 停止原有服务
-    systemctl stop agent-eth1.service 2>/dev/null || true
-    systemctl stop agent-eth2.service 2>/dev/null || true
+    log "=== 移除网卡 $interface 的 namespace ==="
 
-    # 在 namespace 内启动 agent
-    # 使用 systemd-run 在 namespace 内运行
-    systemd-run --scope --property="NetworkNamespacePath=/var/run/netns/$NS_CLIENT" \
-        "$PYTHON_PATH" "$PROJECT_PATH/agents/run_agent.py" eth1 &
-    log "启动 agent-eth1 in $NS_CLIENT"
+    # 停止服务
+    systemctl stop "$service_name" 2>/dev/null || true
+    systemctl disable "$service_name" 2>/dev/null || true
 
-    systemd-run --scope --property="NetworkNamespacePath=/var/run/netns/$NS_SERVER" \
-        "$PYTHON_PATH" "$PROJECT_PATH/agents/run_agent.py" eth2 &
-    log "启动 agent-eth2 in $NS_SERVER"
+    # 删除服务文件
+    rm -f "/etc/systemd/system/${service_name}.service"
+    systemctl daemon-reload
 
-    log "服务启动完成"
+    # 将网卡移回主namespace
+    if ip netns exec "$ns" ip link show "$interface" 2>/dev/null | grep -q "link/ether"; then
+        ip netns exec "$ns" ip link set "$interface" down
+        ip netns exec "$ns" ip link set "$interface" netns 1
+        ip link set "$interface" up
+        log "移回 $interface 到主 namespace"
+    fi
+
+    # 删除namespace
+    ip netns del "$ns" 2>/dev/null || true
+    log "删除 namespace: $ns"
+
+    log "=== $interface namespace 已移除 ==="
 }
 
-# 停止 namespace 内的服务
-stop_services() {
-    log "停止 namespace 内的服务..."
+# 启动namespace内Agent
+start_agent() {
+    local interface="$1"
+    local service_name=$(get_service_name "$interface")
 
-    # 查找并杀死 namespace 内的进程
-    for pid in $(ip netns pids "$NS_CLIENT" 2>/dev/null); do
-        kill "$pid" 2>/dev/null || true
-    done
-
-    for pid in $(ip netns pids "$NS_SERVER" 2>/dev/null); do
-        kill "$pid" 2>/dev/null || true
-    done
-
-    log "服务停止完成"
+    log "启动 Agent: $service_name"
+    systemctl start "$service_name"
+    log "Agent $service_name 已启动"
 }
 
-# 查看状态
+# 停止namespace内Agent
+stop_agent() {
+    local interface="$1"
+    local service_name=$(get_service_name "$interface")
+
+    log "停止 Agent: $service_name"
+    systemctl stop "$service_name"
+    log "Agent $service_name 已停止"
+}
+
+# 查看所有namespace状态
 show_status() {
     log "=== Network Namespace 状态 ==="
 
@@ -127,114 +198,144 @@ show_status() {
     echo "Namespace 列表:"
     ip netns list
 
-    echo ""
-    echo "=== $NS_CLIENT 网络配置 ==="
-    ip netns exec "$NS_CLIENT" ip addr show 2>/dev/null || echo "namespace 不存在"
-    ip netns exec "$NS_CLIENT" ip route show 2>/dev/null || true
+    for ns in $(ip netns list | awk '{print $1}'); do
+        echo ""
+        echo "=== $ns 网络配置 ==="
+        ip netns exec "$ns" ip addr show 2>/dev/null || echo "namespace不存在"
+        ip netns exec "$ns" ip route show 2>/dev/null || true
 
-    echo ""
-    echo "=== $NS_SERVER 网络配置 ==="
-    ip netns exec "$NS_SERVER" ip addr show 2>/dev/null || echo "namespace 不存在"
-    ip netns exec "$NS_SERVER" ip route show 2>/dev/null || true
-
-    echo ""
-    echo "=== Namespace 内进程 ==="
-    ip netns pids "$NS_CLIENT" 2>/dev/null || echo "无进程"
-    ip netns pids "$NS_SERVER" 2>/dev/null || echo "无进程"
-
-    echo ""
-    echo "=== Ping 测试（eth1 -> eth2）==="
-    ip netns exec "$NS_CLIENT" ping -c 2 192.168.12.100 2>/dev/null || echo "ping 失败"
+        echo ""
+        echo "$ns 内进程:"
+        ip netns pids "$ns" 2>/dev/null || echo "无进程"
+    done
 }
 
-# 恢复原配置
-restore_original() {
-    log "恢复原配置..."
-
-    # 停止 namespace 内的服务
-    stop_services
-
-    # 将接口移回主 namespace
-    if ip netns exec "$NS_CLIENT" ip link show "$ETH1" 2>/dev/null | grep -q "link/ether"; then
-        ip netns exec "$NS_CLIENT" ip link set "$ETH1" down
-        ip netns exec "$NS_CLIENT" ip link set "$ETH1" netns 1
-        ip link set "$ETH1" up
-        ip addr add "$ETH1_IP" dev "$ETH1" 2>/dev/null || true
-        log "恢复 $ETH1 到主 namespace"
-    fi
-
-    if ip netns exec "$NS_SERVER" ip link show "$ETH2" 2>/dev/null | grep -q "link/ether"; then
-        ip netns exec "$NS_SERVER" ip link set "$ETH2" down
-        ip netns exec "$NS_SERVER" ip link set "$ETH2" netns 1
-        ip link set "$ETH2" up
-        ip addr add "$ETH2_IP" dev "$ETH2" 2>/dev/null || true
-        log "恢复 $ETH2 到主 namespace"
-    fi
-
-    # 删除 namespace
-    ip netns del "$NS_CLIENT" 2>/dev/null || true
-    ip netns del "$NS_SERVER" 2>/dev/null || true
-    log "删除 namespace"
-
-    # 重新启动原有服务
-    systemctl start agent-eth1.service 2>/dev/null || true
-    systemctl start agent-eth2.service 2>/dev/null || true
-
-    log "恢复完成，验证:"
-    ping -I 192.168.11.100 -c 2 192.168.12.100
+# 列出所有namespace
+list_namespaces() {
+    ip netns list
 }
 
-# 完整设置
-setup() {
-    log "=== 开始 Network Namespace 设置 ==="
+# 设置所有业务网卡（从数据库读取）
+setup_all() {
+    log "=== 设置所有业务网卡 ==="
 
-    # 1. 创建 namespace
-    create_namespace
+    # 这里需要根据实际网卡配置
+    # 示例：eth1/eth2，实际应从Django数据库或配置文件读取
 
-    # 2. 将接口移入 namespace
-    move_interfaces
+    # 查找非管理网卡
+    for iface in $(ip link show | grep -E "^[0-9]+: eth[0-9]" | awk '{print $2}' | cut -d':' -f1); do
+        if [ "$iface" != "eth0" ] && [ "$iface" != "lo" ]; then
+            # 默认IP配置（应从数据库读取）
+            case "$iface" in
+                eth1) ip_cidr="192.168.11.100/16" ;;
+                eth2) ip_cidr="192.168.12.100/16" ;;
+                eth3) ip_cidr="192.168.13.100/16" ;;
+                eth4) ip_cidr="192.168.14.100/16" ;;
+                *)
+                    log "跳过未知网卡: $iface"
+                    continue
+                    ;;
+            esac
 
-    # 3. 配置网络
-    configure_namespace_network
+            setup_interface "$iface" "$ip_cidr"
+        fi
+    done
 
-    # 4. 显示状态
-    show_status
+    log "=== 所有网卡设置完成 ==="
+}
 
-    log "=== 设置完成 ==="
-    log "提示：现在可以手动启动服务或使用 'start' 命令"
+# 恢复所有网卡到主namespace
+restore_all() {
+    log "=== 恢复所有网卡到主namespace ==="
+
+    for ns in $(ip netns list | awk '{print $1}'); do
+        # 提取网卡名（ns-eth1 -> eth1）
+        interface=$(echo "$ns" | sed 's/ns-//')
+
+        remove_interface "$interface"
+    done
+
+    log "=== 所有网卡已恢复 ==="
+}
+
+# 测试namespace连通性
+test_namespace() {
+    local interface="$1"
+    local ns=$(get_namespace_name "$interface")
+    local target_ip="$2"
+
+    log "测试 $ns -> $target_ip 连通性"
+    ip netns exec "$ns" ping -c 3 "$target_ip"
 }
 
 # 主函数
 case "$1" in
-    setup)
-        setup
+    setup-interface)
+        if [ $# -lt 3 ]; then
+            echo "用法: $0 setup-interface <网卡名> <IP/掩码>"
+            echo "示例: $0 setup-interface eth1 192.168.11.100/16"
+            exit 1
+        fi
+        setup_interface "$2" "$3"
         ;;
-    start)
-        start_services
+    remove-interface)
+        if [ $# -lt 2 ]; then
+            echo "用法: $0 remove-interface <网卡名>"
+            exit 1
+        fi
+        remove_interface "$2"
         ;;
-    stop)
-        stop_services
+    start-agent)
+        if [ $# -lt 2 ]; then
+            echo "用法: $0 start-agent <网卡名>"
+            exit 1
+        fi
+        start_agent "$2"
+        ;;
+    stop-agent)
+        if [ $# -lt 2 ]; then
+            echo "用法: $0 stop-agent <网卡名>"
+            exit 1
+        fi
+        stop_agent "$2"
         ;;
     status)
         show_status
         ;;
-    restore)
-        restore_original
+    list)
+        list_namespaces
+        ;;
+    setup-all)
+        setup_all
+        ;;
+    restore-all)
+        restore_all
         ;;
     test)
-        log "=== 测试 eth1 -> eth2 连通性 ==="
-        ip netns exec "$NS_CLIENT" ping -c 3 192.168.12.100
+        if [ $# -lt 3 ]; then
+            echo "用法: $0 test <网卡名> <目标IP>"
+            exit 1
+        fi
+        test_namespace "$2" "$3"
         ;;
     *)
-        echo "用法: $0 {setup|start|stop|status|restore|test}"
+        echo "用法: $0 {command} [参数]"
         echo ""
         echo "命令说明:"
-        echo "  setup  - 创建 namespace 并配置网络"
-        echo "  start  - 在 namespace 内启动服务"
-        echo "  stop   - 停止 namespace 内的服务"
-        echo "  status - 查看 namespace 状态"
-        echo "  restore- 恢复原配置"
-        echo "  test   - 测试 eth1 -> eth2 连通性"
+        echo "  setup-interface <网卡> <IP/掩码>  - 设置单个网卡到namespace"
+        echo "  remove-interface <网卡>            - 移除网卡namespace"
+        echo "  start-agent <网卡>                 - 启动namespace内Agent"
+        echo "  stop-agent <网卡>                  - 停止namespace内Agent"
+        echo "  status                             - 查看所有namespace状态"
+        echo "  list                               - 列出所有namespace"
+        echo "  setup-all                          - 设置所有业务网卡"
+        echo "  restore-all                        - 恢复所有网卡到主namespace"
+        echo "  test <网卡> <目标IP>               - 测试namespace连通性"
+        echo ""
+        echo "示例:"
+        echo "  sudo $0 setup-interface eth1 192.168.11.100/16"
+        echo "  sudo $0 start-agent eth1"
+        echo "  sudo $0 status"
         exit 1
         ;;
 esac

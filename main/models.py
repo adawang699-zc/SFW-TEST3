@@ -11,6 +11,7 @@ class NetworkInterface(models.Model):
     网卡模型 - 存储系统网卡信息
 
     系统启动时自动扫描，管理网卡（MANAGEMENT_INTERFACE）不参与 Agent 绑定
+    支持 Network Namespace，每个业务网卡可独立隔离
     """
     name = models.CharField(max_length=50, unique=True, verbose_name="网卡名称")
     ip_address = models.GenericIPAddressField(blank=True, null=True, verbose_name="IP地址")
@@ -20,6 +21,13 @@ class NetworkInterface(models.Model):
     is_available = models.BooleanField(default=True, verbose_name="是否可用")
     is_up = models.BooleanField(default=False, verbose_name="是否启动")
     status = models.CharField(max_length=10, default='DOWN', verbose_name="状态")
+    namespace = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name="Namespace名称",
+        help_text="网卡所在的namespace，如 ns-eth1。为空表示在主namespace"
+    )
     detected_at = models.DateTimeField(auto_now_add=True, verbose_name="检测时间")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="更新时间")
 
@@ -82,8 +90,27 @@ class LocalAgent(models.Model):
         return f"http://{self.interface.ip_address}:{self.port}"
 
     def get_service_name(self):
-        """获取 systemd 服务名称"""
+        """获取 systemd 服务名称（普通模式）"""
         return f"agent-{self.interface.name}"
+
+    def get_namespace(self):
+        """获取 Agent 所在的 namespace"""
+        return self.interface.namespace
+
+    def get_namespace_service_name(self):
+        """获取 namespace 服务名称"""
+        return f"agent-{self.interface.name}-ns"
+
+    def is_in_namespace(self):
+        """检查 Agent 是否在 namespace 内"""
+        return self.interface.namespace is not None and self.interface.namespace != ''
+
+    def get_namespace_exec_cmd(self):
+        """获取 namespace 内执行命令的前缀列表"""
+        ns = self.get_namespace()
+        if ns:
+            return ['ip', 'netns', 'exec', ns]
+        return []
 
     def generate_agent_id(self):
         """生成 Agent ID（基于网卡名）"""

@@ -59,6 +59,121 @@ except ImportError as e:
 
 logger = logging.getLogger('main')
 
+# ========== Network Namespace 辅助函数 ==========
+
+def get_namespace_list():
+    """获取所有 namespace 列表"""
+    try:
+        result = subprocess.run(
+            ['ip', 'netns', 'list'],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0:
+            # 输出格式: ns-eth1 (id: 1) ns-eth2 (id: 2)
+            namespaces = []
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    ns_name = line.split()[0]
+                    namespaces.append(ns_name)
+            return namespaces
+    except Exception as e:
+        logger.warning(f"获取namespace列表失败: {e}")
+    return []
+
+
+def scan_namespace_interfaces(namespace):
+    """扫描指定 namespace 内的网卡"""
+    interfaces = []
+    try:
+        # 获取 namespace 内所有网卡
+        result = subprocess.run(
+            ['ip', 'netns', 'exec', namespace, 'ip', 'link', 'show'],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            return interfaces
+
+        # 解析 ip link show 输出
+        lines = result.stdout.split('\n')
+        for i, line in enumerate(lines):
+            # 匹配网卡行: "3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP>..."
+            if ':' in line and 'link/ether' in lines[i+1] if i+1 < len(lines) else False:
+                parts = line.split(':')
+                if len(parts) >= 2:
+                    # 提取网卡名（去掉后面的状态）
+                    iface_name = parts[1].strip().split('@')[0].strip()
+
+                    # 获取 MAC 地址
+                    mac_line = lines[i+1] if i+1 < len(lines) else ''
+                    mac_match = mac_line.split('link/ether')[1].strip().split()[0] if 'link/ether' in mac_line else ''
+
+                    # 获取 IP 地址
+                    ip_result = subprocess.run(
+                        ['ip', 'netns', 'exec', namespace, 'ip', 'addr', 'show', iface_name],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    ipv4 = None
+                    if ip_result.returncode == 0:
+                        for ip_line in ip_result.stdout.split('\n'):
+                            if 'inet ' in ip_line:
+                                ipv4 = ip_line.split('inet ')[1].split()[0].split('/')[0]
+
+                    # 判断是否启动
+                    is_up = 'UP' in line
+
+                    interfaces.append({
+                        'name': iface_name,
+                        'namespace': namespace,
+                        'ip_address': ipv4,
+                        'mac_address': mac_match,
+                        'is_up': is_up,
+                        'status': 'UP' if is_up else 'DOWN',
+                        'is_management': False,  # namespace 内网卡都不是管理网卡
+                    })
+    except Exception as e:
+        logger.warning(f"扫描namespace {namespace} 失败: {e}")
+
+    return interfaces
+
+
+def interface_in_namespace(interface_name):
+    """检查网卡是否在某个 namespace 内"""
+    try:
+        result = subprocess.run(
+            ['ip', 'link', 'show', interface_name],
+            capture_output=True, timeout=5
+        )
+        # 如果在主 namespace 能看到网卡，返回 False
+        # 如果看不到（returncode != 0），说明网卡在 namespace 内
+        return result.returncode != 0
+    except:
+        return False
+
+
+def exec_in_namespace(namespace, command):
+    """在指定 namespace 内执行命令"""
+    if namespace:
+        full_cmd = ['ip', 'netns', 'exec', namespace] + command
+        return subprocess.run(full_cmd, capture_output=True, text=True, timeout=30)
+    else:
+        return subprocess.run(command, capture_output=True, text=True, timeout=30)
+
+
+def check_namespace_agent_status(namespace, ip_address, port):
+    """检查 namespace 内 Agent 状态"""
+    try:
+        # 使用 ip netns exec curl 来访问 namespace 内 IP
+        result = subprocess.run(
+            ['ip', 'netns', 'exec', namespace, 'curl', '-s', '--max-time', '3',
+             f'http://{ip_address}:{port}/api/health'],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and 'success' in result.stdout:
+            return 'running'
+    except:
+        pass
+    return 'stopped'
+
 # ========== 系统信息 API ==========
 
 @require_http_methods(["GET"])
@@ -194,12 +309,14 @@ def packet_replay(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_scan_interfaces(request):
-    """扫描系统网卡（包括 DOWN 状态）"""
+    """扫描系统网卡（包括主namespace和子namespace）"""
     try:
         import psutil
         import socket
 
         interfaces = []
+
+        # ========== 1. 扫描主 namespace 网卡（psutil）==========
         net_if_addrs = psutil.net_if_addrs()
         net_if_stats = psutil.net_if_stats()
 
@@ -229,15 +346,23 @@ def api_scan_interfaces(request):
 
             interfaces.append({
                 'name': name,
-                'ip_address': ipv4 or '',  # 允许为空
+                'ip_address': ipv4 or '',
                 'mac_address': mac or '',
                 'speed': speed,
                 'is_management': is_management,
                 'is_up': is_up,
-                'status': 'UP' if is_up else 'DOWN'
+                'status': 'UP' if is_up else 'DOWN',
+                'namespace': None,  # 主 namespace
             })
 
-        # 保存到数据库
+        # ========== 2. 扫描子 namespace 网卡（ip netns exec）==========
+        namespaces = get_namespace_list()
+        for ns in namespaces:
+            ns_interfaces = scan_namespace_interfaces(ns)
+            for iface in ns_interfaces:
+                interfaces.append(iface)
+
+        # ========== 3. 保存到数据库（更新 namespace 字段）==========
         for iface in interfaces:
             NetworkInterface.objects.update_or_create(
                 name=iface['name'],
@@ -249,34 +374,38 @@ def api_scan_interfaces(request):
                     'is_available': iface['is_up'],
                     'is_up': iface['is_up'],
                     'status': iface['status'],
+                    'namespace': iface.get('namespace'),  # 新增：保存 namespace
                 }
             )
 
-        # 按 eth0, eth1, eth2... 顺序排序
+        # 按 eth0, eth1, eth2... 顺序排序，namespace 内网卡排在后面
         def interface_sort_key(iface):
             name = iface['name']
             # 管理网卡 (eth0) 排在最前面
             if iface['is_management']:
-                return (0, 0)
+                return (0, 0, 0)
+            # namespace 内网卡排后面
+            ns_order = 2 if iface.get('namespace') else 1
             # 其他网卡按数字排序
             if name.startswith('eth') and len(name) > 3:
                 try:
                     num = int(name[3:])
-                    return (1, num)
+                    return (ns_order, num, iface.get('namespace') or '')
                 except:
-                    return (1, 999)
+                    return (ns_order, 999, iface.get('namespace') or '')
             # 非 eth 开头的网卡排最后
-            return (2, name)
+            return (3, 0, name)
 
         interfaces.sort(key=interface_sort_key)
 
-        logger.info(f"扫描到 {len(interfaces)} 个网卡")
+        logger.info(f"扫描到 {len(interfaces)} 个网卡 (主namespace: {len([i for i in interfaces if not i.get('namespace')])}, 子namespace: {len([i for i in interfaces if i.get('namespace')])})")
 
         return JsonResponse({
             'success': True,
             'interfaces': interfaces,
             'count': len(interfaces),
-            'management_interface': settings.MANAGEMENT_INTERFACE
+            'management_interface': settings.MANAGEMENT_INTERFACE,
+            'namespaces': namespaces,
         })
 
     except Exception as e:
@@ -335,35 +464,56 @@ def api_interface_list(request):
 
 @require_http_methods(["GET"])
 def api_agent_list(request):
-    """获取 Agent 列表（并行查询状态，优化速度）"""
+    """获取 Agent 列表（支持 namespace）"""
     import psutil
     import socket
     import concurrent.futures
 
     agents = LocalAgent.objects.all()
 
-    # 先获取网卡实际状态
+    # 先获取主 namespace 网卡实际状态
     net_if_addrs = psutil.net_if_addrs()
     net_if_stats = psutil.net_if_stats()
+
+    # 获取 namespace 内网卡状态
+    namespace_interfaces = {}
+    namespaces = get_namespace_list()
+    for ns in namespaces:
+        namespace_interfaces[ns] = {}
+        ns_ifaces = scan_namespace_interfaces(ns)
+        for iface in ns_ifaces:
+            namespace_interfaces[ns][iface['name']] = iface
 
     # 并行查询 Agent 状态
     def query_agent_status(agent):
         """查询单个 Agent 状态"""
         interface_name = agent.interface.name
+        ns = agent.interface.namespace
+
         actual_ip = None
         actual_is_up = False
         actual_status = 'DOWN'
 
-        if interface_name in net_if_addrs:
-            addrs = net_if_addrs[interface_name]
-            for addr in addrs:
-                if addr.family == socket.AF_INET:
-                    actual_ip = addr.address
+        # 根据是否在 namespace 内，选择不同的检查方式
+        if ns:
+            # ========== namespace 内网卡状态 ==========
+            if ns in namespace_interfaces and interface_name in namespace_interfaces[ns]:
+                ns_iface = namespace_interfaces[ns][interface_name]
+                actual_ip = ns_iface.get('ip_address')
+                actual_is_up = ns_iface.get('is_up', False)
+                actual_status = ns_iface.get('status', 'DOWN')
+        else:
+            # ========== 主 namespace 网卡状态 ==========
+            if interface_name in net_if_addrs:
+                addrs = net_if_addrs[interface_name]
+                for addr in addrs:
+                    if addr.family == socket.AF_INET:
+                        actual_ip = addr.address
 
-        if interface_name in net_if_stats:
-            stats = net_if_stats[interface_name]
-            actual_is_up = stats.isup
-            actual_status = 'UP' if stats.isup else 'DOWN'
+            if interface_name in net_if_stats:
+                stats = net_if_stats[interface_name]
+                actual_is_up = stats.isup
+                actual_status = 'UP' if stats.isup else 'DOWN'
 
         # 同步网卡状态到数据库
         if actual_ip and actual_ip != agent.interface.ip_address:
@@ -378,20 +528,27 @@ def api_agent_list(request):
         # 查询 Agent HTTP 状态
         actual_agent_status = agent.status
         if agent.interface.ip_address:
-            try:
-                resp = requests.get(
-                    f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                    timeout=1  # 减少超时
-                )
-                if resp.status_code == 200:
-                    actual_agent_status = 'running'
-                    agent.status = 'running'
-                    agent.save()
-            except:
-                actual_agent_status = 'stopped'
-                if agent.status != 'stopped':
-                    agent.status = 'stopped'
-                    agent.save()
+            if ns:
+                # ========== namespace 内 Agent 状态检查 ==========
+                actual_agent_status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port)
+                agent.status = actual_agent_status
+                agent.save()
+            else:
+                # ========== 主 namespace Agent 状态检查 ==========
+                try:
+                    resp = requests.get(
+                        f"http://{agent.interface.ip_address}:{agent.port}/api/status",
+                        timeout=1
+                    )
+                    if resp.status_code == 200:
+                        actual_agent_status = 'running'
+                        agent.status = 'running'
+                        agent.save()
+                except:
+                    actual_agent_status = 'stopped'
+                    if agent.status != 'stopped':
+                        agent.status = 'stopped'
+                        agent.save()
 
         return {
             'id': agent.id,
@@ -403,6 +560,7 @@ def api_agent_list(request):
             'status': actual_agent_status,
             'interface_status': agent.interface.status,
             'interface_is_up': agent.interface.is_up,
+            'namespace': ns,
             'auto_start': agent.auto_start,
             'last_start_time': agent.last_start_time.isoformat() if agent.last_start_time else None,
             'created_at': agent.created_at.isoformat(),
@@ -412,9 +570,9 @@ def api_agent_list(request):
     # 使用线程池并行查询
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(query_agent_status, agent): agent for agent in agents}
-        for future in concurrent.futures.as_completed(futures, timeout=10):
+        for future in concurrent.futures.as_completed(futures, timeout=15):
             try:
-                result = future.result(timeout=2)
+                result = future.result(timeout=3)
                 data.append(result)
             except:
                 agent = futures[future]
@@ -429,12 +587,13 @@ def api_agent_list(request):
                     'status': agent.status,
                     'interface_status': agent.interface.status,
                     'interface_is_up': agent.interface.is_up,
+                    'namespace': agent.interface.namespace,
                     'auto_start': agent.auto_start,
                     'last_start_time': agent.last_start_time.isoformat() if agent.last_start_time else None,
                     'created_at': agent.created_at.isoformat(),
                 })
 
-    return JsonResponse({'agents': data})
+    return JsonResponse({'agents': data, 'namespaces': namespaces})
 
 
 @require_http_methods(["POST"])
@@ -501,15 +660,22 @@ def api_agent_create(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_agent_delete(request):
-    """删除 Agent"""
+    """删除 Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
+        # 检查是否在 namespace 内
+        ns = agent.interface.namespace
+
+        if ns:
+            service_name = agent.get_namespace_service_name()
+        else:
+            service_name = agent.get_service_name()
+
         # 停止 systemd 服务
-        service_name = agent.get_service_name()
         subprocess.run(['sudo', 'systemctl', 'stop', service_name], timeout=10, capture_output=True)
         subprocess.run(['sudo', 'systemctl', 'disable', service_name], timeout=10, capture_output=True)
 
@@ -522,12 +688,13 @@ def api_agent_delete(request):
         interface_name = agent.interface.name
         agent.delete()
 
-        logger.info(f"删除 Agent: {agent_id}")
+        logger.info(f"删除 Agent: {agent_id} (namespace: {ns or 'main'})")
 
         return JsonResponse({
             'success': True,
             'message': f'Agent {agent_id} 已删除',
-            'interface_name': interface_name
+            'interface_name': interface_name,
+            'namespace': ns
         })
 
     except LocalAgent.DoesNotExist:
@@ -540,7 +707,7 @@ def api_agent_delete(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_agent_start(request):
-    """启动 Agent"""
+    """启动 Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
@@ -555,11 +722,81 @@ def api_agent_start(request):
                 'need_config_ip': True
             })
 
-        # 创建 systemd 服务文件（如果不存在）
-        service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
+        # 检查是否在 namespace 内
+        ns = agent.interface.namespace
 
-        # 使用 Gunicorn 启动（单 worker + preload，保证全局变量共享）
-        service_content = f"""[Unit]
+        if ns:
+            # ========== namespace 内 Agent 启动 ==========
+            service_name = agent.get_namespace_service_name()
+            service_file = f'/etc/systemd/system/{service_name}.service'
+
+            # 创建 namespace 服务文件
+            service_content = f"""[Unit]
+Description=Packet Agent {agent.agent_id} (in namespace {ns})
+After=network.target
+Requires=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={settings.AGENT_WORK_DIR}
+ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
+ExecStop=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -c "import sys; sys.exit(0)"
+Restart=always
+RestartSec=5
+StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{agent.interface.name}_ns.log
+StandardError=append:{settings.AGENT_WORK_DIR}/logs/agent_{agent.interface.name}_ns.log
+
+LimitNOFILE=65535
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+            # 写入服务文件
+            subprocess.run(
+                ['sudo', 'tee', service_file],
+                input=service_content,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            # 重载 systemd
+            subprocess.run(['sudo', 'systemctl', 'daemon-reload'], timeout=10, capture_output=True)
+
+            # 启动服务
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'start', service_name],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                time.sleep(3)
+                # 通过 namespace 检查状态
+                status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port)
+                if status == 'running':
+                    agent.status = 'running'
+                    agent.last_start_time = datetime.now()
+                    agent.save()
+                    logger.info(f"Agent {agent_id} (namespace {ns}) 启动成功")
+                    return JsonResponse({'success': True, 'status': 'running', 'namespace': ns})
+                else:
+                    agent.status = 'starting'
+                    agent.save()
+                    return JsonResponse({'success': True, 'status': 'starting', 'namespace': ns})
+            else:
+                logger.error(f"启动 Agent {agent_id} 失败: {result.stderr}")
+                return JsonResponse({'success': False, 'error': result.stderr})
+
+        else:
+            # ========== 主 namespace Agent 启动（原有逻辑）==========
+            service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
+
+            service_content = f"""[Unit]
 Description=Packet Agent {agent.agent_id} ({agent.interface.name})
 After=network.target
 
@@ -578,48 +815,43 @@ RestartSec=5
 WantedBy=multi-user.target
 """
 
-        # 写入服务文件
-        subprocess.run(
-            ['sudo', 'tee', service_file],
-            input=service_content,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+            subprocess.run(
+                ['sudo', 'tee', service_file],
+                input=service_content,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
 
-        # 重载 systemd
-        subprocess.run(['sudo', 'systemctl', 'daemon-reload'], timeout=10, capture_output=True)
+            subprocess.run(['sudo', 'systemctl', 'daemon-reload'], timeout=10, capture_output=True)
 
-        # 启动服务
-        result = subprocess.run(
-            ['sudo', 'systemctl', 'start', agent.get_service_name()],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+            result = subprocess.run(
+                ['sudo', 'systemctl', 'start', agent.get_service_name()],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
 
-        if result.returncode == 0:
-            # 等待 Agent 启动
-            time.sleep(3)
-
-            # 检查 Agent 状态
-            try:
-                resp = requests.get(
-                    f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                    timeout=5
-                )
-                if resp.status_code == 200:
-                    agent.status = 'running'
-                    agent.last_start_time = datetime.now()
+            if result.returncode == 0:
+                time.sleep(3)
+                try:
+                    resp = requests.get(
+                        f"http://{agent.interface.ip_address}:{agent.port}/api/status",
+                        timeout=5
+                    )
+                    if resp.status_code == 200:
+                        agent.status = 'running'
+                        agent.last_start_time = datetime.now()
+                        agent.save()
+                        logger.info(f"Agent {agent_id} 启动成功")
+                        return JsonResponse({'success': True, 'status': 'running'})
+                except:
+                    agent.status = 'error'
                     agent.save()
-                    logger.info(f"Agent {agent_id} 启动成功")
-                    return JsonResponse({'success': True, 'status': 'running'})
-            except:
-                agent.status = 'error'
-                agent.save()
-                return JsonResponse({'success': True, 'status': 'starting'})
-
-        else:
+                    return JsonResponse({'success': True, 'status': 'starting'})
+            else:
+                logger.error(f"启动 Agent 失败: {result.stderr}")
+                return JsonResponse({'success': False, 'error': result.stderr})
             logger.error(f"启动 Agent 失败: {result.stderr}")
             return JsonResponse({'success': False, 'error': result.stderr})
 
@@ -633,15 +865,25 @@ WantedBy=multi-user.target
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_agent_stop(request):
-    """停止 Agent"""
+    """停止 Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
+        # 检查是否在 namespace 内
+        ns = agent.interface.namespace
+
+        if ns:
+            # namespace 内 Agent 使用 namespace 服务名
+            service_name = agent.get_namespace_service_name()
+        else:
+            # 主 namespace Agent 使用普通服务名
+            service_name = agent.get_service_name()
+
         result = subprocess.run(
-            ['sudo', 'systemctl', 'stop', agent.get_service_name()],
+            ['sudo', 'systemctl', 'stop', service_name],
             capture_output=True,
             text=True,
             timeout=30
@@ -651,8 +893,8 @@ def api_agent_stop(request):
             agent.status = 'stopped'
             agent.last_stop_time = datetime.now()
             agent.save()
-            logger.info(f"Agent {agent_id} 已停止")
-            return JsonResponse({'success': True, 'status': 'stopped'})
+            logger.info(f"Agent {agent_id} 已停止 (namespace: {ns or 'main'})")
+            return JsonResponse({'success': True, 'status': 'stopped', 'namespace': ns})
         else:
             return JsonResponse({'success': False, 'error': result.stderr})
 
@@ -3733,3 +3975,116 @@ def api_industrial_http_files(request, action, filename=None):
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== Network Namespace 管理 API ==========
+
+@require_http_methods(["GET"])
+def api_namespace_list(request):
+    """获取所有 namespace 列表"""
+    namespaces = get_namespace_list()
+    return JsonResponse({
+        'success': True,
+        'namespaces': namespaces,
+        'count': len(namespaces)
+    })
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_namespace_setup_interface(request):
+    """创建网卡 namespace"""
+    try:
+        data = json.loads(request.body)
+        interface_name = data.get('interface_name')
+        ip_cidr = data.get('ip_cidr')  # 如 192.168.11.100/16
+
+        if not interface_name:
+            return JsonResponse({'success': False, 'error': '网卡名称不能为空'})
+
+        if not ip_cidr:
+            return JsonResponse({'success': False, 'error': 'IP地址不能为空'})
+
+        # 执行 setup-interface
+        result = subprocess.run(
+            ['sudo', '/opt/SFW-TEST3/scripts/network-namespace-setup.sh', 'setup-interface', interface_name, ip_cidr],
+            capture_output=True, text=True, timeout=60
+        )
+
+        if result.returncode == 0:
+            # 更新数据库
+            try:
+                iface = NetworkInterface.objects.get(name=interface_name)
+                iface.namespace = f'ns-{interface_name}'
+                iface.ip_address = ip_cidr.split('/')[0]
+                iface.save()
+                logger.info(f"网卡 {interface_name} namespace 创建成功")
+            except NetworkInterface.DoesNotExist:
+                pass
+
+            return JsonResponse({
+                'success': True,
+                'message': f'网卡 {interface_name} namespace 创建成功',
+                'namespace': f'ns-{interface_name}',
+                'output': result.stdout
+            })
+        else:
+            return JsonResponse({'success': False, 'error': result.stderr, 'output': result.stdout})
+
+    except Exception as e:
+        logger.exception(f"创建 namespace 失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_namespace_restore_interface(request):
+    """恢复网卡到主 namespace"""
+    try:
+        data = json.loads(request.body)
+        interface_name = data.get('interface_name')
+
+        if not interface_name:
+            return JsonResponse({'success': False, 'error': '网卡名称不能为空'})
+
+        # 执行 remove-interface
+        result = subprocess.run(
+            ['sudo', '/opt/SFW-TEST3/scripts/network-namespace-setup.sh', 'remove-interface', interface_name],
+            capture_output=True, text=True, timeout=60
+        )
+
+        if result.returncode == 0:
+            # 更新数据库
+            try:
+                iface = NetworkInterface.objects.get(name=interface_name)
+                iface.namespace = None
+                iface.save()
+                logger.info(f"网卡 {interface_name} 已恢复到主 namespace")
+            except NetworkInterface.DoesNotExist:
+                pass
+
+            return JsonResponse({
+                'success': True,
+                'message': f'网卡 {interface_name} 已恢复到主 namespace',
+                'output': result.stdout
+            })
+        else:
+            return JsonResponse({'success': False, 'error': result.stderr, 'output': result.stdout})
+
+    except Exception as e:
+        logger.exception(f"恢复 namespace 失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_namespace_status(request):
+    """获取 namespace 状态"""
+    result = subprocess.run(
+        ['sudo', '/opt/SFW-TEST3/scripts/network-namespace-setup.sh', 'status'],
+        capture_output=True, text=True, timeout=30
+    )
+    return JsonResponse({
+        'success': True,
+        'status': result.stdout,
+        'error': result.stderr if result.returncode != 0 else None
+    })
