@@ -1782,23 +1782,29 @@ def api_send_protocol(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_start_scan(request):
-    """启动端口扫描"""
+    """启动端口扫描（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        if agent.status != 'running':
+        # 检查状态（支持 namespace）
+        ns = agent.interface.namespace
+        if ns:
+            service_name = agent.get_namespace_service_name()
+            status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
+        else:
+            status = agent.status
+
+        if status != 'running':
             return JsonResponse({'success': False, 'error': 'Agent 未运行'})
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/start_scan",
-            json=data,
-            timeout=10
-        )
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/start_scan', data, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1809,23 +1815,29 @@ def api_start_scan(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_start_replay(request):
-    """启动报文回放"""
+    """启动报文回放（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        if agent.status != 'running':
+        # 检查状态（支持 namespace）
+        ns = agent.interface.namespace
+        if ns:
+            service_name = agent.get_namespace_service_name()
+            status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
+        else:
+            status = agent.status
+
+        if status != 'running':
             return JsonResponse({'success': False, 'error': 'Agent 未运行'})
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/start_replay",
-            json=data,
-            timeout=10
-        )
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/start_replay', data, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1836,20 +1848,18 @@ def api_start_replay(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_stop_scan(request):
-    """停止端口扫描"""
+    """停止端口扫描（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/stop_scan",
-            json={},
-            timeout=5
-        )
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/stop_scan', {}, timeout=5)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1860,18 +1870,17 @@ def api_stop_scan(request):
 @require_http_methods(["GET"])
 @csrf_exempt
 def api_scan_progress(request):
-    """获取扫描进度"""
+    """获取扫描进度（支持 namespace）"""
     try:
         agent_id = request.GET.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.get(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/scan_progress",
-            timeout=5
-        )
+        success, resp_data, error = forward_to_agent(agent, 'GET', '/api/scan_progress', timeout=5)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1882,20 +1891,18 @@ def api_scan_progress(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_scan_results(request):
-    """获取扫描结果"""
+    """获取扫描结果（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/scan_results",
-            json={},
-            timeout=5
-        )
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/scan_results', {}, timeout=5)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1906,15 +1913,20 @@ def api_scan_results(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_list_pcap_files(request):
-    """获取 PCAP 文件列表"""
+    """获取 PCAP 文件列表（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.get(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/list_pcap_files",
+        success, resp_data, error = forward_to_agent(agent, 'GET', '/api/list_pcap_files', timeout=10)
+
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
+
+    except LocalAgent.DoesNotExist:
             timeout=5
         )
 
@@ -1929,7 +1941,7 @@ def api_list_pcap_files(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_pcap_files(request):
-    """获取 PCAP 文件列表（新版，支持目录浏览）"""
+    """获取 PCAP 文件列表（新版，支持目录浏览，支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
@@ -1938,13 +1950,11 @@ def api_pcap_files(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/pcap_files/",
-            json={'directory': directory, 'search': search},
-            timeout=10
-        )
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/pcap_files/', {'directory': directory, 'search': search}, timeout=10)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1955,7 +1965,7 @@ def api_pcap_files(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_packet_replay_start(request):
-    """启动报文回放（新版 tcpreplay）"""
+    """启动报文回放（新版 tcpreplay，支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
@@ -1968,20 +1978,20 @@ def api_packet_replay_start(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/packet_replay/start",
-            json={
-                'pcap_files': pcap_files,
-                'loop': loop,
-                'multiplier': multiplier,
-                'rate_pps': rate_pps,
-                'rate_mbps': rate_mbps,
-                'topspeed': topspeed
-            },
-            timeout=10
-        )
+        forward_data = {
+            'pcap_files': pcap_files,
+            'loop': loop,
+            'multiplier': multiplier,
+            'rate_pps': rate_pps,
+            'rate_mbps': rate_mbps,
+            'topspeed': topspeed
+        }
 
-        return JsonResponse(resp.json())
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/packet_replay/start', forward_data, timeout=10)
+
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1992,18 +2002,17 @@ def api_packet_replay_start(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_packet_replay_stop(request):
-    """停止报文回放"""
+    """停止报文回放（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/packet_replay/stop",
-            json={},
-            timeout=5
-        )
-        return JsonResponse(resp.json())
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/packet_replay/stop', {}, timeout=5)
+
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
@@ -2013,17 +2022,16 @@ def api_packet_replay_stop(request):
 @require_http_methods(["GET"])
 @csrf_exempt
 def api_packet_replay_status(request):
-    """获取回放状态"""
+    """获取回放状态（支持 namespace）"""
     try:
         agent_id = request.GET.get('agent_id')
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.get(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/packet_replay/status",
-            timeout=5
-        )
+        success, resp_data, error = forward_to_agent(agent, 'GET', '/api/packet_replay/status', timeout=5)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -2034,16 +2042,18 @@ def api_packet_replay_status(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_stop_replay(request):
-    """停止报文回放"""
+    """停止报文回放（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/stop_replay",
-            json={},
+        success, resp_data, error = forward_to_agent(agent, 'POST', '/api/stop_replay', {}, timeout=5)
+
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
             timeout=5
         )
 
@@ -2058,19 +2068,18 @@ def api_stop_replay(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_replay_stats(request):
-    """获取回放统计"""
+    """获取回放统计（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        resp = requests.get(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/replay_stats",
-            timeout=5
-        )
+        success, resp_data, error = forward_to_agent(agent, 'GET', '/api/replay_stats', timeout=5)
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -3827,34 +3836,36 @@ def _merge_get_params(request, data):
 
 
 def _proxy_industrial_request(agent_id, protocol_path, method='GET', data=None, params=None, timeout=30):
-    """通用工控协议代理请求函数"""
+    """通用工控协议代理请求函数（支持 namespace）"""
     try:
         agent = LocalAgent.objects.get(agent_id=agent_id)
-        if agent.status != 'running':
+
+        # 检查 Agent 状态（支持 namespace）
+        ns = agent.interface.namespace
+        if ns:
+            service_name = agent.get_namespace_service_name()
+            status = check_namespace_agent_status(ns, agent.interface.ip_address, agent.port, service_name)
+        else:
+            status = agent.status
+
+        if status != 'running':
             return {'success': False, 'error': 'Agent 未运行'}
 
-        url = f"http://{agent.interface.ip_address}:{agent.port}/api/industrial_protocol/{protocol_path}"
+        # 构建 endpoint（带 params）
+        endpoint = f'/api/industrial_protocol/{protocol_path}'
+        if params:
+            param_str = '&'.join(f'{k}={v}' for k, v in params.items())
+            endpoint += f'?{param_str}'
 
-        if method == 'GET':
-            resp = requests.get(url, params=params, timeout=timeout)
-        else:
-            resp = requests.post(url, json=data, timeout=timeout)
+        # 使用统一的转发函数（支持 namespace）
+        success, resp_data, error = forward_to_agent(agent, method, endpoint, data, timeout=timeout)
 
-        # 处理空响应
-        if resp.status_code != 200:
-            return {'success': False, 'error': f'Agent 返回错误: HTTP {resp.status_code}'}
-
-        try:
-            return resp.json()
-        except json.JSONDecodeError:
-            return {'success': False, 'error': f'Agent 返回非JSON响应: {resp.text[:200]}'}
+        if success:
+            return resp_data
+        return {'success': False, 'error': error}
 
     except LocalAgent.DoesNotExist:
         return {'success': False, 'error': 'Agent 不存在'}
-    except requests.exceptions.Timeout:
-        return {'success': False, 'error': 'Agent 响应超时'}
-    except requests.exceptions.ConnectionError:
-        return {'success': False, 'error': 'Agent 连接失败'}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
