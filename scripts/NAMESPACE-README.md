@@ -2,52 +2,86 @@
 
 ## 概述
 
-此方案通过 Network Namespace 将 eth1 和 eth2 隔离到独立的网络空间，
-模拟两台独立的机器，使流量必须经过物理网口传输（不走 lo）。
+此方案通过 Network Namespace 将业务网卡隔离到独立的网络空间，
+模拟多台独立机器，使流量必须经过物理网口传输（不走 lo）。
+
+**已完成系统改造（2026-04-28）：**
+- Django Agent 管理系统完全适配 namespace
+- 网卡扫描自动检测 namespace 内网卡
+- Agent 启动/停止/状态检查支持 namespace
+- 新增 namespace 管理 API
 
 ## 文件清单
 
 ```
 scripts/
-├── network-namespace-setup.sh   # 主要配置脚本
+├── network-namespace-setup.sh   # 动态 namespace 管理脚本（支持任意网卡）
 ├── network-namespace.service    # systemd 开机启动服务
-├── agent-eth1-ns.service        # eth1 agent namespace 服务
-├── agent-eth2-ns.service        # eth2 agent namespace 服务
+├── agent-eth1-ns.service        # eth1 agent namespace 服务模板
+├── agent-eth2-ns.service        # eth2 agent namespace 服务模板
+
+main/
+├── models.py                    # NetworkInterface 添加 namespace 字段
+├── views.py                     # namespace 辅助函数 + Agent API 适配
+├── urls.py                      # namespace 管理 API 路由
 ```
 
 ## 快速使用
 
-### 1. 手动测试（一次性）
+### 1. 通过 Web 界面管理（推荐）
+
+访问 Agent 管理页面：
+- 网卡扫描：自动检测主 namespace 和子 namespace 网卡
+- Agent 启动/停止：自动适配 namespace
+- 状态显示：显示 namespace 标识
+
+### 2. 通过 API 管理
 
 ```bash
-# 上传脚本到 Ubuntu
-scp scripts/network-namespace-setup.sh zhangc@192.168.81.105:/opt/SFW-TEST3/scripts/
+# 获取 namespace 列表
+curl 'http://192.168.81.105:8000/api/namespace/list/'
 
-# SSH 到 Ubuntu
-ssh zhangc@192.168.81.105
+# 创建网卡 namespace
+curl -X POST 'http://192.168.81.105:8000/api/namespace/setup-interface/' \
+  -H 'Content-Type: application/json' \
+  -d '{"interface_name":"eth1","ip_cidr":"192.168.11.100/16"}'
 
-# 设置 namespace（需要 sudo）
-sudo chmod +x /opt/SFW-TEST3/scripts/network-namespace-setup.sh
-sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh setup
+# 恢复网卡到主 namespace
+curl -X POST 'http://192.168.81.105:8000/api/namespace/restore-interface/' \
+  -H 'Content-Type: application/json' \
+  -d '{"interface_name":"eth1"}'
 
-# 查看状态
-sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh status
+# 扫描网卡（含 namespace）
+curl -X POST 'http://192.168.81.105:8000/api/interfaces/scan/'
 
-# 测试连通性（eth1 -> eth2，流量走物理网口）
-sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh test
-
-# 恢复原配置
-sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh restore
+# Agent 列表（含 namespace 信息）
+curl 'http://192.168.81.105:8000/api/agents/list/'
 ```
 
-### 2. 开机启动（持久化）
+### 3. 通过命令行管理
 
 ```bash
-# 上传所有服务文件
-scp scripts/*.service zhangc@192.168.81.105:/tmp/
-scp scripts/network-namespace-setup.sh zhangc@192.168.81.105:/opt/SFW-TEST3/scripts/
+# 设置单个网卡到 namespace
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh setup-interface eth1 192.168.11.100/16
 
-# SSH 到 Ubuntu
+# 启动 namespace 内 Agent
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh start-agent eth1
+
+# 停止 namespace 内 Agent
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh stop-agent eth1
+
+# 移除网卡 namespace
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh remove-interface eth1
+
+# 查看所有 namespace 状态
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh status
+
+# 设置所有业务网卡
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh setup-all
+
+# 恢复所有网卡到主 namespace
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh restore-all
+```
 ssh zhangc@192.168.81.105
 
 # 安装 systemd 服务
