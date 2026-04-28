@@ -1927,12 +1927,6 @@ def api_list_pcap_files(request):
         return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
-            timeout=5
-        )
-
-        return JsonResponse(resp.json())
-
-    except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
