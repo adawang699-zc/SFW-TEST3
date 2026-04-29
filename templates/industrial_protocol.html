@@ -101,6 +101,129 @@
     max-width: 500px;
     width: 90%;
 }
+/* S7 Hex Viewer 样式 - 深色主题适配 */
+.s7-hex-viewer {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    font-family: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+}
+.s7-hex-header {
+    display: flex;
+    padding: 8px 12px;
+    background-color: var(--bg-dark);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.s7-hex-address-label {
+    width: 70px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+.s7-hex-bytes-label {
+    flex: 1;
+    color: var(--text-muted);
+}
+.s7-hex-content {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+.s7-hex-row {
+    display: flex;
+    padding: 2px 12px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+.s7-hex-row:hover {
+    background-color: var(--bg-dark);
+}
+.s7-hex-row.selected {
+    background-color: rgba(34, 197, 94, 0.15);
+}
+.s7-hex-address {
+    width: 70px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    user-select: all;
+    cursor: text;
+    padding-right: 8px;
+}
+.s7-hex-bytes {
+    flex: 1;
+    display: flex;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+.s7-hex-byte {
+    width: 28px;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    user-select: none;
+    flex-shrink: 0;
+    color: var(--text-primary);
+}
+.s7-hex-byte-empty {
+    color: var(--text-muted);
+    cursor: default;
+    opacity: 0.5;
+}
+.s7-hex-byte-empty:hover {
+    background-color: transparent;
+}
+.s7-hex-byte:hover {
+    background-color: var(--bg-dark);
+}
+.s7-hex-byte.editing {
+    background-color: rgba(255, 193, 7, 0.2);
+    border: 1px solid var(--warning);
+}
+.s7-hex-byte.modified {
+    background-color: rgba(34, 197, 94, 0.2);
+}
+.s7-hex-byte-input {
+    width: 28px;
+    text-align: center;
+    border: 1px solid var(--warning);
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.875rem;
+    background-color: rgba(255, 193, 7, 0.2);
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+/* S7 CPU Info 表格样式 */
+.s7-cpu-info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.s7-cpu-info-table th, .s7-cpu-info-table td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+.s7-cpu-info-table th {
+    background: var(--bg-dark);
+    color: var(--text-muted);
+    width: 30%;
+}
+.s7-cpu-info-table td {
+    color: var(--text-primary);
+}
+/* Block 操作样式 */
+.s7-block-list {
+    background: var(--bg-secondary);
+    padding: 8px;
+    border-radius: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+}
 </style>
 
 <div class="card">
@@ -352,46 +475,71 @@
                     <div id="s7-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
                 </div>
 
-                <div class="config-section">
-                    <h5>读取数据</h5>
-                    <div class="form-group">
-                        <label class="form-label">区域类型</label>
-                        <select id="s7-area" class="form-input">
-                            <option value="DB" selected>DB (数据块)</option>
-                            <option value="I">I (输入)</option>
-                            <option value="Q">Q (输出)</option>
-                            <option value="M">M (标记)</option>
-                        </select>
+                <!-- 数据配置区域（连接成功后显示） -->
+                <div class="config-section" id="s7-client-data-config" style="display: none;">
+                    <h5>数据配置</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">区域类型</label>
+                            <select id="s7-area" class="form-input" onchange="toggleS7DbNumber()">
+                                <option value="DB" selected>DB (数据块)</option>
+                                <option value="I">I (输入)</option>
+                                <option value="Q">Q (输出)</option>
+                                <option value="M">M (标记)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="s7-db-number-group">
+                            <label class="form-label">DB 编号</label>
+                            <input type="number" id="s7-db-number" class="form-input" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">起始地址</label>
+                            <input type="number" id="s7-start-address" class="form-input" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">数据个数</label>
+                            <input type="number" id="s7-read-count" class="form-input" value="160">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">数据类型</label>
+                            <select id="s7-data-type" class="form-input">
+                                <option value="BYTE">Byte (1字节)</option>
+                                <option value="WORD">Word (2字节)</option>
+                                <option value="DWORD">DWord (4字节)</option>
+                                <option value="REAL">Real (4字节)</option>
+                                <option value="INT">Int (2字节)</option>
+                                <option value="DINT">DInt (4字节)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">刷新间隔 (秒)</label>
+                            <input type="number" id="s7-refresh-interval" class="form-input" value="1" min="0.1" max="60" step="0.1">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">DB 号号 (仅 DB 区域)</label>
-                        <input type="number" id="s7-db-number" class="form-input" value="1">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn">读取</button>
+                        <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn">写入</button>
+                        <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn">刷新</button>
+                        <button class="btn btn-secondary" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none;">停止刷新</button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">起始地址</label>
-                        <input type="text" id="s7-start-address" class="form-input" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">数据类型</label>
-                        <select id="s7-data-type" class="form-input">
-                            <option value="byte">Byte</option>
-                            <option value="word">Word</option>
-                            <option value="dword">DWord</option>
-                            <option value="int">Int</option>
-                            <option value=" dint" selected>DInt</option>
-                            <option value="real">Real</option>
-                            <option value="char">Char</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">数量</label>
-                        <input type="number" id="s7-read-count" class="form-input" value="10">
-                    </div>
-                    <button class="btn btn-primary" onclick="s7ClientRead()">读取</button>
-                    <div id="s7-read-result" style="margin-top: 12px;"></div>
                 </div>
 
-                <div class="config-section">
+                <!-- Hex Viewer 区域 -->
+                <div class="config-section" id="s7-client-hex-section" style="display: none;">
+                    <h5>数据查看器 (十六进制)</h5>
+                    <div class="s7-hex-viewer" id="s7-client-hex-viewer">
+                        <div class="s7-hex-header">
+                            <span class="s7-hex-address-label">地址</span>
+                            <span class="s7-hex-bytes-label">字节值 (十六进制)</span>
+                        </div>
+                        <div class="s7-hex-content" id="s7-client-hex-content">
+                            <!-- 数据将通过 JavaScript 动态生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PLC 操作 -->
+                <div class="config-section" id="s7-client-plc-section" style="display: none;">
                     <h5>PLC 操作</h5>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn btn-secondary" onclick="s7GetCpuInfo()">CPU 信息</button>
@@ -400,7 +548,51 @@
                         <button class="btn btn-warning" onclick="s7PlcHotStart()">热启动</button>
                         <button class="btn btn-danger" onclick="s7PlcStop()">停止</button>
                     </div>
+                    <!-- CPU 信息表格 -->
+                    <div id="s7-cpu-info-container" style="display: none; margin-top: 12px;">
+                        <table class="s7-cpu-info-table">
+                            <tr><th>模块名称</th><td id="s7-cpu-module-name">-</td></tr>
+                            <tr><th>模块类型</th><td id="s7-cpu-module-type">-</td></tr>
+                            <tr><th>序列号</th><td id="s7-cpu-serial">-</td></tr>
+                            <tr><th>AS 名称</th><td id="s7-cpu-as-name">-</td></tr>
+                            <tr><th>CPU 状态</th><td id="s7-cpu-state">-</td></tr>
+                        </table>
+                    </div>
                     <div id="s7-plc-result" style="margin-top: 12px;"></div>
+                </div>
+
+                <!-- 块操作区域 -->
+                <div class="config-section" id="s7-client-block-section" style="display: none;">
+                    <h5>块操作</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">块类型</label>
+                            <select id="s7-block-type" class="form-input">
+                                <option value="db">数据块 (DB)</option>
+                                <option value="ob">组织块 (OB)</option>
+                                <option value="fc">功能 (FC)</option>
+                                <option value="fb">功能块 (FB)</option>
+                                <option value="sdb">系统数据块 (SDB)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">块编号</label>
+                            <input type="number" id="s7-block-number" class="form-input" value="1">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-secondary" onclick="s7ClientListBlocks()" style="margin-top: 24px;">列出块</button>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button class="btn btn-primary" onclick="s7ClientUploadBlock()">上传块 (PC→PLC)</button>
+                        <button class="btn btn-success" onclick="s7ClientDownloadBlock()">下载块 (PLC→PC)</button>
+                    </div>
+                    <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">
+                        <small>说明: 块上传/下载需要连接真实 S7 PLC。S7 服务端模拟器仅支持数据读写。</small>
+                    </div>
+                    <div id="s7-block-list" style="display: none; margin-top: 12px;">
+                        <div class="s7-block-list" id="s7-block-list-content"></div>
+                    </div>
                 </div>
             </div>
 
@@ -1557,6 +1749,9 @@ async function executeWriteMultiple() {
 }
 
 // ========== S7 Client ==========
+let s7ClientRefreshTimer = null;
+let s7ClientHexData = [];  // 存储当前 hex 数据
+
 async function s7ClientConnect() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
@@ -1573,6 +1768,16 @@ async function s7ClientConnect() {
     if (result.success) {
         activeConnections.s7_client = true;
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+
+        // 显示数据配置、Hex Viewer、PLC 操作和块操作区域
+        document.getElementById('s7-client-data-config').style.display = 'block';
+        document.getElementById('s7-client-hex-section').style.display = 'block';
+        document.getElementById('s7-client-plc-section').style.display = 'block';
+        document.getElementById('s7-client-block-section').style.display = 'block';
+
+        // 初始化 hex viewer
+        initS7ClientHexViewer();
+
         showToast('S7 连接成功', 'success');
     } else {
         showToast('连接失败: ' + (result.message || result.error), 'error');
@@ -1582,10 +1787,21 @@ async function s7ClientConnect() {
 async function s7ClientDisconnect() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
+    // 停止自动刷新
+    s7ClientStopRefresh();
+
     const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
         activeConnections.s7_client = false;
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+
+        // 隐藏数据配置、Hex Viewer、PLC 操作和块操作区域
+        document.getElementById('s7-client-data-config').style.display = 'none';
+        document.getElementById('s7-client-hex-section').style.display = 'none';
+        document.getElementById('s7-client-plc-section').style.display = 'none';
+        document.getElementById('s7-client-block-section').style.display = 'none';
+        document.getElementById('s7-cpu-info-container').style.display = 'none';
+
         showToast('已断开', 'success');
     } else {
         showToast('断开失败: ' + (result.message || result.error), 'error');
@@ -1597,6 +1813,139 @@ async function s7ClientStatus() {
 
     const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-client-status').textContent = JSON.stringify(result);
+}
+
+// 初始化 S7 Client Hex Viewer
+function initS7ClientHexViewer() {
+    const content = document.getElementById('s7-client-hex-content');
+    content.innerHTML = '';
+
+    const area = document.getElementById('s7-area').value;
+    const dbNumber = parseInt(document.getElementById('s7-db-number').value) || 1;
+    const startAddress = parseInt(document.getElementById('s7-start-address').value) || 0;
+    const dataLength = parseInt(document.getElementById('s7-read-count').value) || 160;
+
+    // 每行显示16字节，至少显示10行
+    const bytesPerRow = 16;
+    const fixedRows = 10;
+    const dataRows = Math.ceil(dataLength / bytesPerRow);
+    const totalRows = Math.max(fixedRows, dataRows);
+
+    s7ClientHexData = new Array(dataLength).fill(0);  // 初始化数据数组
+
+    for (let row = 0; row < totalRows; row++) {
+        const rowDiv = document.createElement('div');
+        rowDiv.className = 's7-hex-row';
+        rowDiv.dataset.rowIndex = row;
+
+        // 地址前缀
+        const addressDiv = document.createElement('span');
+        const addressValue = startAddress + row * bytesPerRow;
+        addressDiv.className = 's7-hex-address';
+        addressDiv.textContent = String(addressValue).padStart(4, '0') + '-';
+        addressDiv.dataset.address = addressValue;
+        rowDiv.appendChild(addressDiv);
+
+        // 字节值区域
+        const bytesDiv = document.createElement('div');
+        bytesDiv.className = 's7-hex-bytes';
+
+        for (let col = 0; col < bytesPerRow; col++) {
+            const byteIndex = row * bytesPerRow + col;
+            const byteDiv = document.createElement('span');
+
+            if (byteIndex >= dataLength) {
+                byteDiv.className = 's7-hex-byte s7-hex-byte-empty';
+                byteDiv.textContent = '--';
+            } else {
+                byteDiv.className = 's7-hex-byte';
+                byteDiv.textContent = '00';
+                byteDiv.dataset.byteIndex = byteIndex;
+                byteDiv.dataset.address = addressValue + col;
+                byteDiv.dataset.area = area;
+                byteDiv.dataset.dbNumber = dbNumber;
+
+                // 点击编辑
+                byteDiv.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    editS7HexByte(this, 'client');
+                });
+            }
+
+            bytesDiv.appendChild(byteDiv);
+        }
+
+        rowDiv.appendChild(bytesDiv);
+        content.appendChild(rowDiv);
+    }
+}
+
+// 编辑字节值
+function editS7HexByte(byteElement, type) {
+    const currentValue = byteElement.textContent;
+    if (currentValue === '--') return;  // 空字节不可编辑
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 's7-hex-byte-input';
+    input.value = currentValue;
+    input.maxLength = 2;
+    input.style.width = '28px';
+
+    // 复制 dataset
+    input.dataset.byteIndex = byteElement.dataset.byteIndex || '';
+    input.dataset.address = byteElement.dataset.address || '';
+    input.dataset.area = byteElement.dataset.area || 'DB';
+    input.dataset.dbNumber = byteElement.dataset.dbNumber || '1';
+
+    byteElement.parentElement.replaceChild(input, byteElement);
+    input.focus();
+    input.select();
+
+    // 输入验证
+    input.addEventListener('input', function() {
+        this.value = this.value.toUpperCase().replace(/[^0-9A-F]/g, '');
+    });
+
+    // 保存
+    const saveByte = function() {
+        let value = input.value.toUpperCase();
+        if (value.length === 0) value = '00';
+        if (value.length === 1) value = '0' + value;
+        if (!/^[0-9A-F]{2}$/.test(value)) value = currentValue;
+
+        byteElement.textContent = value;
+        byteElement.dataset.byteIndex = input.dataset.byteIndex;
+        byteElement.dataset.address = input.dataset.address;
+        byteElement.dataset.area = input.dataset.area;
+        byteElement.dataset.dbNumber = input.dataset.dbNumber;
+
+        // 更新数据数组
+        const idx = parseInt(byteElement.dataset.byteIndex);
+        if (idx >= 0 && idx < s7ClientHexData.length) {
+            s7ClientHexData[idx] = parseInt(value, 16);
+        }
+
+        // 标记为已修改
+        if (value !== currentValue) {
+            byteElement.classList.add('modified');
+        }
+
+        input.parentElement.replaceChild(byteElement, input);
+    };
+
+    input.addEventListener('blur', saveByte);
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); saveByte(); }
+        else if (e.key === 'Escape') { e.preventDefault(); byteElement.textContent = currentValue; input.parentElement.replaceChild(byteElement, input); }
+    });
+}
+
+// 切换 DB 编号显示
+function toggleS7DbNumber() {
+    const area = document.getElementById('s7-area').value;
+    const dbGroup = document.getElementById('s7-db-number-group');
+    dbGroup.style.display = area === 'DB' ? 'block' : 'none';
 }
 
 async function s7ClientRead() {
@@ -1613,27 +1962,120 @@ async function s7ClientRead() {
 
     const result = await apiRequest('/api/industrial/s7_client/read/', 'POST', data);
     if (result.success) {
-        document.getElementById('s7-read-result').innerHTML = `
-            <div class="hex-display">${JSON.stringify(result.data || result.values)}</div>
-        `;
+        const readData = result.data || result.values || [];
+        s7ClientHexData = readData.slice(0, parseInt(document.getElementById('s7-read-count').value));
+
+        // 更新 hex viewer
+        const content = document.getElementById('s7-client-hex-content');
+        const byteElements = content.querySelectorAll('.s7-hex-byte');
+
+        readData.forEach((value, index) => {
+            if (byteElements[index]) {
+                const byteValue = parseInt(value) & 0xFF;
+                byteElements[index].textContent = byteValue.toString(16).padStart(2, '0').toUpperCase();
+                byteElements[index].classList.remove('modified');
+            }
+        });
+
         showToast('读取成功', 'success');
     } else {
         showToast('读取失败: ' + (result.message || result.error), 'error');
     }
 }
 
+async function s7ClientWrite() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    // 收集 hex viewer 中的数据
+    const content = document.getElementById('s7-client-hex-content');
+    const byteElements = content.querySelectorAll('.s7-hex-byte:not(.s7-hex-byte-empty)');
+    const writeData = [];
+
+    byteElements.forEach(el => {
+        const byteValue = parseInt(el.textContent, 16) || 0;
+        writeData.push(byteValue);
+    });
+
+    const data = {
+        agent_id: selectedClientAgentId,
+        area: document.getElementById('s7-area').value,
+        db_number: parseInt(document.getElementById('s7-db-number').value),
+        start: parseInt(document.getElementById('s7-start-address').value),
+        data: writeData,
+        data_type: document.getElementById('s7-data-type').value
+    };
+
+    const result = await apiRequest('/api/industrial/s7_client/write/', 'POST', data);
+    if (result.success) {
+        showToast('写入成功', 'success');
+        // 清除修改标记
+        byteElements.forEach(el => el.classList.remove('modified'));
+    } else {
+        showToast('写入失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function s7ClientRefresh() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    // 先读取一次
+    await s7ClientRead();
+
+    // 启动定时刷新
+    const interval = parseFloat(document.getElementById('s7-refresh-interval').value) || 1;
+
+    if (s7ClientRefreshTimer) clearInterval(s7ClientRefreshTimer);
+
+    s7ClientRefreshTimer = setInterval(async () => {
+        if (activeConnections.s7_client) {
+            await s7ClientRead();
+        } else {
+            s7ClientStopRefresh();
+        }
+    }, interval * 1000);
+
+    document.getElementById('s7-stop-refresh-btn').style.display = 'inline-block';
+    showToast(`自动刷新已启动 (${interval}s)`, 'success');
+}
+
+function s7ClientStopRefresh() {
+    if (s7ClientRefreshTimer) {
+        clearInterval(s7ClientRefreshTimer);
+        s7ClientRefreshTimer = null;
+    }
+    document.getElementById('s7-stop-refresh-btn').style.display = 'none';
+}
+
 async function s7GetCpuInfo() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/get_cpu_info/', 'POST', { agent_id: selectedClientAgentId });
-    document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+    if (result.success) {
+        // 填充 CPU 信息表格
+        document.getElementById('s7-cpu-info-container').style.display = 'block';
+        document.getElementById('s7-cpu-module-name').textContent = result.ModuleName || '-';
+        document.getElementById('s7-cpu-module-type').textContent = result.ModuleType || '-';
+        document.getElementById('s7-cpu-serial').textContent = result.SerialNumber || '-';
+        document.getElementById('s7-cpu-as-name').textContent = result.ASName || '-';
+        showToast('获取 CPU 信息成功', 'success');
+    } else {
+        showToast('获取失败: ' + (result.message || result.error), 'error');
+    }
 }
 
 async function s7GetCpuState() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/get_cpu_state/', 'POST', { agent_id: selectedClientAgentId });
-    document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+    if (result.success) {
+        const stateValue = result.CpuState || result.state || 0;
+        const stateNames = { 0: '未知', 1: '停止', 2: '启动', 3: '停止', 4: '运行', 8: '故障' };
+        document.getElementById('s7-cpu-info-container').style.display = 'block';
+        document.getElementById('s7-cpu-state').textContent = stateNames[stateValue] || `状态码: ${stateValue}`;
+        showToast('获取 CPU 状态成功', 'success');
+    } else {
+        showToast('获取失败: ' + (result.message || result.error), 'error');
+    }
 }
 
 async function s7PlcColdStart() {
@@ -1655,6 +2097,82 @@ async function s7PlcStop() {
 
     const result = await apiRequest('/api/industrial/s7_client/plc_stop/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '停止成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
+}
+
+// ========== S7 Client 块操作 ==========
+async function s7ClientListBlocks() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/s7_client/list_blocks/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success) {
+        document.getElementById('s7-block-list').style.display = 'block';
+        const listContent = document.getElementById('s7-block-list-content');
+        listContent.innerHTML = '';
+
+        const blocks = result.blocks || [];
+        if (blocks.length === 0) {
+            listContent.innerHTML = '<div style="color: var(--text-muted);">无块数据</div>';
+        } else {
+            blocks.forEach(block => {
+                listContent.innerHTML += `<div style="padding: 4px 8px; border-bottom: 1px solid var(--border);">${block}</div>`;
+            });
+        }
+        showToast('列出块成功', 'success');
+    } else {
+        showToast('列出块失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function s7ClientUploadBlock() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const blockType = document.getElementById('s7-block-type').value;
+    const blockNumber = parseInt(document.getElementById('s7-block-number').value);
+
+    // 收集 hex viewer 中的数据作为块数据
+    const content = document.getElementById('s7-client-hex-content');
+    const byteElements = content.querySelectorAll('.s7-hex-byte:not(.s7-hex-byte-empty)');
+    const blockData = [];
+    byteElements.forEach(el => blockData.push(parseInt(el.textContent, 16) || 0));
+
+    const result = await apiRequest('/api/industrial/s7_client/upload_block/', 'POST', {
+        agent_id: selectedClientAgentId,
+        block_type: blockType,
+        block_number: blockNumber,
+        data: blockData
+    });
+
+    showToast(result.success ? '上传块成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
+}
+
+async function s7ClientDownloadBlock() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const blockType = document.getElementById('s7-block-type').value;
+    const blockNumber = parseInt(document.getElementById('s7-block-number').value);
+
+    const result = await apiRequest('/api/industrial/s7_client/download_block/', 'POST', {
+        agent_id: selectedClientAgentId,
+        block_type: blockType,
+        block_number: blockNumber
+    });
+
+    if (result.success && result.data) {
+        // 更新 hex viewer
+        const content = document.getElementById('s7-client-hex-content');
+        const byteElements = content.querySelectorAll('.s7-hex-byte');
+
+        result.data.forEach((value, index) => {
+            if (byteElements[index]) {
+                byteElements[index].textContent = (parseInt(value) & 0xFF).toString(16).padStart(2, '0').toUpperCase();
+                byteElements[index].classList.remove('s7-hex-byte-empty');
+            }
+        });
+
+        showToast('下载块成功', 'success');
+    } else {
+        showToast('下载块失败: ' + (result.message || result.error), 'error');
+    }
 }
 
 // ========== S7 Server ==========
