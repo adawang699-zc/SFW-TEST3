@@ -319,7 +319,7 @@ import django
 django.setup()
 from main.models import NetworkInterface, LocalAgent
 
-for iface in NetworkInterface.objects.filter(is_management=False, is_available=True):
+for iface in NetworkInterface.objects.filter(is_management=False):
     agent_obj = LocalAgent.objects.filter(interface=iface).first()
     port = agent_obj.port if agent_obj else 8888
     ip = iface.ip_address or ''
