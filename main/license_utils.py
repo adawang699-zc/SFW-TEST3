@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 def find_knowledge_license_tool():
     """查找知识库授权工具"""
     import platform
+    import sys
 
     # 获取项目根目录
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +26,9 @@ def find_knowledge_license_tool():
 
     # 根据操作系统选择优先查找的文件
     is_windows = platform.system() == 'Windows'
+
+    # 获取当前 Python 解释器路径（兼容 Windows 和 Linux）
+    python_executable = sys.executable
 
     if is_windows:
         # Windows: 优先查找 .exe 文件
@@ -49,19 +53,19 @@ def find_knowledge_license_tool():
     for path in possible_paths:
         if os.path.exists(path):
             logger.info(f"找到授权工具: {path}")
-            # 如果是Python文件，需要添加python前缀
+            # 如果是Python文件，使用当前 Python 解释器
             if path.endswith('.py'):
-                return ['python', path]
+                return [python_executable, path]
             else:
                 return [path]
 
         # 如果是相对路径，也尝试在PATH中查找
         if not os.path.isabs(path):
             try:
-                test_cmd = [path, '--help'] if not path.endswith('.py') else ['python', path, '--help']
+                test_cmd = [path, '--help'] if not path.endswith('.py') else [python_executable, path, '--help']
                 subprocess.run(test_cmd, capture_output=True, timeout=5)
                 logger.info(f"在PATH中找到授权工具: {path}")
-                return [path] if not path.endswith('.py') else ['python', path]
+                return [path] if not path.endswith('.py') else [python_executable, path]
             except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
                 continue
 
