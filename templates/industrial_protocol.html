@@ -1744,17 +1744,17 @@ async function s7ClientDisconnect() {
 }
 
 async function s7ClientStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-client-status').textContent = JSON.stringify(result);
 }
 
 async function s7ClientRead() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         area: document.getElementById('s7-area').value,
         db_number: parseInt(document.getElementById('s7-db-number').value),
         start: parseInt(document.getElementById('s7-start-address').value),
@@ -1774,37 +1774,37 @@ async function s7ClientRead() {
 }
 
 async function s7GetCpuInfo() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/get_cpu_info/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/get_cpu_info/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
 }
 
 async function s7GetCpuState() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/get_cpu_state/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/get_cpu_state/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
 }
 
 async function s7PlcColdStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/plc_cold_start/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/plc_cold_start/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '冷启动成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7PlcHotStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/plc_hot_start/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/plc_hot_start/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '热启动成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7PlcStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/plc_stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/plc_stop/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '停止成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
@@ -1841,20 +1841,20 @@ async function s7ServerStop() {
 }
 
 async function s7ServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_server/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_server/status/', 'POST', { agent_id: selectedServerAgentId });
     document.getElementById('s7-server-status').textContent = JSON.stringify(result);
 }
 
 async function s7ServerSetData() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const valuesStr = document.getElementById('s7-server-values').value;
     const values = valuesStr.split(',').map(v => parseInt(v.trim(), 16));
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         area: document.getElementById('s7-server-area').value,
         db_number: parseInt(document.getElementById('s7-server-db').value),
         start: parseInt(document.getElementById('s7-server-address').value),
@@ -1866,10 +1866,10 @@ async function s7ServerSetData() {
 }
 
 async function s7ServerGetData() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         area: document.getElementById('s7-server-area').value,
         db_number: parseInt(document.getElementById('s7-server-db').value),
         start: parseInt(document.getElementById('s7-server-address').value),
@@ -1886,9 +1886,9 @@ async function s7ServerGetData() {
 
 // ========== GOOSE/SV ==========
 async function loadGooseSvInterfaces() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success && result.interfaces) {
         const select = document.getElementById('goose-sv-interface');
         select.innerHTML = '';
@@ -1936,9 +1936,9 @@ async function gooseStop() {
 }
 
 async function gooseStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('goose-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
     } else {
@@ -1982,9 +1982,9 @@ async function svStop() {
 }
 
 async function svStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
     } else {
@@ -1994,10 +1994,10 @@ async function svStatus() {
 
 // ========== DNP3 Client ==========
 async function dnp3ClientConnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         ip: document.getElementById('dnp3-client-ip').value,
         port: parseInt(document.getElementById('dnp3-client-port').value),
         master_address: parseInt(document.getElementById('dnp3-master-addr').value),
@@ -2014,9 +2014,9 @@ async function dnp3ClientConnect() {
 }
 
 async function dnp3ClientDisconnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
         document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
         showToast('已断开', 'success');
@@ -2026,17 +2026,17 @@ async function dnp3ClientDisconnect() {
 }
 
 async function dnp3ClientStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_client/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/dnp3_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('dnp3-client-status').textContent = JSON.stringify(result);
 }
 
 async function dnp3ClientRead() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         object_type: parseInt(document.getElementById('dnp3-object-type').value),
         start_address: parseInt(document.getElementById('dnp3-read-address').value),
         count: parseInt(document.getElementById('dnp3-read-count').value)
@@ -2053,10 +2053,10 @@ async function dnp3ClientRead() {
 
 // ========== DNP3 Server ==========
 async function dnp3ServerStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         port: parseInt(document.getElementById('dnp3-server-port').value),
         outstation_address: parseInt(document.getElementById('dnp3-server-addr').value)
     };
@@ -2071,9 +2071,9 @@ async function dnp3ServerStart() {
 }
 
 async function dnp3ServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_server/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/dnp3_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
@@ -2083,18 +2083,18 @@ async function dnp3ServerStop() {
 }
 
 async function dnp3ServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_server/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/dnp3_server/status/', 'POST', { agent_id: selectedServerAgentId });
     document.getElementById('dnp3-server-status').textContent = JSON.stringify(result);
 }
 
 // ========== BACnet Client ==========
 async function bacnetClientRead() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         ip: document.getElementById('bacnet-client-ip').value,
         object_type: document.getElementById('bacnet-object-type').value,
         object_instance: parseInt(document.getElementById('bacnet-object-instance').value),
@@ -2111,10 +2111,10 @@ async function bacnetClientRead() {
 }
 
 async function bacnetClientWrite() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         ip: document.getElementById('bacnet-client-ip').value,
         object_type: document.getElementById('bacnet-object-type').value,
         object_instance: parseInt(document.getElementById('bacnet-object-instance').value),
@@ -2128,10 +2128,10 @@ async function bacnetClientWrite() {
 
 // ========== BACnet Server ==========
 async function bacnetServerStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         port: parseInt(document.getElementById('bacnet-server-port').value),
         device_id: parseInt(document.getElementById('bacnet-device-id').value)
     };
@@ -2146,9 +2146,9 @@ async function bacnetServerStart() {
 }
 
 async function bacnetServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/bacnet_server/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/bacnet_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('bacnet-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
@@ -2158,18 +2158,18 @@ async function bacnetServerStop() {
 }
 
 async function bacnetServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/bacnet_server/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/bacnet_server/status/', 'POST', { agent_id: selectedServerAgentId });
     document.getElementById('bacnet-server-status').textContent = JSON.stringify(result);
 }
 
 // ========== ENIP Client ==========
 async function enipClientConnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         ip: document.getElementById('enip-client-ip').value
     };
 
@@ -2183,9 +2183,9 @@ async function enipClientConnect() {
 }
 
 async function enipClientDisconnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/enip_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/enip_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
         document.getElementById('enip-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
         showToast('已断开', 'success');
@@ -2195,16 +2195,16 @@ async function enipClientDisconnect() {
 }
 
 async function enipClientStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/enip_client/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/enip_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('enip-client-status').textContent = JSON.stringify(result);
 }
 
 async function enipGetIdentity() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/enip_client/get_identity/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/enip_client/get_identity/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
         document.getElementById('enip-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.identity || result)}</div>`;
     } else {
@@ -2213,10 +2213,10 @@ async function enipGetIdentity() {
 }
 
 async function enipClientRead() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         class_id: parseInt(document.getElementById('enip-class-id').value),
         instance_id: parseInt(document.getElementById('enip-instance-id').value),
         attribute_id: parseInt(document.getElementById('enip-attribute-id').value)
@@ -2232,10 +2232,10 @@ async function enipClientRead() {
 }
 
 async function enipClientWrite() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         class_id: parseInt(document.getElementById('enip-class-id').value),
         instance_id: parseInt(document.getElementById('enip-instance-id').value),
         attribute_id: parseInt(document.getElementById('enip-attribute-id').value),
@@ -2248,10 +2248,10 @@ async function enipClientWrite() {
 
 // ========== ENIP Server ==========
 async function enipServerStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         port: parseInt(document.getElementById('enip-server-port').value)
     };
 
@@ -2265,9 +2265,9 @@ async function enipServerStart() {
 }
 
 async function enipServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/enip_server/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/enip_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('enip-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
@@ -2277,18 +2277,18 @@ async function enipServerStop() {
 }
 
 async function enipServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/enip_server/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/enip_server/status/', 'POST', { agent_id: selectedServerAgentId });
     document.getElementById('enip-server-status').textContent = JSON.stringify(result);
 }
 
 // ========== MMS Client ==========
 async function mmsClientConnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         ip: document.getElementById('mms-client-ip').value,
         port: parseInt(document.getElementById('mms-client-port').value)
     };
@@ -2298,9 +2298,9 @@ async function mmsClientConnect() {
 }
 
 async function mmsGetDomains() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/mms_client/get_domains/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/mms_client/get_domains/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
         document.getElementById('mms-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.domains || result)}</div>`;
     } else {
@@ -2309,10 +2309,10 @@ async function mmsGetDomains() {
 }
 
 async function mmsClientRead() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         domain: document.getElementById('mms-domain').value,
         variable: document.getElementById('mms-variable').value
     };
@@ -2327,10 +2327,10 @@ async function mmsClientRead() {
 }
 
 async function mmsClientWrite() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         domain: document.getElementById('mms-domain').value,
         variable: document.getElementById('mms-variable').value,
         value: 1
@@ -2342,10 +2342,10 @@ async function mmsClientWrite() {
 
 // ========== MMS Server ==========
 async function mmsServerStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         port: parseInt(document.getElementById('mms-server-port').value)
     };
 
@@ -2359,9 +2359,9 @@ async function mmsServerStart() {
 }
 
 async function mmsServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/mms_server/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/mms_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('mms-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
@@ -2371,18 +2371,18 @@ async function mmsServerStop() {
 }
 
 async function mmsServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/mms_server/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/mms_server/status/', 'POST', { agent_id: selectedServerAgentId });
     document.getElementById('mms-server-status').textContent = JSON.stringify(result);
 }
 
 // ========== HTTP Client ==========
 async function httpClientTestConnection() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         url: document.getElementById('http-client-url').value,
         timeout: parseInt(document.getElementById('http-timeout').value)
     };
@@ -2392,7 +2392,7 @@ async function httpClientTestConnection() {
 }
 
 async function httpClientSend() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const bodyStr = document.getElementById('http-body').value;
     let body = {};
@@ -2404,7 +2404,7 @@ async function httpClientSend() {
     }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         url: document.getElementById('http-client-url').value,
         method: document.getElementById('http-method').value,
         body: body,
@@ -2427,10 +2427,10 @@ async function httpClientSend() {
 
 // ========== HTTP Server ==========
 async function httpServerStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         port: parseInt(document.getElementById('http-server-port').value),
         directory: document.getElementById('http-server-dir').value
     };
@@ -2445,9 +2445,9 @@ async function httpServerStart() {
 }
 
 async function httpServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/http_server/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/http_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('http-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
@@ -2457,16 +2457,16 @@ async function httpServerStop() {
 }
 
 async function httpServerStatus() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/http_server/status/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/http_server/status/', 'POST', { agent_id: selectedServerAgentId });
     document.getElementById('http-server-status').textContent = JSON.stringify(result);
 }
 
 async function httpServerLogs() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/http_server/logs/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/http_server/logs/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         document.getElementById('http-files-list').innerHTML = `<div class="hex-display">${JSON.stringify(result.logs)}</div>`;
     } else {
@@ -2475,9 +2475,9 @@ async function httpServerLogs() {
 }
 
 async function httpFilesList() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/http_files/list/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/http_files/list/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success && result.files) {
         let html = '<table class="data-table"><tr><th>文件名</th><th>大小</th><th>操作</th></tr>';
         result.files.forEach(file => {
@@ -2497,9 +2497,9 @@ async function httpFilesList() {
 }
 
 async function httpFileDownload(filename) {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/http_files/download/' + filename + '/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/http_files/download/' + filename + '/', 'POST', { agent_id: selectedServerAgentId });
     showToast(result.success ? '文件内容已获取' : '下载失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
     if (result.success) {
         document.getElementById('http-files-list').innerHTML += `<div class="hex-display">${result.content || JSON.stringify(result)}</div>`;
