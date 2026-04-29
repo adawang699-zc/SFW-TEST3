@@ -18,6 +18,14 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s %(name)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('industrial_protocol')
+
 try:
     from flask import Flask, request, jsonify
     from flask_cors import CORS

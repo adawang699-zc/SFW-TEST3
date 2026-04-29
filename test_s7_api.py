@@ -7,75 +7,32 @@ ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 ssh.connect('192.168.81.140', 22, 'zhangc', 'tdhx@2017', timeout=30)
 
-# 1. 获取 Agent 列表
-print("=== 1. 获取 Agent 列表 ===")
-cmd = "curl -s 'http://127.0.0.1:8000/api/agents/list/'"
+# 1. 检查 Agent 服务状态
+print("=== 1. 检查 Agent 服务状态 ===")
+cmd = "sudo systemctl status agent-eth1.service --no-pager"
 stdin, stdout, stderr = ssh.exec_command(cmd, timeout=120)
 out = stdout.read().decode('utf-8', errors='ignore')
+print(out[:2000])
 
-# 解析获取 agent_eth1 的 IP 和 port
-agent_info = None
-if out:
-    try:
-        resp = json.loads(out)
-        for agent in resp.get('agents', []):
-            if agent['agent_id'] == 'agent_eth1' and agent['status'] == 'running':
-                agent_info = agent
-                print(f"找到 agent_eth1: IP={agent['ip_address']}, Port={agent['port']}, Namespace={agent.get('namespace')}")
-                break
-    except json.JSONDecodeError as e:
-        print(f'JSON Parse Error: {e}')
-
-if not agent_info:
-    print("没有找到运行中的 agent_eth1")
-    ssh.close()
-    exit(1)
-
-ip = agent_info['ip_address']
-port = agent_info['port']
-namespace = agent_info.get('namespace', '')
-
-# 2. 检查 Agent API 路由列表
-print("\n=== 2. 检查 Agent API 路由 ===")
-if namespace:
-    cmd = f"sudo ip netns exec {namespace} curl -s 'http://{ip}:{port}/api/routes'"
-else:
-    cmd = f"curl -s 'http://{ip}:{port}/api/routes'"
+# 2. 检查 Agent 日志
+print("\n=== 2. 检查 Agent 日志 ===")
+cmd = "sudo journalctl -u agent-eth1.service --no-pager -n 50"
 stdin, stdout, stderr = ssh.exec_command(cmd, timeout=120)
-out_routes = stdout.read().decode('utf-8', errors='ignore')
-print(out_routes[:2000] if out_routes else "(empty)")
+out = stdout.read().decode('utf-8', errors='ignore')
+print(out[:3000])
 
-# 3. 测试 Agent 基本状态
-print("\n=== 3. 测试 Agent 基本状态 ===")
-if namespace:
-    cmd = f"sudo ip netns exec {namespace} curl -s 'http://{ip}:{port}/api/status'"
-else:
-    cmd = f"curl -s 'http://{ip}:{port}/api/status'"
+# 3. 重启 Agent 服务
+print("\n=== 3. 重启 Agent 服务 ===")
+cmd = "sudo systemctl restart agent-eth1.service"
 stdin, stdout, stderr = ssh.exec_command(cmd, timeout=120)
-out_status = stdout.read().decode('utf-8', errors='ignore')
-print(out_status[:1000] if out_status else "(empty)")
+exit_status = stdout.channel.recv_exit_status()
+print(f"重启命令返回码: {exit_status}")
 
-# 4. 直接测试 Agent S7 Server API
-print("\n=== 4. 直接测试 Agent S7 Server API ===")
-data = {
-    "server_id": "default",
-    "host": "0.0.0.0",
-    "port": 102
-}
-json_str = json.dumps(data)
-
-if namespace:
-    cmd = f"sudo ip netns exec {namespace} curl -s -X POST -H 'Content-Type: application/json' -d '{json_str}' 'http://{ip}:{port}/api/industrial_protocol/s7_server/start'"
-else:
-    cmd = f"curl -s -X POST -H 'Content-Type: application/json' -d '{json_str}' 'http://{ip}:{port}/api/industrial_protocol/s7_server/start'"
-
-print(f"Command: {cmd}")
+# 4. 等待并再次检查状态
+print("\n=== 4. 再次检查状态 ===")
+cmd = "sleep 3 && sudo systemctl status agent-eth1.service --no-pager"
 stdin, stdout, stderr = ssh.exec_command(cmd, timeout=120)
-out2 = stdout.read().decode('utf-8', errors='ignore')
-err2 = stderr.read().decode('utf-8', errors='ignore')
-print(f"\n=== Response ===")
-print(out2[:2000] if out2 else "(empty)")
-print(f"\n=== stderr ===")
-print(err2[:500] if err2 else "(empty)")
+out = stdout.read().decode('utf-8', errors='ignore')
+print(out[:2000])
 
 ssh.close()
