@@ -1149,6 +1149,7 @@ def s7_server_start():
         host = data.get('host', '0.0.0.0')
         port = int(data.get('port', 102))
 
+        # 第一步：在锁内停止旧服务器和初始化数据存储
         with s7_server_lock:
             # 停止旧服务端
             if server_id in s7_servers:
@@ -1168,9 +1169,6 @@ def s7_server_start():
                         old_thread.join(timeout=2)
                 del s7_servers[server_id]
 
-            # 创建新的S7服务器
-            server = Snap7Server()
-
             # 初始化数据存储
             if server_id not in s7_data_storage:
                 s7_data_storage[server_id] = {
@@ -1183,44 +1181,42 @@ def s7_server_start():
             storage = s7_data_storage[server_id]
             for db_num in [1, 2, 3]:
                 if db_num not in storage['db']:
-                    # 简化初始化，不调用数据库函数（避免错误）
                     storage['db'][db_num] = bytearray([db_num] * S7_DB_MAX_SIZE)
 
-            # 设置保护级别
-            try:
-                if hasattr(server, 'set_protection_level'):
-                    server.set_protection_level(0)
-            except Exception as e:
-                add_log('WARNING', f'设置保护级别失败: {e}')
+        # 第二步：在锁外创建并启动服务器（避免阻塞太久）
+        server = Snap7Server()
 
-            # 简化：不调用 register_s7_areas（避免死锁）
+        # 设置保护级别
+        try:
+            if hasattr(server, 'set_protection_level'):
+                server.set_protection_level(0)
+        except Exception as e:
+            add_log('WARNING', f'设置保护级别失败: {e}')
 
-            # 启动服务器
-            try:
-                if hasattr(server, 'set_socket_params'):
-                    server.set_socket_params(port=port)
+        # 启动服务器
+        try:
+            if hasattr(server, 'set_socket_params'):
+                server.set_socket_params(port=port)
+                server.start()
+            elif hasattr(server, 'start'):
+                try:
+                    server.start(tcp_port=port)
+                except (AttributeError, TypeError):
                     server.start()
-                elif hasattr(server, 'start'):
-                    try:
-                        server.start(tcp_port=port)
-                    except (AttributeError, TypeError):
-                        server.start()
-                else:
-                    raise AttributeError('无法找到S7服务器启动方法')
-            except Exception as e:
-                raise Exception(f'S7服务器启动失败: {e}')
+            else:
+                raise AttributeError('无法找到S7服务器启动方法')
+        except Exception as e:
+            raise Exception(f'S7服务器启动失败: {e}')
 
-            # 运行线程
-            server_running = {'value': True}
+        # 第三步：在锁内存储 server_info（register_s7_areas 需要这个）
+        server_running = {'value': True}
+        def server_loop():
+            while server_running['value']:
+                time.sleep(0.1)
+        server_thread = threading.Thread(target=server_loop, daemon=True)
+        server_thread.start()
 
-            def server_loop():
-                while server_running['value']:
-                    time.sleep(0.1)
-
-            server_thread = threading.Thread(target=server_loop, daemon=True)
-            server_thread.start()
-
-            # 存储服务器信息
+        with s7_server_lock:
             s7_servers[server_id] = {
                 'server': server,
                 'thread': server_thread,
@@ -1230,13 +1226,24 @@ def s7_server_start():
                 'start_time': datetime.now().isoformat(),
             }
 
-            add_log('INFO', f'S7服务端启动成功: {host}:{port} (server_id={server_id})')
-            return jsonify({
-                'success': True,
-                'message': 'S7服务端启动成功',
-                'host': host,
-                'port': port
-            })
+        # 第四步：等待服务器稳定
+        time.sleep(0.5)
+
+        # 第五步：在锁外调用 register_s7_areas 和 sync（这些函数内部有自己的锁）
+        try:
+            register_s7_areas(server_id, db_list=[1, 2, 3])
+            sync_s7_data_to_server(server_id)
+            add_log('INFO', f'S7 DB区域注册成功: DB1, DB2, DB3')
+        except Exception as e:
+            add_log('WARNING', f'S7区域注册失败: {e}（数据可能无法正常读写）')
+
+        add_log('INFO', f'S7服务端启动成功: {host}:{port} (server_id={server_id})')
+        return jsonify({
+            'success': True,
+            'message': 'S7服务端启动成功',
+            'host': host,
+            'port': port
+        })
 
     except Exception as e:
         add_log('ERROR', f'S7服务端启动失败: {e}')

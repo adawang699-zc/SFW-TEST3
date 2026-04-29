@@ -638,86 +638,88 @@
                     </div>
                 </div>
 
-                <!-- DB块配置区域 - 3个DB块 -->
+                <!-- DB块配置区域 - 表格布局 -->
                 <div class="config-section" id="s7-server-db-section" style="display: none;">
-                    <h5 style="margin-bottom: 12px;">DB块数据配置</h5>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                        <!-- DB1 -->
-                        <div class="card" style="background: var(--bg-dark); border: 1px solid var(--border);">
-                            <div style="padding: 12px; border-bottom: 1px solid var(--border);">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="color: var(--primary); font-weight: 600;">DB1</span>
-                                    <input type="number" id="s7-db1-size" class="form-input" value="10" style="width: 80px; height: 28px; text-align: center;" title="数据大小">
-                                    <span style="color: var(--text-muted); font-size: 0.85rem;">字节</span>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                        <h5 style="margin: 0;">DB块数据配置</h5>
+                        <button class="btn btn-primary btn-sm" onclick="s7ServerRefreshAllDb()">刷新全部</button>
+                        <label style="display: flex; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 0.85rem;">
+                            <input type="checkbox" id="s7-server-auto-refresh" onchange="toggleS7ServerAutoRefresh()">
+                            自动
+                        </label>
+                        <input type="number" id="s7-server-refresh-interval" class="form-input" value="1" style="width: 50px; height: 24px; font-size: 0.85rem;">
+                        <span style="color: var(--text-muted); font-size: 0.85rem;">秒</span>
+                    </div>
+
+                    <!-- DB块表格 -->
+                    <table style="width: 100%; border-collapse: collapse; background: var(--bg-dark); border-radius: 8px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">DB块</th>
+                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">大小</th>
+                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">起始地址</th>
+                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">设置值(Hex)</th>
+                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: center;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="s7-db1-row">
+                                <td style="padding: 8px 12px; color: var(--primary); font-weight: 600;">DB1</td>
+                                <td style="padding: 8px 12px;"><input type="number" id="s7-db1-size" class="form-input" value="10" style="width: 60px; height: 24px; text-align: center;"></td>
+                                <td style="padding: 8px 12px;"><input type="number" id="s7-db1-start" class="form-input" value="0" style="width: 60px; height: 24px;"></td>
+                                <td style="padding: 8px 12px;"><input type="text" id="s7-db1-values" class="form-input" placeholder="00,01,02..." style="height: 24px;"></td>
+                                <td style="padding: 8px 12px; text-align: center;">
+                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(1)" style="padding: 2px 8px;">写</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(1)" style="padding: 2px 8px;">读</button>
+                                </td>
+                            </tr>
+                            <tr id="s7-db2-row" style="border-top: 1px solid var(--border);">
+                                <td style="padding: 8px 12px; color: var(--primary); font-weight: 600;">DB2</td>
+                                <td style="padding: 8px 12px;"><input type="number" id="s7-db2-size" class="form-input" value="100" style="width: 60px; height: 24px; text-align: center;"></td>
+                                <td style="padding: 8px 12px;"><input type="number" id="s7-db2-start" class="form-input" value="0" style="width: 60px; height: 24px;"></td>
+                                <td style="padding: 8px 12px;"><input type="text" id="s7-db2-values" class="form-input" placeholder="00,01,02..." style="height: 24px;"></td>
+                                <td style="padding: 8px 12px; text-align: center;">
+                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(2)" style="padding: 2px 8px;">写</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(2)" style="padding: 2px 8px;">读</button>
+                                </td>
+                            </tr>
+                            <tr id="s7-db3-row" style="border-top: 1px solid var(--border);">
+                                <td style="padding: 8px 12px; color: var(--primary); font-weight: 600;">DB3</td>
+                                <td style="padding: 8px 12px;"><input type="number" id="s7-db3-size" class="form-input" value="256" style="width: 60px; height: 24px; text-align: center;"></td>
+                                <td style="padding: 8px 12px;"><input type="number" id="s7-db3-start" class="form-input" value="0" style="width: 60px; height: 24px;"></td>
+                                <td style="padding: 8px 12px;"><input type="text" id="s7-db3-values" class="form-input" placeholder="00,01,02..." style="height: 24px;"></td>
+                                <td style="padding: 8px 12px; text-align: center;">
+                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(3)" style="padding: 2px 8px;">写</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(3)" style="padding: 2px 8px;">读</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- 数据显示区域 -->
+                    <div style="margin-top: 12px;">
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                            <div>
+                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px;">DB1 数据:</div>
+                                <div id="s7-db1-hex" style="font-family: 'Consolas', monospace; font-size: 0.75rem; background: var(--bg-card); border-radius: 4px; padding: 6px; max-height: 80px; overflow-y: auto; border: 1px solid var(--border);">
+                                    <span style="color: var(--text-muted);">等待数据...</span>
                                 </div>
                             </div>
-                            <div style="padding: 12px;">
-                                <div class="form-group">
-                                    <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
-                                    <input type="number" id="s7-db1-start" class="form-input" value="0" style="height: 28px;">
+                            <div>
+                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px;">DB2 数据:</div>
+                                <div id="s7-db2-hex" style="font-family: 'Consolas', monospace; font-size: 0.75rem; background: var(--bg-card); border-radius: 4px; padding: 6px; max-height: 80px; overflow-y: auto; border: 1px solid var(--border);">
+                                    <span style="color: var(--text-muted);">等待数据...</span>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label" style="font-size: 0.85rem;">设置值 (十六进制)</label>
-                                    <input type="text" id="s7-db1-values" class="form-input" placeholder="00,01,02..." style="height: 28px;">
-                                </div>
-                                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(1)">设置</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(1)">读取</button>
-                                </div>
-                                <!-- Hex Viewer -->
-                                <div id="s7-db1-hex" style="margin-top: 12px; font-family: 'Consolas', monospace; font-size: 0.8rem; background: var(--bg-card); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto;">
-                                    <div style="color: var(--text-muted); text-align: center;">等待数据...</div>
+                            </div>
+                            <div>
+                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px;">DB3 数据:</div>
+                                <div id="s7-db3-hex" style="font-family: 'Consolas', monospace; font-size: 0.75rem; background: var(--bg-card); border-radius: 4px; padding: 6px; max-height: 80px; overflow-y: auto; border: 1px solid var(--border);">
+                                    <span style="color: var(--text-muted);">等待数据...</span>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- DB2 -->
-                        <div class="card" style="background: var(--bg-dark); border: 1px solid var(--border);">
-                            <div style="padding: 12px; border-bottom: 1px solid var(--border);">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="color: var(--primary); font-weight: 600;">DB2</span>
-                                    <input type="number" id="s7-db2-size" class="form-input" value="100" style="width: 80px; height: 28px; text-align: center;" title="数据大小">
-                                    <span style="color: var(--text-muted); font-size: 0.85rem;">字节</span>
-                                </div>
-                            </div>
-                            <div style="padding: 12px;">
-                                <div class="form-group">
-                                    <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
-                                    <input type="number" id="s7-db2-start" class="form-input" value="0" style="height: 28px;">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" style="font-size: 0.85rem;">设置值 (十六进制)</label>
-                                    <input type="text" id="s7-db2-values" class="form-input" placeholder="00,01,02..." style="height: 28px;">
-                                </div>
-                                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(2)">设置</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(2)">读取</button>
-                                </div>
-                                <!-- Hex Viewer -->
-                                <div id="s7-db2-hex" style="margin-top: 12px; font-family: 'Consolas', monospace; font-size: 0.8rem; background: var(--bg-card); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto;">
-                                    <div style="color: var(--text-muted); text-align: center;">等待数据...</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- DB3 -->
-                        <div class="card" style="background: var(--bg-dark); border: 1px solid var(--border);">
-                            <div style="padding: 12px; border-bottom: 1px solid var(--border);">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span style="color: var(--primary); font-weight: 600;">DB3</span>
-                                    <input type="number" id="s7-db3-size" class="form-input" value="256" style="width: 80px; height: 28px; text-align: center;" title="数据大小">
-                                    <span style="color: var(--text-muted); font-size: 0.85rem;">字节</span>
-                                </div>
-                            </div>
-                            <div style="padding: 12px;">
-                                <div class="form-group">
-                                    <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
-                                    <input type="number" id="s7-db3-start" class="form-input" value="0" style="height: 28px;">
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label" style="font-size: 0.85rem;">设置值 (十六进制)</label>
-                                    <input type="text" id="s7-db3-values" class="form-input" placeholder="00,01,02..." style="height: 28px;">
-                                </div>
+                    </div>
+                </div>
                                 <div style="display: flex; gap: 8px; margin-top: 8px;">
                                     <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(3)">设置</button>
                                     <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(3)">读取</button>
