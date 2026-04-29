@@ -631,8 +631,36 @@
             };
             if (data) options.body = JSON.stringify(data);
 
-            const response = await fetch(url, options);
-            return response.json();
+            try {
+                const response = await fetch(url, options);
+
+                // 检查响应状态
+                if (!response.ok) {
+                    // 尝试获取错误信息
+                    try {
+                        const errorData = await response.json();
+                        return {success: false, error: errorData.error || errorData.message || `请求失败: ${response.status}`};
+                    } catch {
+                        return {success: false, error: `请求失败: ${response.status} ${response.statusText}`};
+                    }
+                }
+
+                // 尝试解析 JSON
+                const text = await response.text();
+                if (!text || text.trim() === '') {
+                    return {success: false, error: '服务器返回空响应'};
+                }
+
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('JSON 解析失败:', text);
+                    return {success: false, error: 'Invalid JSON response: ' + text.substring(0, 100)};
+                }
+            } catch (e) {
+                console.error('请求异常:', e);
+                return {success: false, error: '请求异常: ' + e.message};
+            }
         }
 
         // 获取 Cookie
