@@ -1246,7 +1246,7 @@ def s7_server_start():
 def s7_server_stop():
     """停止S7服务端"""
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         server_id = data.get('server_id', 'default')
 
         with s7_server_lock:
