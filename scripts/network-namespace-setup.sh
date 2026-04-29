@@ -27,7 +27,7 @@ log() {
 # 从数据库读取网卡配置
 get_interface_config_from_db() {
     local interface="$1"
-    local config="$($PYTHON_PATH -c "
+    local config="$(cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
 import django
@@ -197,7 +197,7 @@ update_db_namespace() {
     local ns="$2"
 
     log "更新数据库: $interface -> namespace=$ns"
-    $PYTHON_PATH -c "
+    (cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
 import django
@@ -211,7 +211,7 @@ try:
     print(f'已更新: {iface.name} -> namespace={iface.namespace}')
 except NetworkInterface.DoesNotExist:
     print(f'警告: 网卡 $interface 不在数据库中')
-" 2>/dev/null || log "数据库更新失败（可忽略）"
+" 2>/dev/null) || log "数据库更新失败（可忽略）"
 }
 
 # 移除网卡的namespace
@@ -243,7 +243,7 @@ remove_interface() {
     log "删除 namespace: $ns"
 
     # 清除数据库 namespace 字段
-    $PYTHON_PATH -c "
+    (cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
 import django
@@ -257,7 +257,7 @@ try:
     print(f'已清除: {iface.name} namespace')
 except Exception as e:
     print(f'数据库更新失败: {e}')
-" 2>/dev/null || log "数据库更新失败（可忽略）"
+" 2>/dev/null) || log "数据库更新失败（可忽略）"
 
     log "=== $interface namespace 已移除 ==="
 }
@@ -312,7 +312,7 @@ setup_all() {
     log "=== 设置所有业务网卡（从数据库读取） ==="
 
     # 从数据库读取所有非管理网卡
-    local interfaces="$($PYTHON_PATH -c "
+    local interfaces="$(cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
 import django
