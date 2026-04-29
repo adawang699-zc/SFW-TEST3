@@ -86,8 +86,8 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: var(--z-modal);
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
     justify-content: center;
     align-items: center;
 }
@@ -95,17 +95,11 @@
     display: flex;
 }
 .modal-content {
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    padding: 24px;
+    background: var(--bg-primary);
+    border-radius: 8px;
+    padding: 20px;
     max-width: 500px;
     width: 90%;
-    border: 2px solid var(--primary);
-    box-shadow: 0 0 40px rgba(255, 107, 53, 0.3);
-}
-.modal-content h4 {
-    color: var(--primary);
-    margin-bottom: 16px;
 }
 </style>
 
@@ -274,15 +268,15 @@
     </div>
 
     <!-- 编辑单元格模态框 -->
-    <div class="modal-overlay" id="editCellModal" role="dialog" aria-labelledby="edit-cell-title" aria-modal="true">
+    <div class="modal-overlay" id="editCellModal">
         <div class="modal-content">
-            <h4 id="edit-cell-title" style="margin-bottom: 16px;">编辑值</h4>
+            <h4 style="margin-bottom: 16px;">编辑值</h4>
             <div class="form-group">
-                <label class="form-label" for="edit-cell-address">地址</label>
-                <input type="text" id="edit-cell-address" class="form-input" readonly aria-describedby="edit-cell-hint">
+                <label class="form-label">地址</label>
+                <input type="text" id="edit-cell-address" class="form-input" readonly>
             </div>
             <div class="form-group">
-                <label class="form-label" for="edit-cell-value">值</label>
+                <label class="form-label">值</label>
                 <input type="number" id="edit-cell-value" class="form-input" min="0" max="65535">
                 <small id="edit-cell-hint" style="color: var(--text-muted);">请输入值</small>
             </div>
@@ -294,21 +288,21 @@
     </div>
 
     <!-- 写入多个值模态框 -->
-    <div class="modal-overlay" id="writeMultipleModal" role="dialog" aria-labelledby="write-multiple-title" aria-modal="true">
+    <div class="modal-overlay" id="writeMultipleModal">
         <div class="modal-content" style="max-width: 600px;">
-            <h4 id="write-multiple-title" style="margin-bottom: 16px;">写入多个值 (FC15/FC16)</h4>
+            <h4 style="margin-bottom: 16px;">写入多个值 (FC15/FC16)</h4>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
-                    <label class="form-label" for="write-multiple-address">起始地址</label>
+                    <label class="form-label">起始地址</label>
                     <input type="number" id="write-multiple-address" class="form-input" value="0" min="0">
                 </div>
                 <div class="form-group">
-                    <label class="form-label" for="write-multiple-count">数量</label>
+                    <label class="form-label">数量</label>
                     <input type="number" id="write-multiple-count" class="form-input" value="10" min="1" max="100">
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label" for="write-multiple-values">值 (逗号分隔)</label>
+                <label class="form-label">值 (逗号分隔)</label>
                 <textarea id="write-multiple-values" class="form-input" rows="4" placeholder="例如: 1,0,1,1,0 或 100,200,300"></textarea>
                 <small style="color: var(--text-muted);">FC15: 输入0或1 | FC16: 输入0-65535</small>
             </div>
@@ -319,14 +313,14 @@
         </div>
     </div>
 
-    <!-- 确认弹窗（切换 Agent 时） -->
-    <div class="modal-overlay" id="confirm-modal" role="dialog" aria-labelledby="confirm-modal-title" aria-modal="true">
-        <div class="modal-content" style="max-width: 400px;">
-            <h4 id="confirm-modal-title" style="margin-bottom: 16px; color: var(--warning);">⚠️ 确认切换</h4>
-            <p id="confirm-modal-message" style="margin-bottom: 20px; color: var(--text-secondary);"></p>
+    <!-- 确认弹窗 -->
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal-content">
+            <h4 style="margin-bottom: 16px; color: var(--warning);">⚠️ 确认操作</h4>
+            <p id="confirm-modal-message" style="margin-bottom: 16px;"></p>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button class="btn btn-secondary" onclick="closeConfirmModal()">取消</button>
-                <button class="btn btn-warning" onclick="executeConfirm()">确认切换</button>
+                <button class="btn btn-primary" onclick="executeConfirm()">确认</button>
             </div>
         </div>
     </div>
@@ -844,140 +838,75 @@ let selectedClientAgentIp = null;
 let selectedServerAgentIp = null;
 let agentsData = [];  // 保存 Agent 数据
 
-// ========== 全局连接状态追踪（支持多协议） ==========
+// ========== 全局连接状态追踪 ==========
 let activeConnections = {
-    // Modbus
     modbus_client: false,
     modbus_server: false,
-    // S7
     s7_client: false,
     s7_server: false,
-    // GOOSE/SV
     goose: false,
-    sv: false,
-    // DNP3
-    dnp3_client: false,
-    dnp3_server: false,
-    // BACnet
-    bacnet_client: false,
-    bacnet_server: false,
-    // ENIP
-    enip_client: false,
-    enip_server: false,
-    // MMS
-    mms_client: false,
-    mms_server: false,
-    // HTTP
-    http_client: false,
-    http_server: false
+    sv: false
 };
 
-// 检测是否有活跃的 Client 连接
 function hasActiveClientConnections() {
-    return Object.keys(activeConnections).some(key =>
-        key.endsWith('_client') && activeConnections[key]
-    );
+    return activeConnections.modbus_client || activeConnections.s7_client;
 }
 
-// 检测是否有活跃的 Server/监听
 function hasActiveServerConnections() {
-    return Object.keys(activeConnections).some(key =>
-        (key.endsWith('_server') || key === 'goose' || key === 'sv') && activeConnections[key]
-    );
+    return activeConnections.modbus_server || activeConnections.s7_server || activeConnections.goose || activeConnections.sv;
 }
 
-// 获取活跃连接列表（用于提示）
 function getActiveConnectionList(type) {
     const active = [];
-    Object.keys(activeConnections).forEach(key => {
-        if (activeConnections[key]) {
-            if (type === 'client' && key.endsWith('_client')) {
-                active.push(key.replace('_client', ' Client').toUpperCase());
-            } else if (type === 'server' && (key.endsWith('_server') || key === 'goose' || key === 'sv')) {
-                active.push(key.replace('_server', ' Server').toUpperCase());
-            }
-        }
-    });
+    if (type === 'client') {
+        if (activeConnections.modbus_client) active.push('Modbus Client');
+        if (activeConnections.s7_client) active.push('S7 Client');
+    } else {
+        if (activeConnections.modbus_server) active.push('Modbus Server');
+        if (activeConnections.s7_server) active.push('S7 Server');
+        if (activeConnections.goose) active.push('GOOSE');
+        if (activeConnections.sv) active.push('SV');
+    }
     return active.join(', ');
 }
 
-// 断开所有 Client 连接
 async function disconnectAllClientConnections() {
-    const disconnectPromises = [];
-
     if (activeConnections.modbus_client && selectedClientAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
-                .then(() => { activeConnections.modbus_client = false; modbusClientConnected = false; updateClientButtonState(false); })
-        );
+        await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
+        activeConnections.modbus_client = false;
+        modbusClientConnected = false;
+        updateClientButtonState(false);
     }
     if (activeConnections.s7_client && selectedClientAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
-                .then(() => { activeConnections.s7_client = false; })
-        );
+        await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
+        activeConnections.s7_client = false;
+        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
     }
-    if (activeConnections.dnp3_client && selectedClientAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
-                .then(() => { activeConnections.dnp3_client = false; })
-        );
-    }
-    if (activeConnections.enip_client && selectedClientAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/enip_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
-                .then(() => { activeConnections.enip_client = false; })
-        );
-    }
-
-    // 停止自动刷新
     stopAutoRefresh();
-
-    await Promise.all(disconnectPromises);
 }
 
-// 断开所有 Server/监听
 async function disconnectAllServerConnections() {
-    const disconnectPromises = [];
-
     if (activeConnections.modbus_server && selectedServerAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedServerAgentId })
-                .then(() => { activeConnections.modbus_server = false; modbusServerRunning = false; updateServerButtonState(false); })
-        );
+        await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedServerAgentId });
+        activeConnections.modbus_server = false;
+        modbusServerRunning = false;
+        updateServerButtonState(false);
     }
     if (activeConnections.s7_server && selectedServerAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId })
-                .then(() => { activeConnections.s7_server = false; })
-        );
-    }
-    if (activeConnections.dnp3_server && selectedServerAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/dnp3_server/stop/', 'POST', { agent_id: selectedServerAgentId })
-                .then(() => { activeConnections.dnp3_server = false; })
-        );
-    }
-    if (activeConnections.enip_server && selectedServerAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/enip_server/stop/', 'POST', { agent_id: selectedServerAgentId })
-                .then(() => { activeConnections.enip_server = false; })
-        );
+        await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId });
+        activeConnections.s7_server = false;
+        document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
     }
     if (activeConnections.goose && selectedServerAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedServerAgentId })
-                .then(() => { activeConnections.goose = false; })
-        );
+        await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedServerAgentId });
+        activeConnections.goose = false;
+        document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
     }
     if (activeConnections.sv && selectedServerAgentId) {
-        disconnectPromises.push(
-            apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedServerAgentId })
-                .then(() => { activeConnections.sv = false; })
-        );
+        await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedServerAgentId });
+        activeConnections.sv = false;
+        document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
     }
-
-    await Promise.all(disconnectPromises);
 }
 
 // 确认弹窗
@@ -987,26 +916,16 @@ function showConfirmModal(message, onConfirm) {
     document.getElementById('confirm-modal-message').textContent = message;
     document.getElementById('confirm-modal').classList.add('show');
 }
-
 function closeConfirmModal() {
     document.getElementById('confirm-modal').classList.remove('show');
     confirmModalCallback = null;
 }
-
 function executeConfirm() {
-    if (confirmModalCallback) {
-        confirmModalCallback();
-    }
+    if (confirmModalCallback) confirmModalCallback();
     closeConfirmModal();
 }
-
-// ESC 关闭确认弹窗
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        if (document.getElementById('confirm-modal').classList.contains('show')) {
-            closeConfirmModal();
-        }
-    }
+    if (e.key === 'Escape') closeConfirmModal();
 });
 
 // 加载租用的 Agent 列表（按 eth1, eth2, eth3... 排序）
@@ -1063,12 +982,9 @@ function renderAgentSelector(containerId, agents, type) {
 }
 
 function selectAgent(agentId, type, ip) {
-    // 检查是否有活跃连接，切换前需要确认
+    // 检查是否有活跃连接
     if (type === 'client') {
-        // 如果选择的是同一个 Agent，直接返回
         if (agentId === selectedClientAgentId) return;
-
-        // 检查是否有活跃的 Client 连接
         if (hasActiveClientConnections()) {
             const activeList = getActiveConnectionList('client');
             showConfirmModal(`当前有活跃连接 (${activeList})，切换 Agent 将断开所有连接，是否继续？`, async () => {
@@ -1080,10 +996,7 @@ function selectAgent(agentId, type, ip) {
         }
         doSelectAgent(agentId, type, ip);
     } else if (type === 'server') {
-        // 如果选择的是同一个 Agent，直接返回
         if (agentId === selectedServerAgentId) return;
-
-        // 检查是否有活跃的 Server/监听
         if (hasActiveServerConnections()) {
             const activeList = getActiveConnectionList('server');
             showConfirmModal(`当前有活跃监听 (${activeList})，切换 Agent 将停止所有服务，是否继续？`, async () => {
@@ -1101,7 +1014,6 @@ function doSelectAgent(agentId, type, ip) {
     if (type === 'client') {
         selectedClientAgentId = agentId;
         selectedClientAgentIp = ip;
-        // 更新 Client 卡片边框
         document.querySelectorAll('#modbus-client-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
@@ -1110,7 +1022,6 @@ function doSelectAgent(agentId, type, ip) {
     } else if (type === 'server') {
         selectedServerAgentId = agentId;
         selectedServerAgentIp = ip;
-        // 更新 Server 卡片边框
         document.querySelectorAll('#modbus-server-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
@@ -1216,39 +1127,22 @@ async function modbusClientToggleConnect() {
         // 连接 - 使用 Client Agent 的接口名称（SO_BINDTODEVICE 强制走物理网口）
         // 从 agent_id 提取接口名称：agent_eth1 -> eth1
         const interfaceName = selectedClientAgentId ? selectedClientAgentId.replace('agent_', '') : null;
-        const unitId = parseInt(document.getElementById('modbus-unit-id').value);
 
         const data = {
             agent_id: selectedClientAgentId,
             ip: document.getElementById('modbus-client-ip').value,
             port: parseInt(document.getElementById('modbus-client-port').value),
-            unit_id: unitId,
+            unit_id: parseInt(document.getElementById('modbus-unit-id').value),
             source_ip: selectedClientAgentIp,  // 绑定源 IP
             interface: interfaceName  // SO_BINDTODEVICE 绑定接口（eth1/eth2 等）
         };
 
         const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);
         if (result.success) {
-            // 连接成功后，立即读取验证 unit_id
-            const verifyData = {
-                agent_id: selectedClientAgentId,
-                function_code: 3,  // 读保持寄存器
-                address: 0,
-                count: 1
-            };
-            const verifyResult = await apiRequest('/api/industrial/modbus_client/read/', 'POST', verifyData);
-
-            if (!verifyResult.success) {
-                // unit_id 不匹配，断开连接
-                await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
-                showToast(`连接失败: unit_id=${unitId} 与 Server 不匹配，请检查 Server 的 Unit ID 设置`, 'error');
-                return;
-            }
-
             modbusClientConnected = true;
             activeConnections.modbus_client = true;
             updateClientButtonState(true);
-            showToast('Modbus 连接成功，unit_id 验证通过', 'success');
+            showToast('Modbus 连接成功', 'success');
             modbusClientRefresh();
         } else {
             showToast('连接失败: ' + (result.message || result.error), 'error');
@@ -1480,20 +1374,6 @@ async function modbusServerRandom() {
 }
 
 // ========== 编辑模态框 ==========
-let lastFocusedElement = null;
-
-// ESC 键关闭模态框
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        if (document.getElementById('editCellModal').classList.contains('show')) {
-            closeEditModal();
-        }
-        if (document.getElementById('writeMultipleModal').classList.contains('show')) {
-            closeWriteMultipleModal();
-        }
-    }
-});
-
 function openEditModal(cell, tbodyId) {
     const func = tbodyId.includes('client')
         ? parseInt(document.getElementById('modbus-client-func').value)
@@ -1515,9 +1395,6 @@ function openEditModal(cell, tbodyId) {
         return;
     }
 
-    // 保存当前焦点
-    lastFocusedElement = document.activeElement;
-
     currentEditCell = cell;
     currentEditTableType = tbodyId;
 
@@ -1536,21 +1413,12 @@ function openEditModal(cell, tbodyId) {
     }
 
     document.getElementById('editCellModal').classList.add('show');
-
-    // 自动聚焦到输入框
-    setTimeout(() => document.getElementById('edit-cell-value').focus(), 100);
 }
 
 function closeEditModal() {
     document.getElementById('editCellModal').classList.remove('show');
     currentEditCell = null;
     currentEditTableType = null;
-
-    // 恢复焦点
-    if (lastFocusedElement) {
-        lastFocusedElement.focus();
-        lastFocusedElement = null;
-    }
 }
 
 async function saveCellValue() {
@@ -1626,27 +1494,14 @@ function showWriteMultipleModal() {
         showToast('请先连接 Modbus', 'warning');
         return;
     }
-
-    // 保存当前焦点
-    lastFocusedElement = document.activeElement;
-
     document.getElementById('write-multiple-address').value = document.getElementById('modbus-client-start').value;
     document.getElementById('write-multiple-count').value = 10;
     document.getElementById('write-multiple-values').value = '';
     document.getElementById('writeMultipleModal').classList.add('show');
-
-    // 自动聚焦到输入框
-    setTimeout(() => document.getElementById('write-multiple-values').focus(), 100);
 }
 
 function closeWriteMultipleModal() {
     document.getElementById('writeMultipleModal').classList.remove('show');
-
-    // 恢复焦点
-    if (lastFocusedElement) {
-        lastFocusedElement.focus();
-        lastFocusedElement = null;
-    }
 }
 
 async function executeWriteMultiple() {
@@ -1736,22 +1591,16 @@ async function s7ClientDisconnect() {
         showToast('断开失败: ' + (result.message || result.error), 'error');
     }
 }
-        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
-        showToast('已断开', 'success');
-    } else {
-        showToast('断开失败: ' + (result.message || result.error), 'error');
-    }
-}
 
 async function s7ClientStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-client-status').textContent = JSON.stringify(result);
 }
 
 async function s7ClientRead() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -1774,35 +1623,35 @@ async function s7ClientRead() {
 }
 
 async function s7GetCpuInfo() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/get_cpu_info/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
 }
 
 async function s7GetCpuState() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/get_cpu_state/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('s7-plc-result').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
 }
 
 async function s7PlcColdStart() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/plc_cold_start/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '冷启动成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7PlcHotStart() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/plc_hot_start/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '热启动成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
 }
 
 async function s7PlcStop() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/plc_stop/', 'POST', { agent_id: selectedClientAgentId });
     showToast(result.success ? '停止成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
@@ -1974,9 +1823,6 @@ async function svStop() {
         showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
-        showToast('停止失败: ' + (result.message || result.error), 'error');
-    }
-}
 
 async function svStatus() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
@@ -1991,7 +1837,7 @@ async function svStatus() {
 
 // ========== DNP3 Client ==========
 async function dnp3ClientConnect() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2011,7 +1857,7 @@ async function dnp3ClientConnect() {
 }
 
 async function dnp3ClientDisconnect() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
@@ -2023,14 +1869,14 @@ async function dnp3ClientDisconnect() {
 }
 
 async function dnp3ClientStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/dnp3_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('dnp3-client-status').textContent = JSON.stringify(result);
 }
 
 async function dnp3ClientRead() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2088,7 +1934,7 @@ async function dnp3ServerStatus() {
 
 // ========== BACnet Client ==========
 async function bacnetClientRead() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2108,7 +1954,7 @@ async function bacnetClientRead() {
 }
 
 async function bacnetClientWrite() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2163,7 +2009,7 @@ async function bacnetServerStatus() {
 
 // ========== ENIP Client ==========
 async function enipClientConnect() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2180,7 +2026,7 @@ async function enipClientConnect() {
 }
 
 async function enipClientDisconnect() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/enip_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
@@ -2192,14 +2038,14 @@ async function enipClientDisconnect() {
 }
 
 async function enipClientStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/enip_client/status/', 'POST', { agent_id: selectedClientAgentId });
     document.getElementById('enip-client-status').textContent = JSON.stringify(result);
 }
 
 async function enipGetIdentity() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/enip_client/get_identity/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
@@ -2210,7 +2056,7 @@ async function enipGetIdentity() {
 }
 
 async function enipClientRead() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2229,7 +2075,7 @@ async function enipClientRead() {
 }
 
 async function enipClientWrite() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2282,7 +2128,7 @@ async function enipServerStatus() {
 
 // ========== MMS Client ==========
 async function mmsClientConnect() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2295,7 +2141,7 @@ async function mmsClientConnect() {
 }
 
 async function mmsGetDomains() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/mms_client/get_domains/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
@@ -2306,7 +2152,7 @@ async function mmsGetDomains() {
 }
 
 async function mmsClientRead() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2324,7 +2170,7 @@ async function mmsClientRead() {
 }
 
 async function mmsClientWrite() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2376,10 +2222,12 @@ async function mmsServerStatus() {
 
 // ========== HTTP Client ==========
 async function httpClientTestConnection() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
         agent_id: selectedClientAgentId,
+        url: document.getElementById('http-url').value
+    };
         url: document.getElementById('http-client-url').value,
         timeout: parseInt(document.getElementById('http-timeout').value)
     };
@@ -2389,7 +2237,7 @@ async function httpClientTestConnection() {
 }
 
 async function httpClientSend() {
-    if (!selectedClientAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const bodyStr = document.getElementById('http-body').value;
     let body = {};
