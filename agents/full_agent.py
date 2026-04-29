@@ -1403,6 +1403,7 @@ def s7_server_set_data():
 
         data_bytes = bytearray(values)
 
+        # 第一步：在锁内写入数据到存储
         with s7_server_lock:
             if server_id not in s7_servers:
                 return jsonify({'success': False, 'error': '服务端不存在'}), 404
@@ -1418,22 +1419,33 @@ def s7_server_set_data():
                 db_data = storage['db'][db_number]
                 if start + len(data_bytes) <= len(db_data):
                     db_data[start:start+len(data_bytes)] = data_bytes
-                    save_s7_db_to_database(server_id, db_number, db_data)
-                    sync_s7_data_to_server(server_id, db_number)
-                return jsonify({'success': True, 'message': '数据已设置'})
+                    # 不在锁内调用 sync（避免死锁）
+                    data_updated = True
+                else:
+                    return jsonify({'success': False, 'error': '地址超出范围'})
             elif area == 'M':
                 storage['m'][start:start+len(data_bytes)] = data_bytes
-                return jsonify({'success': True})
+                data_updated = True
             elif area == 'I':
                 storage['i'][start:start+len(data_bytes)] = data_bytes
-                return jsonify({'success': True})
+                data_updated = True
             elif area == 'Q':
                 storage['q'][start:start+len(data_bytes)] = data_bytes
-                return jsonify({'success': True})
+                data_updated = True
             else:
                 return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'})
 
+        # 第二步：在锁外同步数据到服务器（避免死锁）
+        if area == 'DB' and data_updated:
+            try:
+                sync_s7_data_to_server(server_id, db_number)
+            except Exception as e:
+                add_log('WARNING', f'同步S7数据失败: {e}')
+
+        return jsonify({'success': True, 'message': '数据已设置'})
+
     except Exception as e:
+        add_log('ERROR', f's7_server_set_data 错误: {e}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== S7 Client API ==========
