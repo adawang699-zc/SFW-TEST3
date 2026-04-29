@@ -317,12 +317,9 @@ import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
 import django
 django.setup()
-from main.models import NetworkInterface
+from main.models import NetworkInterface, LocalAgent
 
 for iface in NetworkInterface.objects.filter(is_management=False, is_available=True):
-    agent = iface.agent_profile if hasattr(iface, 'agent_profile') else None
-    # 获取关联的 Agent（通过 LocalAgent）
-    from main.models import LocalAgent
     agent_obj = LocalAgent.objects.filter(interface=iface).first()
     port = agent_obj.port if agent_obj else 8888
     ip = iface.ip_address or ''
@@ -381,7 +378,7 @@ test_namespace() {
 case "$1" in
     setup-interface)
         if [ $# -lt 2 ]; then
-            echo "用法: $0 setup-interface <网卡名> [<IP/掩码> <端口>]"
+            echo "用法: $0 setup-interface [网卡名] [IP/掩码] [端口]"
             echo "示例: $0 setup-interface eth1                    # 从数据库读取配置"
             echo "      $0 setup-interface eth1 192.168.11.100/16 8888  # 手动指定配置"
             exit 1
@@ -390,21 +387,21 @@ case "$1" in
         ;;
     remove-interface)
         if [ $# -lt 2 ]; then
-            echo "用法: $0 remove-interface <网卡名>"
+            echo "用法: $0 remove-interface [网卡名]"
             exit 1
         fi
         remove_interface "$2"
         ;;
     start-agent)
         if [ $# -lt 2 ]; then
-            echo "用法: $0 start-agent <网卡名>"
+            echo "用法: $0 start-agent [网卡名]"
             exit 1
         fi
         start_agent "$2"
         ;;
     stop-agent)
         if [ $# -lt 2 ]; then
-            echo: $0 stop-agent <网卡名>"
+            echo "用法: $0 stop-agent [网卡名]"
             exit 1
         fi
         stop_agent "$2"
@@ -423,7 +420,7 @@ case "$1" in
         ;;
     test)
         if [ $# -lt 3 ]; then
-            echo "用法: $0 test <网卡名> <目标IP>"
+            echo "用法: $0 test [网卡名] [目标IP]"
             exit 1
         fi
         test_namespace "$2" "$3"
@@ -432,15 +429,15 @@ case "$1" in
         echo "用法: $0 {command} [参数]"
         echo ""
         echo "命令说明:"
-        echo "  setup-interface <网卡> [<IP/掩码> <端口>]  - 设置网卡到namespace"
-        echo "  remove-interface <网卡>                    - 移除网卡namespace"
-        echo "  start-agent <网卡>                         - 启动namespace内Agent"
-        echo "  stop-agent <网卡>                          - 停止namespace内Agent"
-        echo "  status                                     - 查看所有namespace状态"
-        echo "  list                                       - 列出所有namespace"
-        echo "  setup-all                                  - 设置所有业务网卡（从DB读取）"
-        echo "  restore-all                                - 恢复所有网卡到主namespace"
-        echo "  test <网卡> <目标IP>                       - 测试namespace连通性"
+        echo "  setup-interface [网卡] [IP/掩码] [端口]  - 设置网卡到namespace"
+        echo "  remove-interface [网卡]                  - 移除网卡namespace"
+        echo "  start-agent [网卡]                       - 启动namespace内Agent"
+        echo "  stop-agent [网卡]                        - 停止namespace内Agent"
+        echo "  status                                   - 查看所有namespace状态"
+        echo "  list                                     - 列出所有namespace"
+        echo "  setup-all                                - 设置所有业务网卡（从DB读取）"
+        echo "  restore-all                              - 恢复所有网卡到主namespace"
+        echo "  test [网卡] [目标IP]                     - 测试namespace连通性"
         echo ""
         echo "示例:"
         echo "  sudo $0 setup-interface eth1                    # 从数据库读取配置"
