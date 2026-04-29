@@ -2236,12 +2236,11 @@ async function s7ClientDownloadBlock() {
 async function s7ServerStart() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const rackSlot = document.getElementById('s7-server-rack-slot').value.split('/');
     const data = {
         agent_id: selectedServerAgentId,
-        port: parseInt(document.getElementById('s7-server-port').value),
-        rack: parseInt(rackSlot[0]) || 0,
-        slot: parseInt(rackSlot[1]) || 2
+        server_id: 'default',
+        host: selectedServerAgentIp || '0.0.0.0',
+        port: parseInt(document.getElementById('s7-server-port').value)
     };
 
     const result = await apiRequest('/api/industrial/s7_server/start/', 'POST', data);
