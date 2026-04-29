@@ -86,8 +86,8 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: var(--z-modal);
     justify-content: center;
     align-items: center;
 }
@@ -95,11 +95,17 @@
     display: flex;
 }
 .modal-content {
-    background: var(--bg-primary);
-    border-radius: 8px;
-    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 24px;
     max-width: 500px;
     width: 90%;
+    border: 2px solid var(--primary);
+    box-shadow: 0 0 40px rgba(255, 107, 53, 0.3);
+}
+.modal-content h4 {
+    color: var(--primary);
+    margin-bottom: 16px;
 }
 </style>
 
@@ -268,15 +274,15 @@
     </div>
 
     <!-- 编辑单元格模态框 -->
-    <div class="modal-overlay" id="editCellModal">
+    <div class="modal-overlay" id="editCellModal" role="dialog" aria-labelledby="edit-cell-title" aria-modal="true">
         <div class="modal-content">
-            <h4 style="margin-bottom: 16px;">编辑值</h4>
+            <h4 id="edit-cell-title" style="margin-bottom: 16px;">编辑值</h4>
             <div class="form-group">
-                <label class="form-label">地址</label>
-                <input type="text" id="edit-cell-address" class="form-input" readonly>
+                <label class="form-label" for="edit-cell-address">地址</label>
+                <input type="text" id="edit-cell-address" class="form-input" readonly aria-describedby="edit-cell-hint">
             </div>
             <div class="form-group">
-                <label class="form-label">值</label>
+                <label class="form-label" for="edit-cell-value">值</label>
                 <input type="number" id="edit-cell-value" class="form-input" min="0" max="65535">
                 <small id="edit-cell-hint" style="color: var(--text-muted);">请输入值</small>
             </div>
@@ -288,21 +294,21 @@
     </div>
 
     <!-- 写入多个值模态框 -->
-    <div class="modal-overlay" id="writeMultipleModal">
+    <div class="modal-overlay" id="writeMultipleModal" role="dialog" aria-labelledby="write-multiple-title" aria-modal="true">
         <div class="modal-content" style="max-width: 600px;">
-            <h4 style="margin-bottom: 16px;">写入多个值 (FC15/FC16)</h4>
+            <h4 id="write-multiple-title" style="margin-bottom: 16px;">写入多个值 (FC15/FC16)</h4>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                 <div class="form-group">
-                    <label class="form-label">起始地址</label>
+                    <label class="form-label" for="write-multiple-address">起始地址</label>
                     <input type="number" id="write-multiple-address" class="form-input" value="0" min="0">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">数量</label>
+                    <label class="form-label" for="write-multiple-count">数量</label>
                     <input type="number" id="write-multiple-count" class="form-input" value="10" min="1" max="100">
                 </div>
             </div>
             <div class="form-group">
-                <label class="form-label">值 (逗号分隔)</label>
+                <label class="form-label" for="write-multiple-values">值 (逗号分隔)</label>
                 <textarea id="write-multiple-values" class="form-input" rows="4" placeholder="例如: 1,0,1,1,0 或 100,200,300"></textarea>
                 <small style="color: var(--text-muted);">FC15: 输入0或1 | FC16: 输入0-65535</small>
             </div>
@@ -1241,6 +1247,20 @@ async function modbusServerRandom() {
 }
 
 // ========== 编辑模态框 ==========
+let lastFocusedElement = null;
+
+// ESC 键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        if (document.getElementById('editCellModal').classList.contains('show')) {
+            closeEditModal();
+        }
+        if (document.getElementById('writeMultipleModal').classList.contains('show')) {
+            closeWriteMultipleModal();
+        }
+    }
+});
+
 function openEditModal(cell, tbodyId) {
     const func = tbodyId.includes('client')
         ? parseInt(document.getElementById('modbus-client-func').value)
@@ -1262,6 +1282,9 @@ function openEditModal(cell, tbodyId) {
         return;
     }
 
+    // 保存当前焦点
+    lastFocusedElement = document.activeElement;
+
     currentEditCell = cell;
     currentEditTableType = tbodyId;
 
@@ -1280,12 +1303,21 @@ function openEditModal(cell, tbodyId) {
     }
 
     document.getElementById('editCellModal').classList.add('show');
+
+    // 自动聚焦到输入框
+    setTimeout(() => document.getElementById('edit-cell-value').focus(), 100);
 }
 
 function closeEditModal() {
     document.getElementById('editCellModal').classList.remove('show');
     currentEditCell = null;
     currentEditTableType = null;
+
+    // 恢复焦点
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
 }
 
 async function saveCellValue() {
@@ -1361,14 +1393,27 @@ function showWriteMultipleModal() {
         showToast('请先连接 Modbus', 'warning');
         return;
     }
+
+    // 保存当前焦点
+    lastFocusedElement = document.activeElement;
+
     document.getElementById('write-multiple-address').value = document.getElementById('modbus-client-start').value;
     document.getElementById('write-multiple-count').value = 10;
     document.getElementById('write-multiple-values').value = '';
     document.getElementById('writeMultipleModal').classList.add('show');
+
+    // 自动聚焦到输入框
+    setTimeout(() => document.getElementById('write-multiple-values').focus(), 100);
 }
 
 function closeWriteMultipleModal() {
     document.getElementById('writeMultipleModal').classList.remove('show');
+
+    // 恢复焦点
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+        lastFocusedElement = null;
+    }
 }
 
 async function executeWriteMultiple() {

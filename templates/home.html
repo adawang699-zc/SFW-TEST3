@@ -71,7 +71,7 @@
 <div class="card">
     <div class="card-header">快速导航</div>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-        <a href="{% url 'main:agent_manage' %}" class="card" style="text-decoration: none; cursor: pointer;">
+        <a href="{% url 'main:agent_manage' %}" class="card card-clickable" style="text-decoration: none;">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 1.5rem;">🔌</span>
                 <div>
@@ -80,7 +80,7 @@
                 </div>
             </div>
         </a>
-        <a href="{% url 'main:device_monitor' %}" class="card" style="text-decoration: none; cursor: pointer;">
+        <a href="{% url 'main:device_monitor' %}" class="card card-clickable" style="text-decoration: none;">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 1.5rem;">🖥️</span>
                 <div>
@@ -89,7 +89,7 @@
                 </div>
             </div>
         </a>
-        <a href="{% url 'main:packet_send' %}" class="card" style="text-decoration: none; cursor: pointer;">
+        <a href="{% url 'main:packet_send' %}" class="card card-clickable" style="text-decoration: none;">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 1.5rem;">📡</span>
                 <div>
@@ -98,7 +98,7 @@
                 </div>
             </div>
         </a>
-        <a href="{% url 'main:industrial_protocol' %}" class="card" style="text-decoration: none; cursor: pointer;">
+        <a href="{% url 'main:industrial_protocol' %}" class="card card-clickable" style="text-decoration: none;">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 1.5rem;">⚙️</span>
                 <div>

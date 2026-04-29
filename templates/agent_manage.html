@@ -25,18 +25,19 @@
         <!-- 租用表单 -->
         <div>
             <div class="form-group">
-                <label class="form-label">用户标识符</label>
-                <input type="text" id="lock-user-identifier" class="form-input" placeholder="输入您的标识，如 user1、张三">
+                <label class="form-label" for="lock-user-identifier">用户标识符</label>
+                <input type="text" id="lock-user-identifier" class="form-input" placeholder="输入您的标识，如 user1、张三" aria-describedby="lock-user-hint">
+                <small id="lock-user-hint" style="color: var(--text-muted); font-size: 0.8rem;">用于识别您的租用记录</small>
             </div>
             <div class="form-group">
-                <label class="form-label">选择要租用的 Agent（仅运行中的 Agent 可租用）</label>
-                <div id="lock-agent-checkboxes" style="max-height: 150px; overflow-y: auto; padding: 8px; background: var(--bg-dark); border-radius: 8px;">
+                <label class="form-label" for="lock-agent-checkboxes">选择要租用的 Agent（仅运行中的 Agent 可租用）</label>
+                <div id="lock-agent-checkboxes" role="group" aria-label="可租用的 Agent 列表" style="max-height: 150px; overflow-y: auto; padding: 8px; background: var(--bg-dark); border-radius: 8px;">
                     <p style="color: var(--text-secondary);">加载中...</p>
                 </div>
             </div>
             <div style="display: flex; gap: 12px;">
-                <button class="btn btn-primary" onclick="lockAgents()">🔒 租用选中 Agent</button>
-                <button class="btn btn-secondary" onclick="unlockAgents()">🔓 释放我的租用</button>
+                <button class="btn btn-primary" onclick="lockAgents()" aria-label="租用选中的 Agent">🔒 租用选中 Agent</button>
+                <button class="btn btn-secondary" onclick="unlockAgents()" aria-label="释放我的租用">🔓 释放我的租用</button>
             </div>
             <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 8px;">
                 租用规则：使用中自动续期，无活动 2 小时后自动释放。请及时释放以便他人使用。
@@ -45,8 +46,8 @@
         <!-- 我的租用状态 -->
         <div>
             <div class="form-group">
-                <label class="form-label">我的租用状态</label>
-                <div id="my-lock-status" style="padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                <label class="form-label" id="my-lock-status-label">我的租用状态</label>
+                <div id="my-lock-status" aria-labelledby="my-lock-status-label" style="padding: 12px; background: var(--bg-dark); border-radius: 8px;">
                     <p style="color: var(--text-secondary);">输入标识符后查看</p>
                 </div>
             </div>
@@ -63,28 +64,29 @@
 </div>
 
 <!-- 配置 IP 模态框 -->
-<div id="config-ip-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); padding: 24px; border-radius: 16px; width: 400px;">
-        <div class="card-header" style="margin-bottom: 20px;">配置网卡 IP</div>
+<div id="config-ip-modal" role="dialog" aria-labelledby="config-ip-title" aria-modal="true" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: var(--z-modal);">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); border: 2px solid var(--primary); padding: 24px; border-radius: 16px; width: 400px; box-shadow: 0 0 40px rgba(255, 107, 53, 0.4);">
+        <div class="card-header" id="config-ip-title" style="margin-bottom: 20px; font-size: 1.2rem;">配置网卡 IP</div>
         <div class="form-group">
-            <label class="form-label">Agent ID</label>
-            <input type="text" id="config-agent-id" class="form-input" readonly>
+            <label class="form-label" for="config-agent-id">Agent ID</label>
+            <input type="text" id="config-agent-id" class="form-input" readonly aria-readonly="true">
         </div>
         <div class="form-group">
-            <label class="form-label">网卡名称</label>
-            <input type="text" id="config-interface-name" class="form-input" readonly>
+            <label class="form-label" for="config-interface-name">网卡名称</label>
+            <input type="text" id="config-interface-name" class="form-input" readonly aria-readonly="true">
         </div>
         <div class="form-group">
-            <label class="form-label">IP 地址</label>
-            <input type="text" id="config-ip-address" class="form-input" placeholder="例如: 11.11.11.11">
+            <label class="form-label" for="config-ip-address">IP 地址</label>
+            <input type="text" id="config-ip-address" class="form-input" placeholder="例如: 11.11.11.11" aria-describedby="config-ip-hint">
+            <small id="config-ip-hint" style="color: var(--text-muted); font-size: 0.8rem;">输入新 IP 地址</small>
         </div>
         <div class="form-group">
-            <label class="form-label">子网掩码 (CIDR)</label>
+            <label class="form-label" for="config-netmask">子网掩码 (CIDR)</label>
             <input type="text" id="config-netmask" class="form-input" value="24" placeholder="例如: 24">
         </div>
         <div style="display: flex; gap: 12px; margin-top: 20px;">
-            <button class="btn btn-primary" onclick="confirmConfigIP()">确认配置</button>
-            <button class="btn btn-secondary" onclick="closeConfigModal()">取消</button>
+            <button class="btn btn-primary" id="confirm-config-ip-btn" onclick="confirmConfigIP()" aria-label="确认配置 IP">确认配置</button>
+            <button class="btn btn-secondary" onclick="closeConfigModal()" aria-label="取消配置">取消</button>
         </div>
     </div>
 </div>
@@ -472,11 +474,11 @@ function renderAgents(agents) {
                 </div>
                 <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
                     ${isRunning
-                        ? `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>`
-                        : `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>
-                           <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}', '${currentIp}')">配置IP</button>`
+                        ? `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')" aria-label="停止 Agent ${agent.agent_id}">停止</button>`
+                        : `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')" aria-label="启动 Agent ${agent.agent_id}">启动</button>
+                           <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}', '${currentIp}')" aria-label="配置 ${agent.interface_name} 的 IP 地址">配置IP</button>`
                     }
-                    <button class="btn btn-sm btn-secondary" onclick="showLogs('${agent.agent_id}')">日志</button>
+                    <button class="btn btn-sm btn-secondary" onclick="showLogs('${agent.agent_id}')" aria-label="查看 Agent ${agent.agent_id} 的日志">日志</button>
                 </div>
             </div>
         `;
@@ -494,6 +496,11 @@ function renderAgents(agents) {
 
 // 启动 Agent
 async function startAgent(agentId) {
+    // 禁用按钮防止重复点击
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '启动中...';
+
     try {
         showToast(`正在启动 Agent ${agentId}...`);
         const result = await apiRequest('/api/agents/start/', 'POST', {
@@ -505,14 +512,23 @@ async function startAgent(agentId) {
             await loadAllData();
         } else {
             showToast('启动失败: ' + result.error, 'error');
+            btn.disabled = false;
+            btn.textContent = '启动';
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '启动';
     }
 }
 
 // 停止 Agent
 async function stopAgent(agentId) {
+    // 禁用按钮防止重复点击
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = '停止中...';
+
     try {
         const result = await apiRequest('/api/agents/stop/', 'POST', {
             agent_id: agentId
@@ -523,9 +539,13 @@ async function stopAgent(agentId) {
             await loadAllData();
         } else {
             showToast('停止失败: ' + result.error, 'error');
+            btn.disabled = false;
+            btn.textContent = '停止';
         }
     } catch (e) {
         showToast('请求失败: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = '停止';
     }
 }
 
@@ -571,20 +591,53 @@ function showToast(message, type = 'success') {
 // ========== 配置 IP 功能 ==========
 
 let configAgentId = null;
+let lastFocusedElement = null;
 
 function showConfigIPModal(agentId, interfaceName, currentIp) {
+    // 记录当前焦点元素
+    lastFocusedElement = document.activeElement;
+
     configAgentId = agentId;
     document.getElementById('config-agent-id').value = agentId;
     document.getElementById('config-interface-name').value = interfaceName;
     document.getElementById('config-ip-address').value = currentIp || '';
     document.getElementById('config-netmask').value = '24';
-    document.getElementById('config-ip-modal').style.display = 'block';
+
+    const modal = document.getElementById('config-ip-modal');
+    modal.style.display = 'block';
+
+    // 将焦点移到第一个输入框
+    setTimeout(() => {
+        document.getElementById('config-ip-address').focus();
+    }, 100);
 }
 
 function closeConfigModal() {
     document.getElementById('config-ip-modal').style.display = 'none';
     configAgentId = null;
+
+    // 恢复之前的焦点
+    if (lastFocusedElement) {
+        lastFocusedElement.focus();
+    }
 }
+
+// ESC 键关闭模态框
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('config-ip-modal');
+        if (modal.style.display === 'block') {
+            closeConfigModal();
+        }
+    }
+});
+
+// 点击模态框背景关闭
+document.getElementById('config-ip-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeConfigModal();
+    }
+});
 
 async function confirmConfigIP() {
     const agentId = document.getElementById('config-agent-id').value;
