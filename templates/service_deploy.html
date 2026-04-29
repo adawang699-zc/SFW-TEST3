@@ -553,16 +553,19 @@
                 <div id="server-agent-selector" class="agent-selector">
                     <!-- 动态生成 Agent 卡片 -->
                 </div>
-                <div id="server-agent-info" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);"></div>
+                <div id="server-agent-info" style="margin-top: 8px; min-height: 24px; font-size: 0.85rem; color: var(--text-muted);"></div>
             </div>
 
             <!-- 协议选择 -->
-            <div class="protocol-tabs" id="server-protocols">
-                <div class="protocol-tab server active" onclick="selectServerProtocol('tcp', this)">TCP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('udp', this)">UDP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('ftp', this)">FTP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('http', this)">HTTP</div>
-                <div class="protocol-tab server" onclick="selectServerProtocol('mail', this)">Mail</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="protocol-tabs" id="server-protocols">
+                    <div class="protocol-tab server active" onclick="selectServerProtocol('tcp', this)">TCP</div>
+                    <div class="protocol-tab server" onclick="selectServerProtocol('udp', this)">UDP</div>
+                    <div class="protocol-tab server" onclick="selectServerProtocol('ftp', this)">FTP</div>
+                    <div class="protocol-tab server" onclick="selectServerProtocol('http', this)">HTTP</div>
+                    <div class="protocol-tab server" onclick="selectServerProtocol('mail', this)">Mail</div>
+                </div>
+                <button class="btn-xs btn-secondary" onclick="refreshServerStatus()" title="刷新状态">🔄</button>
             </div>
 
             <!-- TCP 监听配置 -->
@@ -761,18 +764,21 @@
                 <div id="client-agent-selector" class="agent-selector">
                     <!-- 动态生成 Agent 卡片 -->
                 </div>
-                <div id="client-agent-info" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);"></div>
-                <button class="btn-xs btn-secondary" onclick="syncServerInfo()" style="margin-top: 8px;">⬇ 同步服务端信息</button>
+                <div id="client-agent-info" style="margin-top: 8px; min-height: 24px; font-size: 0.85rem; color: var(--text-muted);"></div>
+                <!-- 同步按钮已隐藏，选择客户端Agent后自动同步 -->
             </div>
 
             <!-- 协议选择 -->
-            <div class="protocol-tabs" id="client-protocols">
-                <div class="protocol-tab client active" onclick="selectClientProtocol('tcp', this)">TCP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('udp', this)">UDP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('ftp', this)">FTP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('http', this)">HTTP</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('mail', this)">Mail</div>
-                <div class="protocol-tab client" onclick="selectClientProtocol('network', this)">Network</div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="protocol-tabs" id="client-protocols">
+                    <div class="protocol-tab client active" onclick="selectClientProtocol('tcp', this)">TCP</div>
+                    <div class="protocol-tab client" onclick="selectClientProtocol('udp', this)">UDP</div>
+                    <div class="protocol-tab client" onclick="selectClientProtocol('ftp', this)">FTP</div>
+                    <div class="protocol-tab client" onclick="selectClientProtocol('http', this)">HTTP</div>
+                    <div class="protocol-tab client" onclick="selectClientProtocol('mail', this)">Mail</div>
+                    <div class="protocol-tab client" onclick="selectClientProtocol('network', this)">Network</div>
+                </div>
+                <button class="btn-xs btn-secondary" onclick="refreshClientStatus()" title="刷新状态">🔄</button>
             </div>
 
             <!-- TCP 客户端配置 -->
@@ -1237,6 +1243,8 @@ function selectClientAgent(agentId) {
         addClientLog(`选择客户端Agent: ${clientAgent.agent_id}`);
         refreshClientStatus();
         startClientStatusPoll();
+        // 自动同步服务端信息（如果已选择服务端Agent）
+        if (serverAgent) syncServerInfo();
     } else {
         document.getElementById('client-agent-info').textContent = '';
         stopClientStatusPoll();
@@ -1246,7 +1254,7 @@ function selectClientAgent(agentId) {
 // 同步服务端信息到客户端
 function syncServerInfo() {
     if (!serverAgent) {
-        showToast('请先选择服务端Agent', 'error');
+        // 静默返回，不再显示toast
         return;
     }
 
@@ -1289,6 +1297,9 @@ function selectServerProtocol(protocol, element) {
         }
     });
     document.getElementById(`${protocol}-server-config`).classList.remove('hidden');
+
+    // 切换协议后立即获取一次状态
+    if (serverAgent) refreshServerStatus();
 }
 
 function selectClientProtocol(protocol, element) {
@@ -2854,16 +2865,13 @@ async function testNetworkConnect() {
     }
 }
 
-// 状态轮询 - 合并为单一定时器，减少请求次数
+// 状态轮询 - 已改为按需获取，不再定时轮询
+// 启动/停止操作后自动刷新，也可手动点击刷新按钮
 let statusPollInterval = null;
 
 function startStatusPoll() {
-    if (statusPollInterval) clearInterval(statusPollInterval);
-    // 5秒刷新一次，减少服务器负载
-    statusPollInterval = setInterval(() => {
-        if (serverAgent) refreshServerStatus();
-        if (clientAgent) refreshClientStatus();
-    }, 5000);
+    // 不再启动定时轮询，仅保留函数以兼容其他调用
+    // 状态获取改为：页面加载一次、启停操作后、手动刷新
 }
 
 function stopStatusPoll() {
