@@ -1144,10 +1144,10 @@ def s7_server_start():
         return jsonify({'success': False, 'error': 'python-snap7未安装或导入失败'}), 500
 
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         server_id = data.get('server_id', 'default')
         host = data.get('host', '0.0.0.0')
-        port = data.get('port', 102)
+        port = int(data.get('port', 102))
 
         with s7_server_lock:
             # 停止旧服务端
