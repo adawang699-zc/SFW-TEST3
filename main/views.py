@@ -118,8 +118,10 @@ def scan_namespace_interfaces(namespace):
                             if 'inet ' in ip_line:
                                 ipv4 = ip_line.split('inet ')[1].split()[0].split('/')[0]
 
-                    # 判断是否启动
-                    is_up = 'UP' in line
+                    # 判断是否有网线连接（carrier 状态）
+                    # LOWER_UP 表示有物理连接，NO-CARRIER 表示无连接
+                    has_carrier = 'LOWER_UP' in line and 'NO-CARRIER' not in line
+                    is_up = has_carrier  # 根据网线连接判断 UP/DOWN
 
                     interfaces.append({
                         'name': iface_name,
@@ -428,8 +430,24 @@ def api_scan_interfaces(request):
 
             # 获取网卡状态
             stats = net_if_stats.get(name)
-            is_up = stats.isup if stats else False
+            # admin_up: 管理状态（接口是否被启用）
+            admin_up = stats.isup if stats else False
             speed = stats.speed if stats and stats.speed > 0 else None
+
+            # 获取 carrier 状态（物理连接）- 通过 ip link show
+            has_carrier = False
+            try:
+                carrier_result = subprocess.run(
+                    ['ip', 'link', 'show', name],
+                    capture_output=True, text=True, timeout=2
+                )
+                if carrier_result.returncode == 0:
+                    # LOWER_UP 表示有物理连接，NO-CARRIER 表示无连接
+                    has_carrier = 'LOWER_UP' in carrier_result.stdout and 'NO-CARRIER' not in carrier_result.stdout
+            except:
+                has_carrier = admin_up  # fallback 到管理状态
+
+            is_up = has_carrier  # 根据网线连接判断 UP/DOWN
 
             # 判断是否是管理网卡
             is_management = (name == settings.MANAGEMENT_INTERFACE)
