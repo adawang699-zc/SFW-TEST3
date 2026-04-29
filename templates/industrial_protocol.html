@@ -1353,7 +1353,8 @@ async function modbusClientToggleConnect() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     if (modbusClientConnected) {
-        // 断开连接
+        // 断开连接 - 先显示断开中状态
+        setClientButtonLoading('modbus-client-connect-btn', '断开中...');
         const result = await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
         if (result.success) {
             modbusClientConnected = false;
@@ -1362,10 +1363,13 @@ async function modbusClientToggleConnect() {
             updateClientButtonState(false);
             showToast('已断开连接', 'success');
         } else {
+            updateClientButtonState(true);  // 恢复原状态
             showToast('断开失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        // 连接 - 使用 Client Agent 的接口名称（SO_BINDTODEVICE 强制走物理网口）
+        // 连接 - 先显示连接中状态
+        setClientButtonLoading('modbus-client-connect-btn', '连接中...');
+        // 使用 Client Agent 的接口名称（SO_BINDTODEVICE 强制走物理网口）
         // 从 agent_id 提取接口名称：agent_eth1 -> eth1
         const interfaceName = selectedClientAgentId ? selectedClientAgentId.replace('agent_', '') : null;
 
@@ -1386,23 +1390,34 @@ async function modbusClientToggleConnect() {
             showToast('Modbus 连接成功', 'success');
             modbusClientRefresh();
         } else {
+            updateClientButtonState(false);  // 恢复原状态
             showToast('连接失败: ' + (result.message || result.error), 'error');
         }
     }
 }
 
+// 设置按钮加载状态（中间状态）
+function setClientButtonLoading(btnId, text) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    btn.textContent = text;
+    btn.classList.remove('btn-success', 'btn-danger');
+    btn.classList.add('btn-secondary');
+}
+
 function updateClientButtonState(connected) {
     const btn = document.getElementById('modbus-client-connect-btn');
     const statusDiv = document.getElementById('modbus-client-status');
+    btn.disabled = false;  // 恢复按钮
 
     if (connected) {
         btn.textContent = '断开';
-        btn.classList.remove('btn-success');
+        btn.classList.remove('btn-success', 'btn-secondary');
         btn.classList.add('btn-danger');
         statusDiv.innerHTML = '<span class="status-badge status-running">已连接</span>';
     } else {
         btn.textContent = '连接';
-        btn.classList.remove('btn-danger');
+        btn.classList.remove('btn-danger', 'btn-secondary');
         btn.classList.add('btn-success');
         statusDiv.innerHTML = '<span class="status-badge status-stopped">未连接</span>';
     }
@@ -1486,18 +1501,21 @@ async function modbusServerToggle() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     if (modbusServerRunning) {
-        // 停止
+        // 停止 - 先显示停止中状态
+        setServerButtonLoading('modbus-server-toggle-btn', '停止中...');
         const result = await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedServerAgentId });
         if (result.success) {
             modbusServerRunning = false;
             activeConnections.modbus_server = false;
             updateServerButtonState(false);
-            showToast('已停止', 'success');
+            showToast('已停止监听', 'success');
         } else {
+            updateServerButtonState(true);  // 恢复原状态
             showToast('停止失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        // 启动 - 使用 Agent IP 作为 interface 参数
+        // 启动 - 先显示启动中状态
+        setServerButtonLoading('modbus-server-toggle-btn', '启动中...');
         const data = {
             agent_id: selectedServerAgentId,
             port: parseInt(document.getElementById('modbus-server-port').value),
@@ -1516,23 +1534,34 @@ async function modbusServerToggle() {
             showToast(msg, result.success ? 'success' : 'info');
             modbusServerRefresh();
         } else {
+            updateServerButtonState(false);  // 恢复原状态
             showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     }
 }
 
+// 设置按钮加载状态（中间状态）
+function setServerButtonLoading(btnId, text) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    btn.textContent = text;
+    btn.classList.remove('btn-success', 'btn-danger');
+    btn.classList.add('btn-secondary');
+}
+
 function updateServerButtonState(running) {
     const btn = document.getElementById('modbus-server-toggle-btn');
     const statusDiv = document.getElementById('modbus-server-status');
+    btn.disabled = false;  // 恢复按钮
 
     if (running) {
-        btn.textContent = '停止';
-        btn.classList.remove('btn-success');
+        btn.textContent = '停止监听';
+        btn.classList.remove('btn-success', 'btn-secondary');
         btn.classList.add('btn-danger');
         statusDiv.innerHTML = '<span class="status-badge status-running">运行中</span>';
     } else {
         btn.textContent = '启动监听';
-        btn.classList.remove('btn-danger');
+        btn.classList.remove('btn-danger', 'btn-secondary');
         btn.classList.add('btn-success');
         statusDiv.innerHTML = '<span class="status-badge status-stopped">未启动</span>';
     }
@@ -1806,7 +1835,8 @@ async function s7ClientToggle() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     if (s7ClientConnected) {
-        // 断开连接
+        // 断开连接 - 先显示断开中状态
+        setS7ClientButtonLoading('断开中...');
         s7ClientStopRefresh();
         const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
         if (result.success) {
@@ -1821,12 +1851,14 @@ async function s7ClientToggle() {
             document.getElementById('s7-client-block-section').style.display = 'none';
             document.getElementById('s7-cpu-info-container').style.display = 'none';
 
-            showToast('已断开', 'success');
+            showToast('已断开连接', 'success');
         } else {
+            updateS7ClientButtonState(true);  // 恢复原状态
             showToast('断开失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        // 连接
+        // 连接 - 先显示连接中状态
+        setS7ClientButtonLoading('连接中...');
         const rackSlot = document.getElementById('s7-rack-slot').value.split('/');
         const data = {
             agent_id: selectedClientAgentId,
@@ -1853,14 +1885,25 @@ async function s7ClientToggle() {
 
             showToast('S7 连接成功', 'success');
         } else {
+            updateS7ClientButtonState(false);  // 恢复原状态
             showToast('连接失败: ' + (result.message || result.error), 'error');
         }
     }
 }
 
+// 设置按钮加载状态（中间状态）
+function setS7ClientButtonLoading(text) {
+    const btn = document.getElementById('s7-client-toggle-btn');
+    btn.disabled = true;
+    btn.textContent = text;
+    btn.classList.remove('btn-success', 'btn-danger');
+    btn.classList.add('btn-secondary');
+}
+
 function updateS7ClientButtonState(connected) {
     const btn = document.getElementById('s7-client-toggle-btn');
     const statusDiv = document.getElementById('s7-client-status');
+    btn.disabled = false;  // 恢复按钮
 
     if (connected) {
         btn.className = 'btn btn-danger';
@@ -2240,18 +2283,21 @@ async function s7ServerToggle() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     if (s7ServerRunning) {
-        // 停止
+        // 停止 - 先显示停止中状态
+        setS7ServerButtonLoading('停止中...');
         const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId, server_id: 'default' });
         if (result.success) {
             s7ServerRunning = false;
             activeConnections.s7_server = false;
             updateS7ServerButtonState(false);
-            showToast('S7 Server 已停止', 'success');
+            showToast('S7 Server 已停止监听', 'success');
         } else {
+            updateS7ServerButtonState(true);  // 恢复原状态
             showToast('停止失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        // 启动
+        // 启动 - 先显示启动中状态
+        setS7ServerButtonLoading('启动中...');
         const data = {
             agent_id: selectedServerAgentId,
             server_id: 'default',
@@ -2266,14 +2312,25 @@ async function s7ServerToggle() {
             updateS7ServerButtonState(true);
             showToast(`S7 Server 启动成功，监听 ${selectedServerAgentIp}:${data.port}`, 'success');
         } else {
+            updateS7ServerButtonState(false);  // 恢复原状态
             showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     }
 }
 
+// 设置按钮加载状态（中间状态）
+function setS7ServerButtonLoading(text) {
+    const btn = document.getElementById('s7-server-toggle-btn');
+    btn.disabled = true;
+    btn.textContent = text;
+    btn.classList.remove('btn-success', 'btn-danger');
+    btn.classList.add('btn-secondary');
+}
+
 function updateS7ServerButtonState(running) {
     const btn = document.getElementById('s7-server-toggle-btn');
     const statusDiv = document.getElementById('s7-server-status-badge');
+    btn.disabled = false;  // 恢复按钮
 
     if (running) {
         btn.className = 'btn btn-danger';
