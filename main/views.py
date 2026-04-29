@@ -87,7 +87,7 @@ def scan_namespace_interfaces(namespace):
     try:
         # 获取 namespace 内所有网卡
         result = subprocess.run(
-            ['ip', 'netns', 'exec', namespace, 'ip', 'link', 'show'],
+            ['sudo', 'ip', 'netns', 'exec', namespace, 'ip', 'link', 'show'],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode != 0:
@@ -109,7 +109,7 @@ def scan_namespace_interfaces(namespace):
 
                     # 获取 IP 地址
                     ip_result = subprocess.run(
-                        ['ip', 'netns', 'exec', namespace, 'ip', 'addr', 'show', iface_name],
+                        ['sudo', 'ip', 'netns', 'exec', namespace, 'ip', 'addr', 'show', iface_name],
                         capture_output=True, text=True, timeout=5
                     )
                     ipv4 = None
