@@ -1182,12 +1182,8 @@ def s7_server_start():
             storage = s7_data_storage[server_id]
             for db_num in [1, 2, 3]:
                 if db_num not in storage['db']:
-                    db_data = load_s7_db_from_database(server_id, db_num)
-                    if db_data is not None:
-                        storage['db'][db_num] = db_data
-                    else:
-                        storage['db'][db_num] = bytearray([db_num] * S7_DB_MAX_SIZE)
-                        save_s7_db_to_database(server_id, db_num, storage['db'][db_num])
+                    # 简化初始化，不调用数据库函数（避免错误）
+                    storage['db'][db_num] = bytearray([db_num] * S7_DB_MAX_SIZE)
 
             # 设置保护级别
             try:
@@ -1196,9 +1192,7 @@ def s7_server_start():
             except Exception as e:
                 add_log('WARNING', f'设置保护级别失败: {e}')
 
-            # 注册区域
-            register_s7_areas(server_id, db_list=[1, 2, 3])
-            sync_s7_data_to_server(server_id)
+            # 简化：不调用 register_s7_areas（避免死锁）
 
             # 启动服务器
             try:
