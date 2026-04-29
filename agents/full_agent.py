@@ -1278,11 +1278,16 @@ def s7_server_stop():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/industrial_protocol/s7_server/status', methods=['GET'])
+@app.route('/api/industrial_protocol/s7_server/status', methods=['GET', 'POST'])
 def s7_server_status():
     """获取S7服务端状态"""
     try:
-        server_id = request.args.get('server_id', 'default')
+        # 支持 GET (args) 和 POST (json)
+        if request.method == 'POST':
+            data = request.json or {}
+            server_id = data.get('server_id', 'default')
+        else:
+            server_id = request.args.get('server_id', 'default')
 
         with s7_server_lock:
             if server_id not in s7_servers:
