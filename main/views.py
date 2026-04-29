@@ -521,6 +521,7 @@ def api_interface_list(request):
             'is_available': iface.is_available,
             'is_up': iface.is_up,
             'status': iface.status,
+            'namespace': iface.namespace,
             'has_agent': agent is not None,
             'agent_id': agent.agent_id if agent else None,
             'agent_status': agent.status if agent else None,
@@ -999,55 +1000,47 @@ def api_agent_stop(request):
 
 @require_http_methods(["GET"])
 def api_agent_status(request):
-    """查询 Agent 状态"""
+    """查询 Agent 状态（支持 namespace）"""
     agent_id = request.GET.get('agent_id')
 
     try:
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        # 通过 HTTP 查询实际状态
-        try:
-            # 增加超时时间，避免发送报文时误判为停止
-            resp = requests.get(
-                f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                timeout=5
-            )
-            if resp.status_code == 200:
-                status_data = resp.json()
-                agent.status = 'running'
-                agent.save()
+        # 通过 HTTP 查询实际状态（支持 namespace）
+        # 增加超时时间，避免发送报文时误判为停止
+        success, status_data, err = forward_to_agent(agent, 'GET', '/api/status', timeout=5)
 
-                # 获取统计信息
-                statistics = {}
-                try:
-                    stats_resp = requests.get(
-                        f"http://{agent.interface.ip_address}:{agent.port}/api/statistics",
-                        timeout=5
-                    )
-                    if stats_resp.status_code == 200:
-                        statistics = stats_resp.json().get('statistics', {})
-                except:
-                    pass
+        if success:
+            agent.status = 'running'
+            agent.save()
 
-                return JsonResponse({
-                    'success': True,
-                    'agent_id': agent_id,
-                    'status': 'running',
-                    'uptime': status_data.get('uptime'),
-                    'interface': agent.interface.name,
-                    'statistics': statistics,
-                })
-        except:
-            # 查询失败时，保持数据库原有状态，不强制更新为 stopped
-            # 这样可以避免发送报文时因超时误判为停止
+            # 获取统计信息
+            statistics = {}
+            try:
+                success2, stats_data, err2 = forward_to_agent(agent, 'GET', '/api/statistics', timeout=5)
+                if success2:
+                    statistics = stats_data.get('statistics', {})
+            except:
+                pass
+
             return JsonResponse({
                 'success': True,
                 'agent_id': agent_id,
-                'status': agent.status,  # 保持数据库原有状态
+                'status': 'running',
+                'uptime': status_data.get('uptime'),
                 'interface': agent.interface.name,
-                'statistics': {},
-                'query_failed': True,  # 标记查询失败，前端可显示提示
+                'statistics': statistics,
             })
+
+        # 查询失败时，保持数据库原有状态，不强制更新为 stopped
+        return JsonResponse({
+            'success': True,
+            'agent_id': agent_id,
+            'status': agent.status,
+            'interface': agent.interface.name,
+            'statistics': {},
+            'query_failed': True,
+        })
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -1055,15 +1048,21 @@ def api_agent_status(request):
 
 @require_http_methods(["GET"])
 def api_agent_logs(request):
-    """获取 Agent 日志"""
+    """获取 Agent 日志（支持 namespace）"""
     agent_id = request.GET.get('agent_id')
     lines = int(request.GET.get('lines', 50))
 
     try:
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
+        # namespace Agent 使用对应的服务名
+        if agent.is_in_namespace():
+            service_name = agent.get_namespace_service_name()
+        else:
+            service_name = agent.get_service_name()
+
         result = subprocess.run(
-            ['sudo', 'journalctl', '-u', agent.get_service_name(), '-n', str(lines), '--no-pager'],
+            ['sudo', 'journalctl', '-u', service_name, '-n', str(lines), '--no-pager'],
             capture_output=True,
             text=True,
             timeout=10
@@ -1084,7 +1083,7 @@ def api_agent_logs(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_agent_config_ip(request):
-    """配置 Agent 网卡的 IP 地址"""
+    """配置 Agent 网卡的 IP 地址（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
@@ -1096,46 +1095,50 @@ def api_agent_config_ip(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
         interface_name = agent.interface.name
+        namespace = agent.interface.namespace
 
         # 检查 Agent 是否正在运行
         if agent.status == 'running':
             return JsonResponse({'success': False, 'error': 'Agent 正在运行，请先停止 Agent'})
 
+        # 获取命令执行函数（考虑 namespace）
+        def run_ip_cmd(args):
+            if namespace:
+                return exec_in_namespace(namespace, ['sudo'] + args)
+            else:
+                return subprocess.run(['sudo'] + args, capture_output=True, text=True, timeout=10)
+
         # 先启动网卡
-        subprocess.run(
-            ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        run_ip_cmd(['ip', 'link', 'set', interface_name, 'up'])
 
         # 清空网卡上所有旧的 IP 地址
-        flush_result = subprocess.run(
-            ['sudo', 'ip', 'addr', 'flush', 'dev', interface_name],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        run_ip_cmd(['ip', 'addr', 'flush', 'dev', interface_name])
 
         # 配置新的 IP 地址（CIDR 格式）
         cidr = f"{ip_address}/{netmask}"
-        result = subprocess.run(
-            ['sudo', 'ip', 'addr', 'add', cidr, 'dev', interface_name],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        result = run_ip_cmd(['ip', 'addr', 'add', cidr, 'dev', interface_name])
 
-        if result.returncode == 0 or 'File exists' in result.stderr:
+        if namespace or result.returncode == 0 or 'File exists' in result.stderr:
             # 更新数据库
             agent.interface.ip_address = ip_address
             agent.interface.is_up = True
             agent.interface.status = 'UP'
             agent.interface.save()
 
-            # 更新 systemd 服务配置文件中的 BIND_IP
-            service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
+            # 更新 systemd 服务配置文件（namespace 时使用 -ns 后缀）
+            if namespace:
+                service_name = agent.get_namespace_service_name()
+                exec_prefix = f'/usr/bin/ip netns exec {namespace}'
+            else:
+                service_name = agent.get_service_name()
+                exec_prefix = ''
+
+            service_file = f'/etc/systemd/system/{service_name}.service'
             # 使用 Gunicorn 启动（单 worker + preload）
+            if exec_prefix:
+                exec_start = f'{exec_prefix} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app'
+            else:
+                exec_start = f'{settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app'
             service_content = f"""[Unit]
 Description=Packet Agent {agent.agent_id} ({interface_name})
 After=network.target
@@ -1147,7 +1150,7 @@ Environment="BIND_IP={ip_address}"
 Environment="BIND_INTERFACE={interface_name}"
 Environment="AGENT_PORT={agent.port}"
 WorkingDirectory={settings.AGENT_WORK_DIR}
-ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
+ExecStart={exec_start}
 Restart=always
 RestartSec=5
 
@@ -1755,23 +1758,31 @@ def api_stop_send(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_send_protocol(request):
-    """发送工控协议报文"""
+    """发送工控协议报文（支持 namespace）"""
     try:
         data = json.loads(request.body)
         agent_id = data.get('agent_id')
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        if agent.status != 'running':
+        # namespace Agent 使用实时状态检查
+        if agent.is_in_namespace():
+            ns_status = check_namespace_agent_status(
+                agent.interface.namespace, agent.interface.ip_address, agent.port
+            )
+            if ns_status != 'running':
+                return JsonResponse({'success': False, 'error': 'Agent 未运行'})
+        elif agent.status != 'running':
             return JsonResponse({'success': False, 'error': 'Agent 未运行'})
 
-        resp = requests.post(
-            f"http://{agent.interface.ip_address}:{agent.port}/api/send_protocol",
-            json=data,
-            timeout=30
+        # 使用 forward_to_agent 转发（支持 namespace）
+        success, resp_data, err = forward_to_agent(
+            agent, 'POST', '/api/send_protocol', data=data, timeout=30
         )
 
-        return JsonResponse(resp.json())
+        if success:
+            return JsonResponse(resp_data)
+        return JsonResponse({'success': False, 'error': err or '请求失败'})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
@@ -2993,7 +3004,7 @@ def api_license_device_generate(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_interface_config_ip(request):
-    """配置网卡 IP 地址"""
+    """配置网卡 IP 地址（支持 namespace）"""
     try:
         data = json.loads(request.body)
         interface_name = data.get('interface_name')
@@ -3003,22 +3014,22 @@ def api_interface_config_ip(request):
         if not interface_name or not ip_address:
             return JsonResponse({'success': False, 'error': '缺少网卡名或 IP 地址'})
 
+        # 检查网卡是否在 namespace 内
+        iface = NetworkInterface.objects.filter(name=interface_name).first()
+        namespace = iface.namespace if iface else None
+
+        def run_ip_cmd(args):
+            if namespace:
+                return exec_in_namespace(namespace, ['sudo'] + args)
+            else:
+                return subprocess.run(['sudo'] + args, capture_output=True, text=True, timeout=10)
+
         # 先启动网卡
-        subprocess.run(
-            ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        run_ip_cmd(['ip', 'link', 'set', interface_name, 'up'])
 
         # 配置 IP 地址（CIDR 格式）
         cidr = f"{ip_address}/{netmask}"
-        result = subprocess.run(
-            ['sudo', 'ip', 'addr', 'add', cidr, 'dev', interface_name],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        result = run_ip_cmd(['ip', 'addr', 'add', cidr, 'dev', interface_name])
 
         if result.returncode == 0 or 'File exists' in result.stderr:
             # 更新数据库
@@ -3050,7 +3061,7 @@ def api_interface_config_ip(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_interface_startup(request):
-    """启动网卡"""
+    """启动网卡（支持 namespace）"""
     try:
         data = json.loads(request.body)
         interface_name = data.get('interface_name')
@@ -3058,12 +3069,19 @@ def api_interface_startup(request):
         if not interface_name:
             return JsonResponse({'success': False, 'error': '缺少网卡名'})
 
-        result = subprocess.run(
-            ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        # 检查网卡是否在 namespace 内
+        iface = NetworkInterface.objects.filter(name=interface_name).first()
+        namespace = iface.namespace if iface else None
+
+        if namespace:
+            result = exec_in_namespace(namespace, ['sudo', 'ip', 'link', 'set', interface_name, 'up'])
+        else:
+            result = subprocess.run(
+                ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
 
         if result.returncode == 0:
             # 更新数据库
