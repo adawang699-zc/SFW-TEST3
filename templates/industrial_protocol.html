@@ -37,6 +37,11 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
+    align-items: start;
+}
+/* 确保左右两列顶部对齐，不随内容拉伸 */
+.client-server-grid > div {
+    min-width: 0;
 }
 .data-table {
     width: 100%;
@@ -223,6 +228,17 @@
     border-radius: 4px;
     max-height: 150px;
     overflow-y: auto;
+}
+/* 响应式设计：小屏幕变成单列 */
+@media (max-width: 1200px) {
+    .client-server-grid {
+        grid-template-columns: 1fr;
+    }
+}
+@media (min-width: 1201px) {
+    .client-server-grid {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 </style>
 
