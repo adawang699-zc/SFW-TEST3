@@ -1,0 +1,161 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - link "防火墙测试平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 13:07:38"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 Agent 管理" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: Agent 管理
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "🔧 服务下发" [ref=e19] [cursor=pointer]:
+      - /url: /service-deploy/
+      - generic [ref=e20]: 🔧
+      - text: 服务下发
+    - link "⚙️ 工控协议" [ref=e22] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e23]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e25] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e26]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e28] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e29]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e31] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e32]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e34] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e35]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e37] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e38]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e40] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e41]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e43] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e44]: 🔑
+      - text: 授权管理
+  - generic [ref=e45]:
+    - generic [ref=e46]:
+      - generic [ref=e47]: 工控协议测试
+      - paragraph [ref=e48]: 支持 Modbus、S7、GOOSE、SV、DNP3、BACnet、Ethernet/IP、MMS 等工控协议的客户端和服务端模拟
+    - generic [ref=e49]:
+      - generic [ref=e50]: 协议选择
+      - generic [ref=e51]:
+        - generic [ref=e52] [cursor=pointer]: Modbus
+        - generic [ref=e53] [cursor=pointer]: S7
+        - generic [ref=e54] [cursor=pointer]: GOOSE/SV
+        - generic [ref=e55] [cursor=pointer]: DNP3
+        - generic [ref=e56] [cursor=pointer]: BACnet
+        - generic [ref=e57] [cursor=pointer]: ENIP
+        - generic [ref=e58] [cursor=pointer]: MMS
+        - generic [ref=e59] [cursor=pointer]: HTTP
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - heading "Modbus Client" [level=4] [ref=e63]
+          - generic [ref=e64]:
+            - heading "选择 Client Agent" [level=5] [ref=e65]
+            - generic [ref=e67]: 加载中...
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - generic [ref=e70]:
+                - generic [ref=e71]: 目标 IP
+                - textbox "192.168.1.100" [ref=e72]
+              - generic [ref=e73]:
+                - generic [ref=e74]: 端口
+                - spinbutton [ref=e75]: "502"
+              - generic [ref=e76]:
+                - generic [ref=e77]: Unit ID
+                - spinbutton [ref=e78]: "1"
+            - generic [ref=e79]:
+              - button "连接" [ref=e80] [cursor=pointer]
+              - generic [ref=e82]: 未连接
+          - generic [ref=e83]:
+            - heading "读取配置" [level=5] [ref=e84]
+            - generic [ref=e85]:
+              - generic [ref=e86]:
+                - generic [ref=e87]: 功能码
+                - combobox [ref=e88]:
+                  - option "FC1 - 读线圈"
+                  - option "FC2 - 读离散输入"
+                  - option "FC3 - 读保持寄存器" [selected]
+                  - option "FC4 - 读输入寄存器"
+              - generic [ref=e89]:
+                - generic [ref=e90]: 起始地址
+                - spinbutton [ref=e91]: "0"
+              - generic [ref=e92]:
+                - generic [ref=e93]: 结束地址
+                - spinbutton [ref=e94]: "99"
+            - generic [ref=e95]:
+              - button "读取" [ref=e96] [cursor=pointer]
+              - button "FC15/16 写入" [ref=e97] [cursor=pointer]
+              - generic [ref=e98]: "刷新间隔(秒):"
+              - spinbutton [ref=e99]: "1"
+              - button "自动刷新" [ref=e100] [cursor=pointer]
+          - generic [ref=e101]:
+            - heading "数据表格 (双击单元格编辑，仅FC1和FC3支持)" [level=5] [ref=e102]
+            - generic:
+              - table:
+                - rowgroup
+        - generic [ref=e103]:
+          - heading "Modbus Server" [level=4] [ref=e104]
+          - generic [ref=e105]:
+            - heading "选择 Server Agent" [level=5] [ref=e106]
+            - generic [ref=e108]: 加载中...
+          - generic [ref=e109]:
+            - generic [ref=e110]:
+              - generic [ref=e111]:
+                - generic [ref=e112]: 监听端口
+                - spinbutton [ref=e113]: "502"
+              - generic [ref=e114]:
+                - generic [ref=e115]: Unit ID
+                - spinbutton [ref=e116]: "1"
+            - generic [ref=e117]:
+              - button "启动监听" [ref=e118] [cursor=pointer]
+              - generic [ref=e120]: 未启动
+          - generic [ref=e121]:
+            - heading "数据区配置" [level=5] [ref=e122]
+            - generic [ref=e123]:
+              - generic [ref=e124]:
+                - generic [ref=e125]: 功能码
+                - combobox [ref=e126]:
+                  - option "FC1 - 线圈"
+                  - option "FC2 - 离散输入"
+                  - option "FC3 - 保持寄存器" [selected]
+                  - option "FC4 - 输入寄存器"
+              - generic [ref=e127]:
+                - generic [ref=e128]: 起始地址
+                - spinbutton [ref=e129]: "0"
+              - generic [ref=e130]:
+                - generic [ref=e131]: 结束地址
+                - spinbutton [ref=e132]: "99"
+            - generic [ref=e133]:
+              - button "刷新" [ref=e134] [cursor=pointer]
+              - button "重置" [ref=e135] [cursor=pointer]
+              - button "随机" [ref=e136] [cursor=pointer]
+          - generic [ref=e137]:
+            - heading "数据表格 (双击单元格修改值)" [level=5] [ref=e138]
+            - generic:
+              - table:
+                - rowgroup
