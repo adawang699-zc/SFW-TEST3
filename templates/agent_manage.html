@@ -91,7 +91,7 @@
 
 <div class="card">
     <div class="card-header">Agent 列表</div>
-    <div id="agent-list">
+    <div id="agent-list" style="min-height: 680px; max-height: 680px; overflow-y: auto; padding-right: 4px;">
         <p style="color: var(--text-secondary);">扫描网卡后自动创建 Agent...</p>
     </div>
 </div>
@@ -413,7 +413,7 @@ async function unlockAgents() {
     }
 }
 
-// 渲染 Agent 列表
+// 渲染 Agent 列表（卡片网格，固定高度防抖动）
 function renderAgents(agents) {
     const container = document.getElementById('agent-list');
 
@@ -422,7 +422,7 @@ function renderAgents(agents) {
         return;
     }
 
-    // 按 eth 序号排序（eth1, eth2, eth3...）
+    // 按 eth 序号排序
     agents.sort((a, b) => {
         const numA = parseInt(a.agent_id.replace('agent_eth', '')) || 0;
         const numB = parseInt(b.agent_id.replace('agent_eth', '')) || 0;
@@ -439,48 +439,56 @@ function renderAgents(agents) {
         });
     });
 
-    let html = '<table class="table"><thead><tr><th>Agent ID</th><th>网卡</th><th>网卡状态</th><th>IP</th><th>端口</th><th>Agent状态</th><th>租用状态</th><th>操作</th></tr></thead><tbody>';
+    let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
 
     agents.forEach(agent => {
-        const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
-        const statusText = agent.status === 'running' ? '运行中' : '已停止';
         const isRunning = agent.status === 'running';
+        const interfaceUp = agent.interface_is_up || agent.interface_status === 'UP';
+        const isLocked = lockedAgentIds.has(agent.agent_id);
         const currentIp = agent.ip_address || '';
 
-        // 网卡连接状态
-        const interfaceUp = agent.interface_is_up || agent.interface_status === 'UP';
-        const interfaceStatusClass = interfaceUp ? 'status-running' : 'status-stopped';
-        const interfaceStatusText = interfaceUp ? 'UP' : 'DOWN';
-
-        // 租用状态
-        const isLocked = lockedAgentIds.has(agent.agent_id);
-        const lockStatusHtml = isLocked ?
-            `<span class="status-badge" style="background: rgba(255, 107, 53, 0.2); color: var(--primary);">已租用(${lockInfo[agent.agent_id]?.user_identifier})</span>` :
-            `<span class="status-badge status-stopped">空闲</span>`;
+        const borderColor = isRunning ? 'var(--success)' : (interfaceUp ? 'var(--warning)' : 'var(--border)');
 
         html += `
-            <tr>
-                <td><span class="agent-id">${agent.agent_id}</span></td>
-                <td>${agent.interface_name}</td>
-                <td><span class="status-badge ${interfaceStatusClass}">${interfaceStatusText}</span></td>
-                <td>${agent.ip_address || '未配置'}</td>
-                <td>${agent.port}</td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                <td>${lockStatusHtml}</td>
-                <td>
-                    ${isRunning ?
-                        `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>
-                         <button class="btn btn-sm btn-secondary" disabled style="opacity: 0.5; cursor: not-allowed;" title="运行中不可配置IP">配置IP</button>` :
-                        `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>
-                         <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}', '${currentIp}')">配置IP</button>`
+            <div class="agent-card" style="border-color: ${borderColor}; display: flex; flex-direction: column; justify-content: space-between; min-height: 150px;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span class="agent-id">${agent.agent_id}</span>
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                            <span class="status-badge ${interfaceUp ? 'status-running' : 'status-stopped'}">${agent.interface_name} ${interfaceUp ? 'UP' : 'DOWN'}</span>
+                            <span class="status-badge ${isRunning ? 'status-running' : 'status-stopped'}">${isRunning ? '运行中' : '已停止'}</span>
+                        </div>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 4px;">
+                        IP: ${agent.ip_address || '<span style="color: var(--text-muted);">未配置</span>'} &nbsp;|&nbsp; 端口: ${agent.port}
+                    </div>
+                    <div style="margin-top: 4px;">
+                        ${isLocked
+                            ? `<span class="status-badge" style="background: rgba(255, 107, 53, 0.2); color: var(--primary);">已租用(${lockInfo[agent.agent_id]?.user_identifier})</span>`
+                            : `<span class="status-badge status-stopped">空闲</span>`
+                        }
+                        ${agent.namespace ? `<span class="status-badge" style="background: rgba(0, 168, 150, 0.2); color: var(--secondary);">${agent.namespace}</span>` : ''}
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                    ${isRunning
+                        ? `<button class="btn btn-sm btn-danger" onclick="stopAgent('${agent.agent_id}')">停止</button>`
+                        : `<button class="btn btn-sm btn-success" onclick="startAgent('${agent.agent_id}')">启动</button>
+                           <button class="btn btn-sm btn-secondary" onclick="showConfigIPModal('${agent.agent_id}', '${agent.interface_name}', '${currentIp}')">配置IP</button>`
                     }
                     <button class="btn btn-sm btn-secondary" onclick="showLogs('${agent.agent_id}')">日志</button>
-                </td>
-            </tr>
+                </div>
+            </div>
         `;
     });
 
-    html += '</tbody></table>';
+    // 补齐空位，保持网格高度稳定
+    const remainder = agents.length % 2;
+    if (remainder === 1) {
+        html += '<div style="min-height: 150px;"></div>';
+    }
+
+    html += '</div>';
     container.innerHTML = html;
 }
 
