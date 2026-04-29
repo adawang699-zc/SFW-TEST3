@@ -492,9 +492,7 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                        <button class="btn btn-success" onclick="s7ClientConnect()">连接</button>
-                        <button class="btn btn-danger" onclick="s7ClientDisconnect()">断开</button>
-                        <button class="btn btn-secondary" onclick="s7ClientStatus()">状态</button>
+                        <button class="btn btn-success" id="s7-client-toggle-btn" onclick="s7ClientToggle()">连接</button>
                         <div id="s7-client-status" style="padding: 4px 12px; background: var(--bg-secondary); border-radius: 4px;">
                             <span class="status-badge status-stopped">未连接</span>
                         </div>
@@ -633,9 +631,7 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
-                        <button class="btn btn-success" onclick="s7ServerStart()">启动</button>
-                        <button class="btn btn-danger" onclick="s7ServerStop()">停止</button>
-                        <button class="btn btn-secondary" onclick="s7ServerStatus()">状态</button>
+                        <button class="btn btn-success" id="s7-server-toggle-btn" onclick="s7ServerToggle()">启动监听</button>
                         <div id="s7-server-status-badge" style="padding: 4px 12px; background: var(--bg-secondary); border-radius: 4px;">
                             <span class="status-badge status-stopped">未启动</span>
                         </div>
@@ -1123,9 +1119,10 @@ async function disconnectAllServerConnections() {
         updateServerButtonState(false);
     }
     if (activeConnections.s7_server && selectedServerAgentId) {
-        await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId });
+        await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId, server_id: 'default' });
         activeConnections.s7_server = false;
-        document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        s7ServerRunning = false;
+        updateS7ServerButtonState(false);
     }
     if (activeConnections.goose && selectedServerAgentId) {
         await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedServerAgentId });
@@ -1801,71 +1798,79 @@ async function executeWriteMultiple() {
 }
 
 // ========== S7 Client ==========
+let s7ClientConnected = false;
 let s7ClientRefreshTimer = null;
 let s7ClientHexData = [];  // 存储当前 hex 数据
 
-async function s7ClientConnect() {
+async function s7ClientToggle() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
-    const rackSlot = document.getElementById('s7-rack-slot').value.split('/');
-    const data = {
-        agent_id: selectedClientAgentId,
-        ip: document.getElementById('s7-client-ip').value,
-        port: parseInt(document.getElementById('s7-client-port').value),
-        rack: parseInt(rackSlot[0]) || 0,
-        slot: parseInt(rackSlot[1]) || 1
-    };
+    if (s7ClientConnected) {
+        // 断开连接
+        s7ClientStopRefresh();
+        const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success) {
+            s7ClientConnected = false;
+            activeConnections.s7_client = false;
+            updateS7ClientButtonState(false);
 
-    const result = await apiRequest('/api/industrial/s7_client/connect/', 'POST', data);
-    if (result.success) {
-        activeConnections.s7_client = true;
-        document.getElementById('s7-client-status').innerHTML = '<span class="status-badge status-running">已连接</span>';
+            // 隐藏数据配置、Hex Viewer、PLC 操作和块操作区域
+            document.getElementById('s7-client-data-config').style.display = 'none';
+            document.getElementById('s7-client-hex-section').style.display = 'none';
+            document.getElementById('s7-client-plc-section').style.display = 'none';
+            document.getElementById('s7-client-block-section').style.display = 'none';
+            document.getElementById('s7-cpu-info-container').style.display = 'none';
 
-        // 显示数据配置、Hex Viewer、PLC 操作和块操作区域
-        document.getElementById('s7-client-data-config').style.display = 'block';
-        document.getElementById('s7-client-hex-section').style.display = 'block';
-        document.getElementById('s7-client-plc-section').style.display = 'block';
-        document.getElementById('s7-client-block-section').style.display = 'block';
-
-        // 初始化 hex viewer
-        initS7ClientHexViewer();
-
-        showToast('S7 连接成功', 'success');
+            showToast('已断开', 'success');
+        } else {
+            showToast('断开失败: ' + (result.message || result.error), 'error');
+        }
     } else {
-        showToast('连接失败: ' + (result.message || result.error), 'error');
+        // 连接
+        const rackSlot = document.getElementById('s7-rack-slot').value.split('/');
+        const data = {
+            agent_id: selectedClientAgentId,
+            ip: document.getElementById('s7-client-ip').value,
+            port: parseInt(document.getElementById('s7-client-port').value),
+            rack: parseInt(rackSlot[0]) || 0,
+            slot: parseInt(rackSlot[1]) || 1
+        };
+
+        const result = await apiRequest('/api/industrial/s7_client/connect/', 'POST', data);
+        if (result.success) {
+            s7ClientConnected = true;
+            activeConnections.s7_client = true;
+            updateS7ClientButtonState(true);
+
+            // 显示数据配置、Hex Viewer、PLC 操作和块操作区域
+            document.getElementById('s7-client-data-config').style.display = 'block';
+            document.getElementById('s7-client-hex-section').style.display = 'block';
+            document.getElementById('s7-client-plc-section').style.display = 'block';
+            document.getElementById('s7-client-block-section').style.display = 'block';
+
+            // 初始化 hex viewer
+            initS7ClientHexViewer();
+
+            showToast('S7 连接成功', 'success');
+        } else {
+            showToast('连接失败: ' + (result.message || result.error), 'error');
+        }
     }
 }
 
-async function s7ClientDisconnect() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+function updateS7ClientButtonState(connected) {
+    const btn = document.getElementById('s7-client-toggle-btn');
+    const statusDiv = document.getElementById('s7-client-status');
 
-    // 停止自动刷新
-    s7ClientStopRefresh();
-
-    const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
-    if (result.success) {
-        activeConnections.s7_client = false;
-        document.getElementById('s7-client-status').innerHTML = '<span class="status-badge status-stopped">未连接</span>';
-
-        // 隐藏数据配置、Hex Viewer、PLC 操作和块操作区域
-        document.getElementById('s7-client-data-config').style.display = 'none';
-        document.getElementById('s7-client-hex-section').style.display = 'none';
-        document.getElementById('s7-client-plc-section').style.display = 'none';
-        document.getElementById('s7-client-block-section').style.display = 'none';
-        document.getElementById('s7-cpu-info-container').style.display = 'none';
-
-        showToast('已断开', 'success');
+    if (connected) {
+        btn.className = 'btn btn-danger';
+        btn.textContent = '断开';
+        statusDiv.innerHTML = '<span class="status-badge status-running">已连接</span>';
     } else {
-        showToast('断开失败: ' + (result.message || result.error), 'error');
+        btn.className = 'btn btn-success';
+        btn.textContent = '连接';
+        statusDiv.innerHTML = '<span class="status-badge status-stopped">未连接</span>';
     }
-}
-
-async function s7ClientStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedClientAgentId });
-    const statusBadge = result.connected ? '<span class="status-badge status-running">已连接</span>' : '<span class="status-badge status-stopped">未连接</span>';
-    document.getElementById('s7-client-status').innerHTML = statusBadge;
 }
 
 // 初始化 S7 Client Hex Viewer
@@ -2229,45 +2234,56 @@ async function s7ClientDownloadBlock() {
 }
 
 // ========== S7 Server ==========
-async function s7ServerStart() {
+let s7ServerRunning = false;
+
+async function s7ServerToggle() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const data = {
-        agent_id: selectedServerAgentId,
-        server_id: 'default',
-        host: selectedServerAgentIp || '0.0.0.0',
-        port: parseInt(document.getElementById('s7-server-port').value)
-    };
-
-    const result = await apiRequest('/api/industrial/s7_server/start/', 'POST', data);
-    if (result.success) {
-        activeConnections.s7_server = true;
-        document.getElementById('s7-server-status-badge').innerHTML = '<span class="status-badge status-running">运行中</span>';
-        showToast('S7 Server 启动成功', 'success');
+    if (s7ServerRunning) {
+        // 停止
+        const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId, server_id: 'default' });
+        if (result.success) {
+            s7ServerRunning = false;
+            activeConnections.s7_server = false;
+            updateS7ServerButtonState(false);
+            showToast('S7 Server 已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
     } else {
-        showToast('启动失败: ' + (result.message || result.error), 'error');
+        // 启动
+        const data = {
+            agent_id: selectedServerAgentId,
+            server_id: 'default',
+            host: selectedServerAgentIp || '0.0.0.0',
+            port: parseInt(document.getElementById('s7-server-port').value)
+        };
+
+        const result = await apiRequest('/api/industrial/s7_server/start/', 'POST', data);
+        if (result.success) {
+            s7ServerRunning = true;
+            activeConnections.s7_server = true;
+            updateS7ServerButtonState(true);
+            showToast(`S7 Server 启动成功，监听 ${selectedServerAgentIp}:${data.port}`, 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
     }
 }
 
-async function s7ServerStop() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
+function updateS7ServerButtonState(running) {
+    const btn = document.getElementById('s7-server-toggle-btn');
+    const statusDiv = document.getElementById('s7-server-status-badge');
 
-    const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId });
-    if (result.success) {
-        activeConnections.s7_server = false;
-        document.getElementById('s7-server-status-badge').innerHTML = '<span class="status-badge status-stopped">未启动</span>';
-        showToast('已停止', 'success');
+    if (running) {
+        btn.className = 'btn btn-danger';
+        btn.textContent = '停止监听';
+        statusDiv.innerHTML = '<span class="status-badge status-running">运行中</span>';
     } else {
-        showToast('停止失败: ' + (result.message || result.error), 'error');
+        btn.className = 'btn btn-success';
+        btn.textContent = '启动监听';
+        statusDiv.innerHTML = '<span class="status-badge status-stopped">未启动</span>';
     }
-}
-
-async function s7ServerStatus() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/s7_server/status/', 'POST', { agent_id: selectedServerAgentId });
-    const statusBadge = result.running ? '<span class="status-badge status-running">运行中</span>' : '<span class="status-badge status-stopped">未启动</span>';
-    document.getElementById('s7-server-status-badge').innerHTML = statusBadge;
 }
 
 async function s7ServerSetData() {
