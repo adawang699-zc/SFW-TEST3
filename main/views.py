@@ -2987,34 +2987,127 @@ def api_license_device_test_connection(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_license_device_generate(request):
-    """生成设备授权"""
+    """生成设备授权 - 支持 DR 和 dev-Code 两种方式"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': '仅支持POST请求'})
+
     try:
         data = json.loads(request.body)
-        auth_name = data.get('name', '')
-        machine_code = data.get('machine_code')
-        method = data.get('method', 'DR')
+        auth_name = data.get('name', '').strip()
+        machine_code = data.get('machine_code', '').strip()
+        method = data.get('method', 'DR')  # 默认 DR 方式
 
         if not machine_code:
-            return JsonResponse({'success': False, 'error': '缺少机器码'})
+            return JsonResponse({'success': False, 'error': '缺少设备机器码'})
 
-        from main.license_utils import generate_device_license
+        if method == 'dev-Code':
+            # dev-Code 方式：SSH 执行 licgen 命令
+            success, result = _generate_device_license_dev_code(machine_code)
+        else:
+            # DR 方式：SSH 执行 lic_gen 命令
+            if not auth_name:
+                return JsonResponse({'success': False, 'error': 'DR 方式需要授权机构名称'})
 
-        success, result = generate_device_license(auth_name, machine_code)
+            from main.license_utils import generate_device_license as gen_device_license
+            success, result = gen_device_license(auth_name, machine_code)
 
         if success:
-            # 将二进制内容转为数组返回（前端处理）
-            content_bytes = list(result.get('content', b''))
+            # 将二进制内容转为 base64 返回（前端处理）
+            import base64
+            content_b64 = base64.b64encode(result.get('content', b'')).decode('utf-8')
             return JsonResponse({
                 'success': True,
                 'filename': result.get('filename'),
-                'content': content_bytes,
+                'content': content_b64,
                 'message': result.get('message', '生成成功')
             })
         else:
             return JsonResponse({'success': False, 'error': result})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '无效的JSON格式'})
     except Exception as e:
-        logger.exception(f"生成设备授权失败: {e}")
+        logger.exception(f"生成设备授权异常: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+def _generate_device_license_dev_code(machine_code: str) -> tuple:
+    """
+    dev-Code 方式：SSH 到授权服务器执行 licgen 命令
+
+    Args:
+        machine_code: 设备机器码
+
+    Returns:
+        (success, result): 成功返回(True, {'filename': ..., 'content': ...})，失败返回(False, error)
+    """
+    import paramiko
+
+    # dev-Code 授权服务器配置（与 DR 服务器相同，但工具路径不同）
+    LICENSE_SERVER = '10.40.24.17'
+    LICENSE_USER = 'tdhx'
+    LICENSE_PASSWORD = 'tdhx@2017'
+    LICENSE_PORT = 22
+    LICGEN_PATH = '/home/tdhx/license/x64/licgen'  # 注意：dev-Code 使用 licgen，DR 使用 lic_gen
+
+    filename = f'{machine_code}.lic'
+
+    try:
+        logger.info(f"[dev-Code] 连接授权服务器: {LICENSE_SERVER}")
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(LICENSE_SERVER, port=LICENSE_PORT, username=LICENSE_USER, password=LICENSE_PASSWORD, timeout=30)
+
+        # 执行 licgen 命令（dev-Code 方式）
+        command = f'{LICGEN_PATH} -m {machine_code} -p {filename}'
+        logger.info(f"[dev-Code] 执行命令: {command}")
+
+        stdin, stdout, stderr = ssh.exec_command(command, timeout=30)
+        exit_code = stdout.channel.recv_exit_status()
+
+        output = stdout.read().decode('utf-8', errors='ignore')
+        error = stderr.read().decode('utf-8', errors='ignore')
+
+        logger.info(f"[dev-Code] 命令输出: {output}")
+        if error:
+            logger.warning(f"[dev-Code] 命令错误输出: {error}")
+
+        if exit_code != 0 and 'successful' not in output.lower():
+            ssh.close()
+            return False, f"授权生成失败: {output or error}"
+
+        # 下载生成的 .lic 文件
+        sftp = ssh.open_sftp()
+        remote_path = f'/home/tdhx/{filename}'
+
+        try:
+            with sftp.file(remote_path, 'rb') as remote_file:
+                file_content = remote_file.read()
+        except FileNotFoundError:
+            ssh.close()
+            return False, f"授权文件未生成: {remote_path}"
+
+        sftp.close()
+        ssh.close()
+
+        logger.info(f"[dev-Code] 设备授权生成成功: {filename}, 文件大小: {len(file_content)} 字节")
+
+        return True, {
+            'filename': filename,
+            'content': file_content,
+            'message': f'{filename} generate successful.',
+            'output': output.strip()
+        }
+
+    except paramiko.AuthenticationException:
+        logger.error("[dev-Code] 授权服务器认证失败")
+        return False, "授权服务器认证失败"
+    except paramiko.SSHException as e:
+        logger.error(f"[dev-Code] SSH连接错误: {e}")
+        return False, f"SSH连接错误: {str(e)}"
+    except Exception as e:
+        logger.exception(f"[dev-Code] 生成设备授权失败: {e}")
+        return False, str(e)
 
 
 # ========== 网卡配置 API ==========

@@ -338,17 +338,14 @@ function generateDeviceLicense() {
         method: method
     }).then(data => {
         if (data.success) {
-            // 设备授权返回的是原始二进制内容，需要编码
-            const bytes = new Uint8Array(data.content);
-            let binary = '';
-            for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-            currentDeviceLicenseContent = btoa(binary);
+            // 设备授权返回 base64 编码内容，直接使用
+            currentDeviceLicenseContent = data.content;  // 已经是 base64
             currentDeviceLicenseFilename = data.filename;
 
             document.getElementById('deviceDownloadSection').style.display = 'block';
             document.getElementById('noDeviceDownload').style.display = 'none';
             document.getElementById('deviceDownloadFilename').textContent = `文件名: ${data.filename}`;
-            addLog(`设备授权生成成功 - 文件: ${data.filename}`, 'success');
+            addLog(`设备授权生成成功 - 方式: ${method}, 文件: ${data.filename}`, 'success');
         } else {
             addLog(`设备授权生成失败: ${data.error}`, 'error');
         }
