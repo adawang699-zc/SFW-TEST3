@@ -1931,9 +1931,6 @@ async function gooseStop() {
         showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
-        showToast('停止失败: ' + (result.message || result.error), 'error');
-    }
-}
 
 async function gooseStatus() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
