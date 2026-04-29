@@ -24,6 +24,7 @@ import os
 import sys
 import logging
 import argparse
+import threading
 from datetime import datetime
 
 # 配置日志
@@ -1431,6 +1432,231 @@ def s7_server_set_data():
                 return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'})
 
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ========== S7 Client API ==========
+@app.route('/api/industrial_protocol/s7_client/connect', methods=['POST'])
+def s7_client_connect():
+    """连接S7服务器"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7未安装或导入失败'}), 500
+
+    if Snap7Client is None:
+        return jsonify({'success': False, 'error': 'snap7.Client类不可用'}), 500
+
+    try:
+        data = request.json
+        client_id = data.get('client_id', 'default')
+        ip = data.get('ip') or data.get('server_ip')
+        port = data.get('port', 102)
+        rack = data.get('rack', 0)
+        slot = data.get('slot', 1)
+
+        if not ip:
+            return jsonify({'success': False, 'error': '缺少服务器IP地址'}), 400
+
+        add_log('INFO', f'S7客户端连接请求: {ip}:{port}, Rack={rack}, Slot={slot}')
+
+        with s7_client_lock:
+            # 如果已存在连接，先断开
+            if client_id in s7_clients:
+                old_client = s7_clients[client_id].get('client')
+                if old_client:
+                    try:
+                        old_client.disconnect()
+                    except Exception:
+                        pass
+                del s7_clients[client_id]
+
+            # 创建新的客户端连接
+            client = Snap7Client()
+            client.connect(ip, rack, slot, port)
+
+            # 存储连接信息
+            s7_clients[client_id] = {
+                'client': client,
+                'server_ip': ip,
+                'port': port,
+                'rack': rack,
+                'slot': slot,
+                'connected': True
+            }
+
+            add_log('INFO', f'S7客户端连接成功: {ip}:{port}')
+            return jsonify({
+                'success': True,
+                'message': f'已连接到 {ip}:{port}',
+                'client_id': client_id
+            })
+
+    except Exception as e:
+        add_log('ERROR', f'S7客户端连接失败: {str(e)}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/disconnect', methods=['POST'])
+def s7_client_disconnect():
+    """断开S7客户端连接"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json
+        client_id = data.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': True, 'message': '客户端未连接'})
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if client:
+                try:
+                    client.disconnect()
+                except Exception as e:
+                    add_log('WARNING', f'断开S7客户端时出错: {e}')
+
+            del s7_clients[client_id]
+            add_log('INFO', f'S7客户端已断开: {client_id}')
+            return jsonify({'success': True, 'message': '已断开连接'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/status', methods=['GET', 'POST'])
+def s7_client_status():
+    """获取S7客户端状态"""
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            client_id = data.get('client_id', 'default')
+        else:
+            client_id = request.args.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': True, 'connected': False})
+
+            client_info = s7_clients[client_id]
+            return jsonify({
+                'success': True,
+                'connected': client_info.get('connected', False),
+                'server_ip': client_info.get('server_ip'),
+                'port': client_info.get('port'),
+                'rack': client_info.get('rack'),
+                'slot': client_info.get('slot')
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/read', methods=['POST'])
+def s7_client_read():
+    """读取S7服务器数据"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json
+        client_id = data.get('client_id', 'default')
+        area = data.get('area', 'DB')
+        db_number = data.get('db_number', 1)
+        start = data.get('start', 0)
+        size = data.get('size', 1)
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client = s7_clients[client_id].get('client')
+            if not client:
+                return jsonify({'success': False, 'error': '客户端连接丢失'}), 500
+
+            # 读取数据
+            if area == 'DB':
+                result = client.read_area(snap7_area.DB, db_number, start, size)
+            elif area == 'I' or area == 'PE':
+                result = client.read_area(snap7_area.PE, 0, start, size)
+            elif area == 'Q' or area == 'PA':
+                result = client.read_area(snap7_area.PA, 0, start, size)
+            elif area == 'M' or area == 'MK':
+                result = client.read_area(snap7_area.MK, 0, start, size)
+            else:
+                return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'}), 400
+
+            # 转换为整数列表
+            values = list(result) if result else []
+            add_log('INFO', f'S7读取成功: area={area}, db={db_number}, start={start}, size={size}')
+
+            return jsonify({
+                'success': True,
+                'values': values,
+                'area': area,
+                'db_number': db_number,
+                'start': start,
+                'size': size
+            })
+
+    except Exception as e:
+        add_log('ERROR', f'S7读取失败: {str(e)}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/write', methods=['POST'])
+def s7_client_write():
+    """写入S7服务器数据"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json
+        client_id = data.get('client_id', 'default')
+        area = data.get('area', 'DB')
+        db_number = data.get('db_number', 1)
+        start = data.get('start', 0)
+        values = data.get('values', []) or data.get('data', [])
+
+        if not values:
+            return jsonify({'success': False, 'error': '缺少写入数据'}), 400
+
+        # 转换数据
+        data_bytes = bytearray(values)
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client = s7_clients[client_id].get('client')
+            if not client:
+                return jsonify({'success': False, 'error': '客户端连接丢失'}), 500
+
+            # 写入数据
+            if area == 'DB':
+                client.write_area(snap7_area.DB, db_number, start, data_bytes)
+            elif area == 'I' or area == 'PE':
+                client.write_area(snap7_area.PE, 0, start, data_bytes)
+            elif area == 'Q' or area == 'PA':
+                client.write_area(snap7_area.PA, 0, start, data_bytes)
+            elif area == 'M' or area == 'MK':
+                client.write_area(snap7_area.MK, 0, start, data_bytes)
+            else:
+                return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'}), 400
+
+            add_log('INFO', f'S7写入成功: area={area}, db={db_number}, start={start}, size={len(values)}')
+            return jsonify({
+                'success': True,
+                'message': '写入成功',
+                'area': area,
+                'db_number': db_number,
+                'start': start,
+                'size': len(values)
+            })
+
+    except Exception as e:
+        add_log('ERROR', f'S7写入失败: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ========== 主入口 ==========
