@@ -1095,6 +1095,339 @@ def api_get_dhcp_client_status():
         logger.exception(f"获取 DHCP 状态失败: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ========== S7 Server API ==========
+# 导入 S7 Server 相关变量和辅助函数
+try:
+    from agents.industrial_protocol_base import (
+        SNAP7_AVAILABLE, Snap7Server, snap7, snap7_srv_area,
+        s7_servers, s7_server_lock, s7_data_storage, S7_DB_MAX_SIZE,
+        s7_clients, s7_client_lock, Snap7Client, snap7_area,
+        add_log, save_s7_db_to_database, load_s7_db_from_database,
+        sync_s7_data_to_server, register_s7_areas
+    )
+    logger.info(f"S7 Server 模块导入成功: SNAP7_AVAILABLE={SNAP7_AVAILABLE}")
+except ImportError as e:
+    logger.warning(f"S7 Server 模块导入失败: {e}")
+    SNAP7_AVAILABLE = False
+    Snap7Server = None
+    s7_servers = {}
+    s7_server_lock = threading.Lock()
+    s7_data_storage = {}
+    S7_DB_MAX_SIZE = 32768
+    s7_clients = {}
+    s7_client_lock = threading.Lock()
+    Snap7Client = None
+    snap7_area = None
+    snap7_srv_area = None
+
+    def add_log(level, msg):
+        logger.log(logging.getLevelName(level), msg)
+
+    def save_s7_db_to_database(*args, **kwargs):
+        pass
+
+    def load_s7_db_from_database(*args, **kwargs):
+        return None
+
+    def sync_s7_data_to_server(*args, **kwargs):
+        pass
+
+    def register_s7_areas(*args, **kwargs):
+        pass
+
+@app.route('/api/industrial_protocol/s7_server/start', methods=['POST'])
+def s7_server_start():
+    """启动S7服务端"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7未安装或导入失败'}), 500
+
+    try:
+        data = request.json
+        server_id = data.get('server_id', 'default')
+        host = data.get('host', '0.0.0.0')
+        port = data.get('port', 102)
+
+        with s7_server_lock:
+            # 停止旧服务端
+            if server_id in s7_servers:
+                old_server_info = s7_servers[server_id]
+                old_server_info['running'] = False
+                server = old_server_info.get('server')
+                if server:
+                    try:
+                        server.stop()
+                        server.destroy()
+                        add_log('INFO', '停止旧S7服务器')
+                    except Exception as e:
+                        add_log('WARNING', f'停止旧S7服务器时出错: {e}')
+                if 'thread' in old_server_info:
+                    old_thread = old_server_info['thread']
+                    if old_thread.is_alive():
+                        old_thread.join(timeout=2)
+                del s7_servers[server_id]
+
+            # 创建新的S7服务器
+            server = Snap7Server()
+
+            # 初始化数据存储
+            if server_id not in s7_data_storage:
+                s7_data_storage[server_id] = {
+                    'db': {},
+                    'm': bytearray(S7_DB_MAX_SIZE),
+                    'i': bytearray(S7_DB_MAX_SIZE),
+                    'q': bytearray(S7_DB_MAX_SIZE),
+                }
+
+            storage = s7_data_storage[server_id]
+            for db_num in [1, 2, 3]:
+                if db_num not in storage['db']:
+                    db_data = load_s7_db_from_database(server_id, db_num)
+                    if db_data is not None:
+                        storage['db'][db_num] = db_data
+                    else:
+                        storage['db'][db_num] = bytearray([db_num] * S7_DB_MAX_SIZE)
+                        save_s7_db_to_database(server_id, db_num, storage['db'][db_num])
+
+            # 设置保护级别
+            try:
+                if hasattr(server, 'set_protection_level'):
+                    server.set_protection_level(0)
+            except Exception as e:
+                add_log('WARNING', f'设置保护级别失败: {e}')
+
+            # 注册区域
+            register_s7_areas(server_id, db_list=[1, 2, 3])
+            sync_s7_data_to_server(server_id)
+
+            # 启动服务器
+            try:
+                if hasattr(server, 'set_socket_params'):
+                    server.set_socket_params(port=port)
+                    server.start()
+                elif hasattr(server, 'start'):
+                    try:
+                        server.start(tcp_port=port)
+                    except (AttributeError, TypeError):
+                        server.start()
+                else:
+                    raise AttributeError('无法找到S7服务器启动方法')
+            except Exception as e:
+                raise Exception(f'S7服务器启动失败: {e}')
+
+            # 运行线程
+            server_running = {'value': True}
+
+            def server_loop():
+                while server_running['value']:
+                    time.sleep(0.1)
+
+            server_thread = threading.Thread(target=server_loop, daemon=True)
+            server_thread.start()
+
+            # 存储服务器信息
+            s7_servers[server_id] = {
+                'server': server,
+                'thread': server_thread,
+                'running': server_running,
+                'host': host,
+                'port': port,
+                'start_time': datetime.now().isoformat(),
+            }
+
+            add_log('INFO', f'S7服务端启动成功: {host}:{port} (server_id={server_id})')
+            return jsonify({
+                'success': True,
+                'message': 'S7服务端启动成功',
+                'host': host,
+                'port': port
+            })
+
+    except Exception as e:
+        add_log('ERROR', f'S7服务端启动失败: {e}')
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/industrial_protocol/s7_server/stop', methods=['POST'])
+def s7_server_stop():
+    """停止S7服务端"""
+    try:
+        data = request.json
+        server_id = data.get('server_id', 'default')
+
+        with s7_server_lock:
+            if server_id not in s7_servers:
+                return jsonify({'success': False, 'error': '服务端不存在'}), 404
+
+            server_info = s7_servers[server_id]
+            server = server_info.get('server')
+            server_running = server_info.get('running')
+
+            if server_running and isinstance(server_running, dict):
+                server_running['value'] = False
+
+            if server:
+                try:
+                    server.stop()
+                    server.destroy()
+                    add_log('INFO', f'S7服务端已停止: server_id={server_id}')
+                except Exception as e:
+                    add_log('WARNING', f'停止S7服务器时出错: {e}')
+
+            del s7_servers[server_id]
+            return jsonify({'success': True, 'message': 'S7服务端已停止'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/industrial_protocol/s7_server/status', methods=['GET'])
+def s7_server_status():
+    """获取S7服务端状态"""
+    try:
+        server_id = request.args.get('server_id', 'default')
+
+        with s7_server_lock:
+            if server_id not in s7_servers:
+                return jsonify({'success': True, 'running': False})
+
+            server_info = s7_servers[server_id]
+            running = server_info.get('running', {})
+            if isinstance(running, dict):
+                is_running = running.get('value', False)
+            else:
+                is_running = bool(running)
+
+            return jsonify({
+                'success': True,
+                'running': is_running,
+                'host': server_info.get('host'),
+                'port': server_info.get('port'),
+                'start_time': server_info.get('start_time')
+            })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/industrial_protocol/s7_server/get_data', methods=['POST'])
+def s7_server_get_data():
+    """读取S7服务端数据"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7未安装'}), 500
+
+    try:
+        data = request.json
+        server_id = data.get('server_id', 'default')
+        area = data.get('area', 'DB')
+        db_number = int(data.get('db_number', 1))
+        start = int(data.get('start', 0))
+        size = int(data.get('size', 1))
+
+        with s7_server_lock:
+            if server_id not in s7_servers:
+                return jsonify({'success': False, 'error': '服务端不存在'}), 404
+
+            if server_id not in s7_data_storage:
+                return jsonify({'success': False, 'error': '数据存储不存在'}), 404
+
+            storage = s7_data_storage[server_id]
+
+            if area == 'DB':
+                if db_number not in storage['db']:
+                    storage['db'][db_number] = bytearray(S7_DB_MAX_SIZE)
+                db_data = storage['db'][db_number]
+                if start + size <= len(db_data):
+                    data_bytes = db_data[start:start+size]
+                else:
+                    data_bytes = bytearray(size)
+                values = [int(b) for b in data_bytes]
+                return jsonify({
+                    'success': True,
+                    'values': values,
+                    'area': area,
+                    'db_number': db_number,
+                    'start': start,
+                    'size': size
+                })
+            elif area == 'M':
+                m_data = storage['m']
+                if start + size <= len(m_data):
+                    data_bytes = m_data[start:start+size]
+                else:
+                    data_bytes = bytearray(size)
+                values = [int(b) for b in data_bytes]
+                return jsonify({'success': True, 'values': values})
+            elif area == 'I':
+                i_data = storage['i']
+                if start + size <= len(i_data):
+                    data_bytes = i_data[start:start+size]
+                else:
+                    data_bytes = bytearray(size)
+                values = [int(b) for b in data_bytes]
+                return jsonify({'success': True, 'values': values})
+            elif area == 'Q':
+                q_data = storage['q']
+                if start + size <= len(q_data):
+                    data_bytes = q_data[start:start+size]
+                else:
+                    data_bytes = bytearray(size)
+                values = [int(b) for b in data_bytes]
+                return jsonify({'success': True, 'values': values})
+            else:
+                return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/industrial_protocol/s7_server/set_data', methods=['POST'])
+def s7_server_set_data():
+    """设置S7服务端数据"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7未安装'}), 500
+
+    try:
+        data = request.json
+        server_id = data.get('server_id', 'default')
+        area = data.get('area', 'DB')
+        db_number = int(data.get('db_number', 1))
+        start = int(data.get('start', 0))
+        values = data.get('values', [])
+
+        if not values:
+            return jsonify({'success': False, 'error': 'values 不能为空'})
+
+        data_bytes = bytearray(values)
+
+        with s7_server_lock:
+            if server_id not in s7_servers:
+                return jsonify({'success': False, 'error': '服务端不存在'}), 404
+
+            if server_id not in s7_data_storage:
+                return jsonify({'success': False, 'error': '数据存储不存在'}), 404
+
+            storage = s7_data_storage[server_id]
+
+            if area == 'DB':
+                if db_number not in storage['db']:
+                    storage['db'][db_number] = bytearray(S7_DB_MAX_SIZE)
+                db_data = storage['db'][db_number]
+                if start + len(data_bytes) <= len(db_data):
+                    db_data[start:start+len(data_bytes)] = data_bytes
+                    save_s7_db_to_database(server_id, db_number, db_data)
+                    sync_s7_data_to_server(server_id, db_number)
+                return jsonify({'success': True, 'message': '数据已设置'})
+            elif area == 'M':
+                storage['m'][start:start+len(data_bytes)] = data_bytes
+                return jsonify({'success': True})
+            elif area == 'I':
+                storage['i'][start:start+len(data_bytes)] = data_bytes
+                return jsonify({'success': True})
+            elif area == 'Q':
+                storage['q'][start:start+len(data_bytes)] = data_bytes
+                return jsonify({'success': True})
+            else:
+                return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ========== 主入口 ==========
 
 # Gunicorn 入口：在模块导入时初始化 start_time
