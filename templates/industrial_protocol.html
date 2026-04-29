@@ -319,6 +319,18 @@
         </div>
     </div>
 
+    <!-- 确认弹窗（切换 Agent 时） -->
+    <div class="modal-overlay" id="confirm-modal" role="dialog" aria-labelledby="confirm-modal-title" aria-modal="true">
+        <div class="modal-content" style="max-width: 400px;">
+            <h4 id="confirm-modal-title" style="margin-bottom: 16px; color: var(--warning);">⚠️ 确认切换</h4>
+            <p id="confirm-modal-message" style="margin-bottom: 20px; color: var(--text-secondary);"></p>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeConfirmModal()">取消</button>
+                <button class="btn btn-warning" onclick="executeConfirm()">确认切换</button>
+            </div>
+        </div>
+    </div>
+
     <!-- S7 Tab -->
     <div id="s7-content" class="protocol-content">
         <div class="client-server-grid">
@@ -832,6 +844,171 @@ let selectedClientAgentIp = null;
 let selectedServerAgentIp = null;
 let agentsData = [];  // 保存 Agent 数据
 
+// ========== 全局连接状态追踪（支持多协议） ==========
+let activeConnections = {
+    // Modbus
+    modbus_client: false,
+    modbus_server: false,
+    // S7
+    s7_client: false,
+    s7_server: false,
+    // GOOSE/SV
+    goose: false,
+    sv: false,
+    // DNP3
+    dnp3_client: false,
+    dnp3_server: false,
+    // BACnet
+    bacnet_client: false,
+    bacnet_server: false,
+    // ENIP
+    enip_client: false,
+    enip_server: false,
+    // MMS
+    mms_client: false,
+    mms_server: false,
+    // HTTP
+    http_client: false,
+    http_server: false
+};
+
+// 检测是否有活跃的 Client 连接
+function hasActiveClientConnections() {
+    return Object.keys(activeConnections).some(key =>
+        key.endsWith('_client') && activeConnections[key]
+    );
+}
+
+// 检测是否有活跃的 Server/监听
+function hasActiveServerConnections() {
+    return Object.keys(activeConnections).some(key =>
+        (key.endsWith('_server') || key === 'goose' || key === 'sv') && activeConnections[key]
+    );
+}
+
+// 获取活跃连接列表（用于提示）
+function getActiveConnectionList(type) {
+    const active = [];
+    Object.keys(activeConnections).forEach(key => {
+        if (activeConnections[key]) {
+            if (type === 'client' && key.endsWith('_client')) {
+                active.push(key.replace('_client', ' Client').toUpperCase());
+            } else if (type === 'server' && (key.endsWith('_server') || key === 'goose' || key === 'sv')) {
+                active.push(key.replace('_server', ' Server').toUpperCase());
+            }
+        }
+    });
+    return active.join(', ');
+}
+
+// 断开所有 Client 连接
+async function disconnectAllClientConnections() {
+    const disconnectPromises = [];
+
+    if (activeConnections.modbus_client && selectedClientAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
+                .then(() => { activeConnections.modbus_client = false; modbusClientConnected = false; updateClientButtonState(false); })
+        );
+    }
+    if (activeConnections.s7_client && selectedClientAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
+                .then(() => { activeConnections.s7_client = false; })
+        );
+    }
+    if (activeConnections.dnp3_client && selectedClientAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
+                .then(() => { activeConnections.dnp3_client = false; })
+        );
+    }
+    if (activeConnections.enip_client && selectedClientAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/enip_client/disconnect/', 'POST', { agent_id: selectedClientAgentId })
+                .then(() => { activeConnections.enip_client = false; })
+        );
+    }
+
+    // 停止自动刷新
+    stopAutoRefresh();
+
+    await Promise.all(disconnectPromises);
+}
+
+// 断开所有 Server/监听
+async function disconnectAllServerConnections() {
+    const disconnectPromises = [];
+
+    if (activeConnections.modbus_server && selectedServerAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedServerAgentId })
+                .then(() => { activeConnections.modbus_server = false; modbusServerRunning = false; updateServerButtonState(false); })
+        );
+    }
+    if (activeConnections.s7_server && selectedServerAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId })
+                .then(() => { activeConnections.s7_server = false; })
+        );
+    }
+    if (activeConnections.dnp3_server && selectedServerAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/dnp3_server/stop/', 'POST', { agent_id: selectedServerAgentId })
+                .then(() => { activeConnections.dnp3_server = false; })
+        );
+    }
+    if (activeConnections.enip_server && selectedServerAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/enip_server/stop/', 'POST', { agent_id: selectedServerAgentId })
+                .then(() => { activeConnections.enip_server = false; })
+        );
+    }
+    if (activeConnections.goose && selectedServerAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedServerAgentId })
+                .then(() => { activeConnections.goose = false; })
+        );
+    }
+    if (activeConnections.sv && selectedServerAgentId) {
+        disconnectPromises.push(
+            apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedServerAgentId })
+                .then(() => { activeConnections.sv = false; })
+        );
+    }
+
+    await Promise.all(disconnectPromises);
+}
+
+// 确认弹窗
+let confirmModalCallback = null;
+function showConfirmModal(message, onConfirm) {
+    confirmModalCallback = onConfirm;
+    document.getElementById('confirm-modal-message').textContent = message;
+    document.getElementById('confirm-modal').classList.add('show');
+}
+
+function closeConfirmModal() {
+    document.getElementById('confirm-modal').classList.remove('show');
+    confirmModalCallback = null;
+}
+
+function executeConfirm() {
+    if (confirmModalCallback) {
+        confirmModalCallback();
+    }
+    closeConfirmModal();
+}
+
+// ESC 关闭确认弹窗
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        if (document.getElementById('confirm-modal').classList.contains('show')) {
+            closeConfirmModal();
+        }
+    }
+});
+
 // 加载租用的 Agent 列表（按 eth1, eth2, eth3... 排序）
 async function loadAgents() {
     try {
@@ -886,6 +1063,41 @@ function renderAgentSelector(containerId, agents, type) {
 }
 
 function selectAgent(agentId, type, ip) {
+    // 检查是否有活跃连接，切换前需要确认
+    if (type === 'client') {
+        // 如果选择的是同一个 Agent，直接返回
+        if (agentId === selectedClientAgentId) return;
+
+        // 检查是否有活跃的 Client 连接
+        if (hasActiveClientConnections()) {
+            const activeList = getActiveConnectionList('client');
+            showConfirmModal(`当前有活跃连接 (${activeList})，切换 Agent 将断开所有连接，是否继续？`, async () => {
+                await disconnectAllClientConnections();
+                showToast('已断开所有连接', 'info');
+                doSelectAgent(agentId, type, ip);
+            });
+            return;
+        }
+        doSelectAgent(agentId, type, ip);
+    } else if (type === 'server') {
+        // 如果选择的是同一个 Agent，直接返回
+        if (agentId === selectedServerAgentId) return;
+
+        // 检查是否有活跃的 Server/监听
+        if (hasActiveServerConnections()) {
+            const activeList = getActiveConnectionList('server');
+            showConfirmModal(`当前有活跃监听 (${activeList})，切换 Agent 将停止所有服务，是否继续？`, async () => {
+                await disconnectAllServerConnections();
+                showToast('已停止所有服务', 'info');
+                doSelectAgent(agentId, type, ip);
+            });
+            return;
+        }
+        doSelectAgent(agentId, type, ip);
+    }
+}
+
+function doSelectAgent(agentId, type, ip) {
     if (type === 'client') {
         selectedClientAgentId = agentId;
         selectedClientAgentIp = ip;
@@ -993,6 +1205,7 @@ async function modbusClientToggleConnect() {
         const result = await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
         if (result.success) {
             modbusClientConnected = false;
+            activeConnections.modbus_client = false;
             stopAutoRefresh();
             updateClientButtonState(false);
             showToast('已断开连接', 'success');
@@ -1033,6 +1246,7 @@ async function modbusClientToggleConnect() {
             }
 
             modbusClientConnected = true;
+            activeConnections.modbus_client = true;
             updateClientButtonState(true);
             showToast('Modbus 连接成功，unit_id 验证通过', 'success');
             modbusClientRefresh();
@@ -1141,6 +1355,7 @@ async function modbusServerToggle() {
         const result = await apiRequest('/api/industrial/modbus_server/stop/', 'POST', { agent_id: selectedServerAgentId });
         if (result.success) {
             modbusServerRunning = false;
+            activeConnections.modbus_server = false;
             updateServerButtonState(false);
             showToast('已停止', 'success');
         } else {
@@ -1158,6 +1373,7 @@ async function modbusServerToggle() {
         const result = await apiRequest('/api/industrial/modbus_server/start/', 'POST', data);
         if (result.success || (result.message && result.message.indexOf('已在运行') !== -1)) {
             modbusServerRunning = true;
+            activeConnections.modbus_server = true;
             updateServerButtonState(true);
             const msg = result.success
                 ? `Modbus Server 启动成功，监听 ${selectedServerAgentIp}:${data.port}`
@@ -1487,11 +1703,11 @@ async function executeWriteMultiple() {
 
 // ========== S7 Client ==========
 async function s7ClientConnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const rackSlot = document.getElementById('s7-rack-slot').value.split('/');
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedClientAgentId,
         ip: document.getElementById('s7-client-ip').value,
         port: parseInt(document.getElementById('s7-client-port').value),
         rack: parseInt(rackSlot[0]) || 0,
@@ -1500,6 +1716,7 @@ async function s7ClientConnect() {
 
     const result = await apiRequest('/api/industrial/s7_client/connect/', 'POST', data);
     if (result.success) {
+        activeConnections.s7_client = true;
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
         showToast('S7 连接成功', 'success');
     } else {
@@ -1508,10 +1725,17 @@ async function s7ClientConnect() {
 }
 
 async function s7ClientDisconnect() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
+        activeConnections.s7_client = false;
+        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        showToast('已断开', 'success');
+    } else {
+        showToast('断开失败: ' + (result.message || result.error), 'error');
+    }
+}
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
         showToast('已断开', 'success');
     } else {
@@ -1586,15 +1810,16 @@ async function s7PlcStop() {
 
 // ========== S7 Server ==========
 async function s7ServerStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         port: parseInt(document.getElementById('s7-server-port').value)
     };
 
     const result = await apiRequest('/api/industrial/s7_server/start/', 'POST', data);
     if (result.success) {
+        activeConnections.s7_server = true;
         document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
         showToast('S7 Server 启动成功', 'success');
     } else {
@@ -1603,10 +1828,11 @@ async function s7ServerStart() {
 }
 
 async function s7ServerStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
+        activeConnections.s7_server = false;
         document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
@@ -1675,16 +1901,17 @@ async function loadGooseSvInterfaces() {
 }
 
 async function gooseStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         interface: document.getElementById('goose-sv-interface').value,
         go_id: document.getElementById('goose-id').value
     };
 
     const result = await apiRequest('/api/industrial/goose_sv/goose/start/', 'POST', data);
     if (result.success) {
+        activeConnections.goose = true;
         document.getElementById('goose-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
         showToast('GOOSE 接收已启动', 'success');
     } else {
@@ -1693,13 +1920,17 @@ async function gooseStart() {
 }
 
 async function gooseStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
+        activeConnections.goose = false;
         document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
+        showToast('停止失败: ' + (result.message || result.error), 'error');
+    }
+}
         showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
@@ -1716,16 +1947,17 @@ async function gooseStatus() {
 }
 
 async function svStart() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedAgentId,
+        agent_id: selectedServerAgentId,
         interface: document.getElementById('goose-sv-interface').value,
         sv_id: document.getElementById('sv-id').value
     };
 
     const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
     if (result.success) {
+        activeConnections.sv = true;
         document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
         showToast('SV 接收已启动', 'success');
     } else {
@@ -1734,13 +1966,17 @@ async function svStart() {
 }
 
 async function svStop() {
-    if (!selectedAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
+        activeConnections.sv = false;
         document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
         showToast('已停止', 'success');
     } else {
+        showToast('停止失败: ' + (result.message || result.error), 'error');
+    }
+}
         showToast('停止失败: ' + (result.message || result.error), 'error');
     }
 }
