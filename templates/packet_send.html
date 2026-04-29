@@ -245,10 +245,13 @@ select.form-input option, select option {
     <div id="agent-selector" style="display: flex; gap: 12px; flex-wrap: wrap;">
         <span style="color: var(--text-muted);">加载中...</span>
     </div>
-    <div id="selected-agent-info" style="margin-top: 12px; padding: 10px; background: var(--bg-secondary); border-radius: 6px; display: none;">
-        <span style="color: var(--success);">已选择:</span>
-        <span id="selected-agent-name" style="font-weight: 600;"></span>
-        <span style="color: var(--text-muted); margin-left: 12px;">IP: <span id="selected-agent-ip"></span></span>
+    <div id="selected-agent-info" style="margin-top: 12px; padding: 10px; min-height: 20px; background: var(--bg-secondary); border-radius: 6px;">
+        <span id="selected-agent-text" style="color: var(--text-muted);">请选择 Agent</span>
+        <span id="selected-agent-detail" style="display: none;">
+            <span style="color: var(--success);">已选择:</span>
+            <span id="selected-agent-name" style="font-weight: 600;"></span>
+            <span style="color: var(--text-muted); margin-left: 12px;">IP: <span id="selected-agent-ip"></span></span>
+        </span>
     </div>
     <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 8px;">
         系统根据您的访问 IP 自动识别租用的 Agent。如无租用记录，请在 <a href="{% url 'main:agent_manage' %}" style="color: var(--primary);">Agent管理</a> 页面租用
@@ -625,7 +628,8 @@ async function selectAgent(agentId) {
     });
 
     // 显示选中信息
-    document.getElementById('selected-agent-info').style.display = 'block';
+    document.getElementById('selected-agent-text').style.display = 'none';
+    document.getElementById('selected-agent-detail').style.display = 'inline';
     document.getElementById('selected-agent-name').textContent = selectedAgent.agent_id;
     document.getElementById('selected-agent-ip').textContent = selectedAgent.ip_address;
 
