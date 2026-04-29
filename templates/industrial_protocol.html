@@ -471,29 +471,39 @@
             <div>
                 <h4 style="color: var(--primary); margin-bottom: 12px;">S7 Client</h4>
                 <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">目标 IP</label>
-                        <input type="text" id="s7-client-ip" class="form-input" placeholder="192.168.1.100">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Client Agent</h5>
+                    <div id="s7-client-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <span style="color: var(--text-muted);">加载中...</span>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">端口</label>
-                        <input type="number" id="s7-client-port" class="form-input" value="102">
+                </div>
+                <div class="config-section">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">目标 IP</label>
+                            <input type="text" id="s7-client-ip" class="form-input" placeholder="192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" id="s7-client-port" class="form-input" value="102">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Rack/Slot</label>
+                            <input type="text" id="s7-rack-slot" class="form-input" value="0/1" placeholder="rack/slot">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label"> Rack/Slot</label>
-                        <input type="text" id="s7-rack-slot" class="form-input" value="0/1" placeholder="rack/slot">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
                         <button class="btn btn-success" onclick="s7ClientConnect()">连接</button>
                         <button class="btn btn-danger" onclick="s7ClientDisconnect()">断开</button>
                         <button class="btn btn-secondary" onclick="s7ClientStatus()">状态</button>
+                        <div id="s7-client-status" style="padding: 4px 12px; background: var(--bg-secondary); border-radius: 4px;">
+                            <span class="status-badge status-stopped">未连接</span>
+                        </div>
                     </div>
-                    <div id="s7-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
                 </div>
 
                 <!-- 数据配置区域（连接成功后显示） -->
                 <div class="config-section" id="s7-client-data-config" style="display: none;">
-                    <h5>数据配置</h5>
+                    <h5 style="margin-bottom: 12px;">数据配置</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label class="form-label">区域类型</label>
@@ -542,21 +552,20 @@
 
                 <!-- Hex Viewer 区域 -->
                 <div class="config-section" id="s7-client-hex-section" style="display: none;">
-                    <h5>数据查看器 (十六进制)</h5>
+                    <h5 style="margin-bottom: 12px;">数据查看器 (十六进制)</h5>
                     <div class="s7-hex-viewer" id="s7-client-hex-viewer">
                         <div class="s7-hex-header">
                             <span class="s7-hex-address-label">地址</span>
                             <span class="s7-hex-bytes-label">字节值 (十六进制)</span>
                         </div>
                         <div class="s7-hex-content" id="s7-client-hex-content">
-                            <!-- 数据将通过 JavaScript 动态生成 -->
                         </div>
                     </div>
                 </div>
 
                 <!-- PLC 操作 -->
                 <div class="config-section" id="s7-client-plc-section" style="display: none;">
-                    <h5>PLC 操作</h5>
+                    <h5 style="margin-bottom: 12px;">PLC 操作</h5>
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <button class="btn btn-secondary" onclick="s7GetCpuInfo()">CPU 信息</button>
                         <button class="btn btn-secondary" onclick="s7GetCpuState()">CPU 状态</button>
@@ -564,7 +573,6 @@
                         <button class="btn btn-warning" onclick="s7PlcHotStart()">热启动</button>
                         <button class="btn btn-danger" onclick="s7PlcStop()">停止</button>
                     </div>
-                    <!-- CPU 信息表格 -->
                     <div id="s7-cpu-info-container" style="display: none; margin-top: 12px;">
                         <table class="s7-cpu-info-table">
                             <tr><th>模块名称</th><td id="s7-cpu-module-name">-</td></tr>
@@ -574,12 +582,11 @@
                             <tr><th>CPU 状态</th><td id="s7-cpu-state">-</td></tr>
                         </table>
                     </div>
-                    <div id="s7-plc-result" style="margin-top: 12px;"></div>
                 </div>
 
                 <!-- 块操作区域 -->
                 <div class="config-section" id="s7-client-block-section" style="display: none;">
-                    <h5>块操作</h5>
+                    <h5 style="margin-bottom: 12px;">块操作</h5>
                     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label class="form-label">块类型</label>
@@ -603,9 +610,6 @@
                         <button class="btn btn-primary" onclick="s7ClientUploadBlock()">上传块 (PC→PLC)</button>
                         <button class="btn btn-success" onclick="s7ClientDownloadBlock()">下载块 (PLC→PC)</button>
                     </div>
-                    <div style="color: var(--text-muted); font-size: 0.85rem; margin-top: 8px;">
-                        <small>说明: 块上传/下载需要连接真实 S7 PLC。S7 服务端模拟器仅支持数据读写。</small>
-                    </div>
                     <div id="s7-block-list" style="display: none; margin-top: 12px;">
                         <div class="s7-block-list" id="s7-block-list-content"></div>
                     </div>
@@ -614,45 +618,67 @@
 
             <!-- S7 Server -->
             <div>
-                <h4 style="color: var(--primary); margin-bottom: 12px;">S7 Server</div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">S7 Server</h4>
                 <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">监听端口</label>
-                        <input type="number" id="s7-server-port" class="form-input" value="102">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Server Agent</h5>
+                    <div id="s7-server-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <span style="color: var(--text-muted);">加载中...</span>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                </div>
+                <div class="config-section">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">监听端口</label>
+                            <input type="number" id="s7-server-port" class="form-input" value="102">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Rack/Slot</label>
+                            <input type="text" id="s7-server-rack-slot" class="form-input" value="0/2" placeholder="rack/slot">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
                         <button class="btn btn-success" onclick="s7ServerStart()">启动</button>
                         <button class="btn btn-danger" onclick="s7ServerStop()">停止</button>
                         <button class="btn btn-secondary" onclick="s7ServerStatus()">状态</button>
+                        <div id="s7-server-status-badge" style="padding: 4px 12px; background: var(--bg-secondary); border-radius: 4px;">
+                            <span class="status-badge status-stopped">未启动</span>
+                        </div>
                     </div>
-                    <div id="s7-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
                 </div>
 
                 <div class="config-section">
-                    <h5>数据区设置</h5>
-                    <div class="form-group">
-                        <label class="form-label">区域</label>
-                        <select id="s7-server-area" class="form-input">
-                            <option value="DB" selected>DB</option>
-                            <option value="I">I</option>
-                            <option value="Q">Q</option>
-                            <option value="M">M</option>
-                        </select>
+                    <h5 style="margin-bottom: 12px;">数据区设置</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">区域</label>
+                            <select id="s7-server-area" class="form-input">
+                                <option value="DB" selected>DB</option>
+                                <option value="I">I</option>
+                                <option value="Q">Q</option>
+                                <option value="M">M</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">DB 编号</label>
+                            <input type="number" id="s7-server-db" class="form-input" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">起始地址</label>
+                            <input type="number" id="s7-server-address" class="form-input" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">数据个数</label>
+                            <input type="number" id="s7-server-size" class="form-input" value="10">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">DB 号号</label>
-                        <input type="number" id="s7-server-db" class="form-input" value="1">
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label class="form-label">设置值 (十六进制,逗号分隔)</label>
+                        <input type="text" id="s7-server-values" class="form-input" placeholder="00,01,02,03">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">地址</label>
-                        <input type="number" id="s7-server-address" class="form-input" value="0">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-primary" onclick="s7ServerSetData()">设置数据</button>
+                        <button class="btn btn-secondary" onclick="s7ServerGetData()">读取数据</button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">值 (十六进制,逗号分隔)</label>
-                        <input type="text" id="s7-server-values" class="form-input" placeholder="00,01,02">
-                    </div>
-                    <button class="btn btn-primary" onclick="s7ServerSetData()">设置</button>
-                    <button class="btn btn-secondary" onclick="s7ServerGetData()">获取</button>
                 </div>
             </div>
         </div>
@@ -1161,13 +1187,19 @@ async function loadAgents() {
             // 为 Modbus Client 和 Server 分别渲染 Agent 选择器
             renderAgentSelector('modbus-client-agent-selector', runningAgents, 'client');
             renderAgentSelector('modbus-server-agent-selector', runningAgents, 'server');
+            renderAgentSelector('s7-client-agent-selector', runningAgents, 'client');
+            renderAgentSelector('s7-server-agent-selector', runningAgents, 'server');
         } else {
             document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('s7-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('s7-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
         }
     } catch (e) {
         document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('s7-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('s7-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
     }
 }
 
@@ -1226,11 +1258,19 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
+        document.querySelectorAll('#s7-client-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
         showToast(`已选择 ${agentId} (${ip}) 作为 Client Agent`, 'success');
     } else if (type === 'server') {
         selectedServerAgentId = agentId;
         selectedServerAgentIp = ip;
         document.querySelectorAll('#modbus-server-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        document.querySelectorAll('#s7-server-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
@@ -1783,7 +1823,7 @@ async function s7ClientConnect() {
     const result = await apiRequest('/api/industrial/s7_client/connect/', 'POST', data);
     if (result.success) {
         activeConnections.s7_client = true;
-        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+        document.getElementById('s7-client-status').innerHTML = '<span class="status-badge status-running">已连接</span>';
 
         // 显示数据配置、Hex Viewer、PLC 操作和块操作区域
         document.getElementById('s7-client-data-config').style.display = 'block';
@@ -1809,7 +1849,7 @@ async function s7ClientDisconnect() {
     const result = await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
     if (result.success) {
         activeConnections.s7_client = false;
-        document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+        document.getElementById('s7-client-status').innerHTML = '<span class="status-badge status-stopped">未连接</span>';
 
         // 隐藏数据配置、Hex Viewer、PLC 操作和块操作区域
         document.getElementById('s7-client-data-config').style.display = 'none';
@@ -1828,7 +1868,8 @@ async function s7ClientStatus() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_client/status/', 'POST', { agent_id: selectedClientAgentId });
-    document.getElementById('s7-client-status').textContent = JSON.stringify(result);
+    const statusBadge = result.connected ? '<span class="status-badge status-running">已连接</span>' : '<span class="status-badge status-stopped">未连接</span>';
+    document.getElementById('s7-client-status').innerHTML = statusBadge;
 }
 
 // 初始化 S7 Client Hex Viewer
@@ -2195,15 +2236,18 @@ async function s7ClientDownloadBlock() {
 async function s7ServerStart() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
+    const rackSlot = document.getElementById('s7-server-rack-slot').value.split('/');
     const data = {
         agent_id: selectedServerAgentId,
-        port: parseInt(document.getElementById('s7-server-port').value)
+        port: parseInt(document.getElementById('s7-server-port').value),
+        rack: parseInt(rackSlot[0]) || 0,
+        slot: parseInt(rackSlot[1]) || 2
     };
 
     const result = await apiRequest('/api/industrial/s7_server/start/', 'POST', data);
     if (result.success) {
         activeConnections.s7_server = true;
-        document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+        document.getElementById('s7-server-status-badge').innerHTML = '<span class="status-badge status-running">运行中</span>';
         showToast('S7 Server 启动成功', 'success');
     } else {
         showToast('启动失败: ' + (result.message || result.error), 'error');
@@ -2216,7 +2260,7 @@ async function s7ServerStop() {
     const result = await apiRequest('/api/industrial/s7_server/stop/', 'POST', { agent_id: selectedServerAgentId });
     if (result.success) {
         activeConnections.s7_server = false;
-        document.getElementById('s7-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        document.getElementById('s7-server-status-badge').innerHTML = '<span class="status-badge status-stopped">未启动</span>';
         showToast('已停止', 'success');
     } else {
         showToast('停止失败: ' + (result.message || result.error), 'error');
@@ -2227,7 +2271,8 @@ async function s7ServerStatus() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const result = await apiRequest('/api/industrial/s7_server/status/', 'POST', { agent_id: selectedServerAgentId });
-    document.getElementById('s7-server-status').textContent = JSON.stringify(result);
+    const statusBadge = result.running ? '<span class="status-badge status-running">运行中</span>' : '<span class="status-badge status-stopped">未启动</span>';
+    document.getElementById('s7-server-status-badge').innerHTML = statusBadge;
 }
 
 async function s7ServerSetData() {
@@ -2256,12 +2301,12 @@ async function s7ServerGetData() {
         area: document.getElementById('s7-server-area').value,
         db_number: parseInt(document.getElementById('s7-server-db').value),
         start: parseInt(document.getElementById('s7-server-address').value),
-        size: 10
+        size: parseInt(document.getElementById('s7-server-size').value) || 10
     };
 
     const result = await apiRequest('/api/industrial/s7_server/get_data/', 'POST', data);
     if (result.success) {
-        document.getElementById('s7-server-status').innerHTML = `<div class="hex-display">${JSON.stringify(result.data)}</div>`;
+        showToast('读取数据成功: ' + JSON.stringify(result.data), 'success');
     } else {
         showToast('获取失败: ' + (result.message || result.error), 'error');
     }
