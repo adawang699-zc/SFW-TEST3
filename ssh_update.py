@@ -5,7 +5,7 @@ import time
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('192.168.81.105', 22, 'zhangc', 'tdhx@2017', timeout=30)
+ssh.connect('192.168.81.140', 22, 'zhangc', 'tdhx@2017', timeout=30)
 
 commands = [
     'cd /opt/SFW-TEST3 && git fetch origin && git reset --hard origin/main',
@@ -32,5 +32,5 @@ time.sleep(3)
 
 # Test status
 import requests
-resp = requests.get("http://192.168.81.105:8000/api/agents/status/?agent_id=agent_eth4", timeout=5)
+resp = requests.get("http://192.168.81.140:8000/api/agents/status/?agent_id=agent_eth4", timeout=5)
 print(f"eth4 status after restart: {resp.json()}")

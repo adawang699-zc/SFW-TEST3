@@ -39,23 +39,23 @@ main/
 
 ```bash
 # 获取 namespace 列表
-curl 'http://192.168.81.105:8000/api/namespace/list/'
+curl 'http://192.168.81.140:8000/api/namespace/list/'
 
 # 创建网卡 namespace
-curl -X POST 'http://192.168.81.105:8000/api/namespace/setup-interface/' \
+curl -X POST 'http://192.168.81.140:8000/api/namespace/setup-interface/' \
   -H 'Content-Type: application/json' \
   -d '{"interface_name":"eth1","ip_cidr":"192.168.11.100/16"}'
 
 # 恢复网卡到主 namespace
-curl -X POST 'http://192.168.81.105:8000/api/namespace/restore-interface/' \
+curl -X POST 'http://192.168.81.140:8000/api/namespace/restore-interface/' \
   -H 'Content-Type: application/json' \
   -d '{"interface_name":"eth1"}'
 
 # 扫描网卡（含 namespace）
-curl -X POST 'http://192.168.81.105:8000/api/interfaces/scan/'
+curl -X POST 'http://192.168.81.140:8000/api/interfaces/scan/'
 
 # Agent 列表（含 namespace 信息）
-curl 'http://192.168.81.105:8000/api/agents/list/'
+curl 'http://192.168.81.140:8000/api/agents/list/'
 ```
 
 ### 3. 通过命令行管理
@@ -82,7 +82,7 @@ sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh setup-all
 # 恢复所有网卡到主 namespace
 sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh restore-all
 ```
-ssh zhangc@192.168.81.105
+ssh zhangc@192.168.81.140
 
 # 安装 systemd 服务
 sudo cp /tmp/network-namespace.service /etc/systemd/system/

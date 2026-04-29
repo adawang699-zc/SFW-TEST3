@@ -6,7 +6,7 @@ import time
 # 设置 stdout 为 UTF-8
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-SSH_HOST = '192.168.81.105'
+SSH_HOST = '192.168.81.140'
 SSH_USER = 'zhangc'
 SSH_PASSWORD = 'tdhx@2017'
 REMOTE_PATH = '/opt/SFW-TEST3'

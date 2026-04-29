@@ -15,7 +15,7 @@ import paramiko
 import time
 
 # ========== Ubuntu 配置 ==========
-UBUNTU_IP = "192.168.81.105"
+UBUNTU_IP = "192.168.81.140"
 UBUNTU_USER = "zhangc"
 UBUNTU_PASSWORD = "tdhx@2017"
 UBUNTU_PROJECT_PATH = "/opt/SFW-TEST3"
