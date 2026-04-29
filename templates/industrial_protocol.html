@@ -1003,21 +1003,38 @@ async function modbusClientToggleConnect() {
         // 连接 - 使用 Client Agent 的接口名称（SO_BINDTODEVICE 强制走物理网口）
         // 从 agent_id 提取接口名称：agent_eth1 -> eth1
         const interfaceName = selectedClientAgentId ? selectedClientAgentId.replace('agent_', '') : null;
+        const unitId = parseInt(document.getElementById('modbus-unit-id').value);
 
         const data = {
             agent_id: selectedClientAgentId,
             ip: document.getElementById('modbus-client-ip').value,
             port: parseInt(document.getElementById('modbus-client-port').value),
-            unit_id: parseInt(document.getElementById('modbus-unit-id').value),
+            unit_id: unitId,
             source_ip: selectedClientAgentIp,  // 绑定源 IP
             interface: interfaceName  // SO_BINDTODEVICE 绑定接口（eth1/eth2 等）
         };
 
         const result = await apiRequest('/api/industrial/modbus_client/connect/', 'POST', data);
         if (result.success) {
+            // 连接成功后，立即读取验证 unit_id
+            const verifyData = {
+                agent_id: selectedClientAgentId,
+                function_code: 3,  // 读保持寄存器
+                address: 0,
+                count: 1
+            };
+            const verifyResult = await apiRequest('/api/industrial/modbus_client/read/', 'POST', verifyData);
+
+            if (!verifyResult.success) {
+                // unit_id 不匹配，断开连接
+                await apiRequest('/api/industrial/modbus_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
+                showToast(`连接失败: unit_id=${unitId} 与 Server 不匹配，请检查 Server 的 Unit ID 设置`, 'error');
+                return;
+            }
+
             modbusClientConnected = true;
             updateClientButtonState(true);
-            showToast('Modbus 连接成功', 'success');
+            showToast('Modbus 连接成功，unit_id 验证通过', 'success');
             modbusClientRefresh();
         } else {
             showToast('连接失败: ' + (result.message || result.error), 'error');
