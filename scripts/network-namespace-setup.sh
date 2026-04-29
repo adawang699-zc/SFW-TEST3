@@ -29,7 +29,7 @@ get_interface_config_from_db() {
     local interface="$1"
     local config="$(cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'djangoProject.settings')
 import django
 django.setup()
 from main.models import NetworkInterface, LocalAgent
@@ -199,7 +199,7 @@ update_db_namespace() {
     log "更新数据库: $interface -> namespace=$ns"
     (cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'djangoProject.settings')
 import django
 django.setup()
 from main.models import NetworkInterface
@@ -245,7 +245,7 @@ remove_interface() {
     # 清除数据库 namespace 字段
     (cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'djangoProject.settings')
 import django
 django.setup()
 from main.models import NetworkInterface
@@ -314,7 +314,7 @@ setup_all() {
     # 从数据库读取所有非管理网卡
     local interfaces="$(cd $PROJECT_PATH && $PYTHON_PATH -c "
 import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ubuntu_deploy.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'djangoProject.settings')
 import django
 django.setup()
 from main.models import NetworkInterface, LocalAgent
