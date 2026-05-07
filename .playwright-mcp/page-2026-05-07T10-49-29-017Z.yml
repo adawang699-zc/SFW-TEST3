@@ -1,0 +1,176 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - link "防火墙测试平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 18:49:28"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 Agent 管理" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: Agent 管理
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "🔧 服务下发" [ref=e19] [cursor=pointer]:
+      - /url: /service-deploy/
+      - generic [ref=e20]: 🔧
+      - text: 服务下发
+    - link "⚙️ 工控协议" [ref=e22] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e23]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e25] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e26]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e28] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e29]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e31] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e32]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e34] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e35]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e37] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e38]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e40] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e41]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e43] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e44]: 🔑
+      - text: 授权管理
+  - generic [ref=e45]:
+    - generic [ref=e46]:
+      - generic [ref=e47]: 防火墙测试平台
+      - paragraph [ref=e48]: 专业的一体化防火墙自动化测试解决方案
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - generic [ref=e51]: "7"
+          - generic [ref=e52]: 运行中的 Agent
+        - generic [ref=e53]:
+          - generic [ref=e54]: "2"
+          - generic [ref=e55]: 测试设备
+        - generic [ref=e56]:
+          - generic [ref=e57]: "8"
+          - generic [ref=e58]: 网卡数量
+        - generic [ref=e59]:
+          - generic [ref=e60]: 8+
+          - generic [ref=e61]: 工控协议
+    - generic [ref=e62]:
+      - generic [ref=e63]: 系统状态
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]:
+            - generic [ref=e67]: CPU 使用率
+            - generic [ref=e68]: "--"
+          - generic [ref=e70]: "--"
+        - generic [ref=e71]:
+          - generic [ref=e72]:
+            - generic [ref=e73]: 内存使用率
+            - generic [ref=e74]: "--"
+          - generic [ref=e76]: "--"
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: 磁盘使用率
+            - generic [ref=e80]: "--"
+          - generic [ref=e82]: "--"
+    - generic [ref=e83]:
+      - generic [ref=e84]: 快速导航
+      - generic [ref=e85]:
+        - link "🔌 网卡 & Agent 管理网卡绑定和 Agent" [ref=e86] [cursor=pointer]:
+          - /url: /agent-manage/
+          - generic [ref=e87]:
+            - generic [ref=e88]: 🔌
+            - generic [ref=e89]:
+              - generic [ref=e90]: 网卡 & Agent
+              - generic [ref=e91]: 管理网卡绑定和 Agent
+        - link "🖥️ 测试设备 监控测试设备状态" [ref=e92] [cursor=pointer]:
+          - /url: /device-monitor/
+          - generic [ref=e93]:
+            - generic [ref=e94]: 🖥️
+            - generic [ref=e95]:
+              - generic [ref=e96]: 测试设备
+              - generic [ref=e97]: 监控测试设备状态
+        - link "📡 报文发送 构造并发送测试报文" [ref=e98] [cursor=pointer]:
+          - /url: /packet-send/
+          - generic [ref=e99]:
+            - generic [ref=e100]: 📡
+            - generic [ref=e101]:
+              - generic [ref=e102]: 报文发送
+              - generic [ref=e103]: 构造并发送测试报文
+        - link "⚙️ 工控协议 Modbus/S7/GOOSE 等" [ref=e104] [cursor=pointer]:
+          - /url: /industrial-protocol/
+          - generic [ref=e105]:
+            - generic [ref=e106]: ⚙️
+            - generic [ref=e107]:
+              - generic [ref=e108]: 工控协议
+              - generic [ref=e109]: Modbus/S7/GOOSE 等
+    - generic [ref=e110]:
+      - generic [ref=e111]: Agent 状态概览
+      - table [ref=e113]:
+        - rowgroup [ref=e114]:
+          - row "Agent ID 网卡 IP 地址 状态" [ref=e115]:
+            - columnheader "Agent ID" [ref=e116]
+            - columnheader "网卡" [ref=e117]
+            - columnheader "IP 地址" [ref=e118]
+            - columnheader "状态" [ref=e119]
+        - rowgroup [ref=e120]:
+          - row "agent_eth1 eth1 192.168.11.100 运行中" [ref=e121]:
+            - cell "agent_eth1" [ref=e122]
+            - cell "eth1" [ref=e123]
+            - cell "192.168.11.100" [ref=e124]
+            - cell "运行中" [ref=e125]:
+              - generic [ref=e126]: 运行中
+          - row "agent_eth2 eth2 192.168.12.100 运行中" [ref=e127]:
+            - cell "agent_eth2" [ref=e128]
+            - cell "eth2" [ref=e129]
+            - cell "192.168.12.100" [ref=e130]
+            - cell "运行中" [ref=e131]:
+              - generic [ref=e132]: 运行中
+          - row "agent_eth3 eth3 192.168.13.100 运行中" [ref=e133]:
+            - cell "agent_eth3" [ref=e134]
+            - cell "eth3" [ref=e135]
+            - cell "192.168.13.100" [ref=e136]
+            - cell "运行中" [ref=e137]:
+              - generic [ref=e138]: 运行中
+          - row "agent_eth4 eth4 192.168.14.100 已停止" [ref=e139]:
+            - cell "agent_eth4" [ref=e140]
+            - cell "eth4" [ref=e141]
+            - cell "192.168.14.100" [ref=e142]
+            - cell "已停止" [ref=e143]:
+              - generic [ref=e144]: 已停止
+          - row "agent_eth5 eth5 192.168.15.100 运行中" [ref=e145]:
+            - cell "agent_eth5" [ref=e146]
+            - cell "eth5" [ref=e147]
+            - cell "192.168.15.100" [ref=e148]
+            - cell "运行中" [ref=e149]:
+              - generic [ref=e150]: 运行中
+          - row "agent_eth6 eth6 192.168.16.100 运行中" [ref=e151]:
+            - cell "agent_eth6" [ref=e152]
+            - cell "eth6" [ref=e153]
+            - cell "192.168.16.100" [ref=e154]
+            - cell "运行中" [ref=e155]:
+              - generic [ref=e156]: 运行中
+          - row "agent_eth7 eth7 192.168.17.100 运行中" [ref=e157]:
+            - cell "agent_eth7" [ref=e158]
+            - cell "eth7" [ref=e159]
+            - cell "192.168.17.100" [ref=e160]
+            - cell "运行中" [ref=e161]:
+              - generic [ref=e162]: 运行中
