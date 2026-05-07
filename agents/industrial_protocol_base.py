@@ -2364,6 +2364,17 @@ def sync_s7_data_to_server(server_id, db_number=None):
                 add_log('WARNING', '未找到ctypes_buffers，数据同步失败')
                 return
 
+            server = server_info.get('server')
+
+            # 获取服务端DB区域常量（与 register_s7_areas 保持一致）
+            SRV_AREA_DB = None
+            if snap7_srv_area is not None and hasattr(snap7_srv_area, 'DB'):
+                SRV_AREA_DB = snap7_srv_area.DB
+            elif snap7_type is not None and hasattr(snap7_type, 'SrvArea') and hasattr(snap7_type.SrvArea, 'DB'):
+                SRV_AREA_DB = snap7_type.SrvArea.DB
+            else:
+                SRV_AREA_DB = 5  # 硬编码值
+
             for db_num in db_list:
                 if db_num not in storage['db']:
                     add_log('WARNING', f'sync_s7_data: DB{db_num} 不在 storage 中')
@@ -2373,17 +2384,33 @@ def sync_s7_data_to_server(server_id, db_number=None):
                     continue
 
                 db_data = storage['db'][db_num]
-                c_buffer = server_info['ctypes_buffers'][db_num]
+                old_buffer = server_info['ctypes_buffers'][db_num]
 
-                # 同步数据：将bytearray复制到ctypes缓冲区
-                sync_size = min(len(c_buffer), len(db_data))
+                # 创建新的ctypes缓冲区并复制数据
+                sync_size = min(len(old_buffer), len(db_data))
+                c_buffer_type = ctypes.c_ubyte * sync_size
+                c_buffer = c_buffer_type()
                 for i in range(sync_size):
                     c_buffer[i] = db_data[i]
+
+                # 强制 snap7 服务器重新加载缓冲区：先注销旧区域，再注册新区域
+                if server:
+                    try:
+                        server.unregister_area(SRV_AREA_DB, db_num)
+                    except Exception:
+                        pass  # 忽略注销错误（可能未注册）
+                    try:
+                        server.register_area(SRV_AREA_DB, db_num, c_buffer)
+                    except Exception as e:
+                        add_log('WARNING', f'DB{db_num} 重新注册失败: {e}')
+
+                # 更新引用（保持新缓冲区存活，防止GC回收）
+                server_info['ctypes_buffers'][db_num] = c_buffer
 
                 # 验证同步结果（前5字节）
                 verify = [c_buffer[i] for i in range(min(5, sync_size))]
                 expected = [db_data[i] for i in range(min(5, sync_size))]
-                add_log('INFO', f'S7数据同步: DB{db_num} -> ctypes ({sync_size}字节), 验证: {verify} == {expected}')
+                add_log('INFO', f'S7数据同步: DB{db_num} -> 新ctypes ({sync_size}字节), 验证: {verify} == {expected}')
 
     except Exception as e:
         add_log('WARNING', f'S7数据同步异常: {e}')
