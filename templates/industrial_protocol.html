@@ -2117,25 +2117,6 @@ async function s7ClientRead() {
     }
 }
 
-    const data = {
-        agent_id: selectedClientAgentId,
-        area: document.getElementById('s7-area').value,
-        db_number: dbNum,
-        start: parseInt(document.getElementById('s7-start-address').value),
-        size: parseInt(document.getElementById('s7-read-count').value) || 160
-    };
-
-    const result = await apiRequest('/api/industrial/s7_client/read/', 'POST', data);
-    if (result.success) {
-        const readData = result.data || result.values || [];
-        s7ClientHexData = readData;
-        updateS7ClientHexViewer(readData, parseInt(document.getElementById('s7-start-address').value));
-        showToast('读取成功', 'success');
-    } else {
-        showToast('读取失败: ' + (result.message || result.error), 'error');
-    }
-}
-
 async function s7ClientWrite() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
