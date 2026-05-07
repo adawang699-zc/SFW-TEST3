@@ -2357,31 +2357,10 @@ def sync_s7_data_to_server(server_id, db_number=None):
             else:
                 db_list = [1, 2, 3]
 
-            # 优先尝试使用server.db（自动注册方式）
-            if hasattr(server, 'db'):
-                try:
-                    if isinstance(server.db, dict):
-                        # 直接通过server.db设置数据
-                        for db_num in db_list:
-                            if db_num in storage['db']:
-                                db_data = storage['db'][db_num]
-                                server.db[db_num] = db_data
-                                add_log('DEBUG', f'通过server.db同步DB{db_num}数据 ({len(db_data)}字节)')
-                        return
-                    elif hasattr(server.db, '__setitem__'):
-                        # 支持索引赋值
-                        for db_num in db_list:
-                            if db_num in storage['db']:
-                                db_data = storage['db'][db_num]
-                                server.db[db_num] = db_data
-                                add_log('DEBUG', f'通过server.db[索引]同步DB{db_num}数据 ({len(db_data)}字节)')
-                        return
-                except Exception as db_e:
-                    add_log('DEBUG', f'使用server.db同步失败: {db_e}，尝试ctypes缓冲区方式')
-            
-            # 使用ctypes缓冲区同步（手动注册方式）
+            # 使用ctypes缓冲区同步（这是实际工作的方式）
+            # 注意：server.db[db_num] = db_data 只是字典操作，不会更新 snap7 服务器数据
             if 'ctypes_buffers' not in server_info:
-                add_log('DEBUG', '未找到ctypes_buffers，跳过数据同步')
+                add_log('WARNING', '未找到ctypes_buffers，数据同步失败')
                 return
 
             for db_num in db_list:
