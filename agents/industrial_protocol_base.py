@@ -2407,10 +2407,7 @@ def sync_s7_data_to_server(server_id, db_number=None):
                 # 更新引用（保持新缓冲区存活，防止GC回收）
                 server_info['ctypes_buffers'][db_num] = c_buffer
 
-                # 验证同步结果（前5字节）
-                verify = [c_buffer[i] for i in range(min(5, sync_size))]
-                expected = [db_data[i] for i in range(min(5, sync_size))]
-                add_log('INFO', f'S7数据同步: DB{db_num} -> 新ctypes ({sync_size}字节), 验证: {verify} == {expected}')
+                add_log('DEBUG', f'S7数据同步: DB{db_num} -> 新ctypes缓冲区 ({sync_size}字节)')
 
     except Exception as e:
         add_log('WARNING', f'S7数据同步异常: {e}')
