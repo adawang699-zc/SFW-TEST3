@@ -515,7 +515,11 @@
                         </div>
                         <div class="form-group" id="s7-db-number-group" style="min-width: 80px;">
                             <label class="form-label" style="font-size: 0.85rem;">DB号</label>
-                            <input type="number" id="s7-db-number" class="form-input" value="1" style="height: 36px; width: 70px;">
+                            <select id="s7-db-number" class="form-input" style="height: 36px; width: 70px;" onchange="s7ClientRead()">
+                                <option value="1" selected>DB1</option>
+                                <option value="2">DB2</option>
+                                <option value="3">DB3</option>
+                            </select>
                         </div>
                         <div class="form-group" style="min-width: 80px;">
                             <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
@@ -2065,10 +2069,14 @@ function updateS7ClientHexViewer(data, startAddr) {
 async function s7ClientRead() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
+    const dbNum = parseInt(document.getElementById('s7-db-number').value);
+    const titleEl = document.getElementById('s7-client-hex-title');
+    if (titleEl) titleEl.textContent = `DB${dbNum} 数据`;
+
     const data = {
         agent_id: selectedClientAgentId,
         area: document.getElementById('s7-area').value,
-        db_number: parseInt(document.getElementById('s7-db-number').value),
+        db_number: dbNum,
         start: parseInt(document.getElementById('s7-start-address').value),
         size: parseInt(document.getElementById('s7-read-count').value) || 160
     };

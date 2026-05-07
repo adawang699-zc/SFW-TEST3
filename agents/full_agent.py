@@ -1674,6 +1674,106 @@ def s7_client_write():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/industrial_protocol/s7_client/upload_block', methods=['POST'])
+def s7_client_upload_block():
+    """上传块到S7 PLC (PC → PLC)"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json
+        client_id = data.get('client_id', 'default')
+        block_type = data.get('block_type', 'db')
+        block_number = data.get('block_number', 1)
+        block_data_b64 = data.get('block_data', '')
+        block_data_array = data.get('data', [])
+
+        if block_data_b64:
+            import base64
+            block_bytes = base64.b64decode(block_data_b64)
+            block_bytearray = bytearray(block_bytes)
+        elif block_data_array:
+            block_bytearray = bytearray(block_data_array)
+        else:
+            return jsonify({'success': False, 'error': '缺少块数据'}), 400
+
+        if len(block_bytearray) < 32:
+            return jsonify({'success': False, 'error': f'块数据太小({len(block_bytearray)}字节)'}), 400
+
+        try:
+            from snap7.type import Block
+            block_type_map = {
+                'db': Block.DB, 'ob': Block.OB, 'fc': Block.FC,
+                'fb': Block.FB, 'sdb': Block.SDB, 'sfc': Block.SFC, 'sfb': Block.SFB
+            }
+        except ImportError:
+            block_type_map = {
+                'db': 0x41, 'ob': 0x38, 'fc': 0x43, 'fb': 0x45,
+                'sdb': 0x42, 'sfc': 0x44, 'sfb': 0x46
+            }
+
+        block_type_enum = block_type_map.get(block_type.lower(), block_type_map['db'])
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            client.download(block_bytearray, block_number)
+
+            add_log('INFO', f'S7 上传块: client_id={client_id}, type={block_type}, number={block_number}, size={len(block_bytearray)}')
+            return jsonify({'success': True, 'message': f'块{block_number}上传成功', 'size': len(block_bytearray)})
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'S7 上传块失败: {error_msg}')
+        if 'protection' in error_msg.lower() or 'not authorized' in error_msg.lower():
+            return jsonify({'success': False, 'error': 'S7模拟器不支持块上传功能，需连接真实PLC。'}), 500
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/download_block', methods=['POST'])
+def s7_client_download_block():
+    """从S7 PLC下载块 (PLC → PC)"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json
+        client_id = data.get('client_id', 'default')
+        block_number = data.get('block_number', 1)
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            block_data = client.upload(block_number)
+
+            import base64
+            block_base64 = base64.b64encode(bytes(block_data)).decode('utf-8')
+
+            add_log('INFO', f'S7 下载块: client_id={client_id}, number={block_number}, size={len(block_data)}')
+            return jsonify({'success': True, 'message': f'块{block_number}下载成功', 'data': block_base64, 'size': len(block_data)})
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'S7 下载块失败: {error_msg}')
+        if 'protection' in error_msg.lower() or 'not authorized' in error_msg.lower():
+            return jsonify({'success': False, 'error': 'S7模拟器不支持块下载功能，需连接真实PLC。'}), 500
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
 # ========== S7 Client PLC 操作 ==========
 
 @app.route('/api/industrial_protocol/s7_client/get_cpu_info', methods=['GET', 'POST'])
