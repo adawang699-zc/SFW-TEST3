@@ -160,13 +160,13 @@
 .s7-hex-bytes {
     flex: 1;
     display: flex;
-    gap: 6px;
+    gap: 4px;
     flex-wrap: nowrap;
 }
 .s7-hex-byte {
-    width: 36px;
+    width: 28px;
     text-align: center;
-    padding: 3px 4px;
+    padding: 3px 2px;
     border-radius: 3px;
     cursor: pointer;
     transition: background-color 0.15s;
@@ -527,8 +527,10 @@
                         </div>
                         <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">读取</button>
                         <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">写入</button>
-                        <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto;">刷新</button>
-                        <button class="btn btn-secondary" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none; height: 36px; align-items: center; justify-content: center;">停止</button>
+                        <div style="margin-left: auto; display: flex; gap: 8px;">
+                            <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">刷新</button>
+                            <button class="btn btn-danger" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none; height: 36px; align-items: center; justify-content: center;">停止</button>
+                        </div>
                     </div>
                 </div>
 
@@ -2040,8 +2042,8 @@ function updateS7ClientHexViewer(data, startAddr) {
 
         // 地址列
         const addrStr = addr.toString().padStart(4, '0');
-        html += `<div style="display: flex; gap: 6px; padding: 4px 0; align-items: center;">`;
-        html += `<span style="color: var(--primary); width: 70px; flex-shrink: 0;">${addrStr}</span>`;
+        html += `<div style="display: flex; gap: 4px; padding: 3px 0; align-items: center;">`;
+        html += `<span style="color: var(--primary); width: 55px; flex-shrink: 0;">${addrStr}</span>`;
         html += `<span style="color: var(--text-muted);">:</span>`;
 
         // 字节列（16字节）
@@ -2049,9 +2051,9 @@ function updateS7ClientHexViewer(data, startAddr) {
             if (j < rowData.length) {
                 const byte = rowData[j] & 0xFF;
                 const hex = byte.toString(16).padStart(2, '0').toUpperCase();
-                html += `<span style="color: var(--text-primary); width: 36px; text-align: center; flex-shrink: 0;">${hex}</span>`;
+                html += `<span style="color: var(--text-primary); width: 28px; text-align: center; flex-shrink: 0;">${hex}</span>`;
             } else {
-                html += `<span style="color: var(--text-muted); width: 36px; text-align: center; flex-shrink: 0;">--</span>`;
+                html += `<span style="color: var(--text-muted); width: 28px; text-align: center; flex-shrink: 0;">--</span>`;
             }
         }
         html += '</div>';
@@ -2132,7 +2134,7 @@ async function s7ClientRefresh() {
         }
     }, interval * 1000);
 
-    document.getElementById('s7-stop-refresh-btn').style.display = 'inline-block';
+    document.getElementById('s7-stop-refresh-btn').style.display = 'inline-flex';
     document.getElementById('s7-refresh-btn').style.display = 'none';
     showToast(`自动刷新已启动`, 'success');
 }
@@ -2475,8 +2477,8 @@ function updateS7ServerHexViewer(data) {
 
         // 地址列
         const addrStr = addr.toString().padStart(4, '0');
-        html += `<div style="display: flex; gap: 6px; padding: 4px 0; align-items: center;">`;
-        html += `<span style="color: var(--primary); width: 70px; flex-shrink: 0;">${addrStr}</span>`;
+        html += `<div style="display: flex; gap: 4px; padding: 3px 0; align-items: center;">`;
+        html += `<span style="color: var(--primary); width: 55px; flex-shrink: 0;">${addrStr}</span>`;
         html += `<span style="color: var(--text-muted);">:</span>`;
 
         // 字节列（16字节）
@@ -2484,9 +2486,9 @@ function updateS7ServerHexViewer(data) {
             if (j < rowData.length) {
                 const byte = rowData[j] & 0xFF;
                 const hex = byte.toString(16).padStart(2, '0').toUpperCase();
-                html += `<span style="color: var(--text-primary); width: 36px; text-align: center; flex-shrink: 0;">${hex}</span>`;
+                html += `<span style="color: var(--text-primary); width: 28px; text-align: center; flex-shrink: 0;">${hex}</span>`;
             } else {
-                html += `<span style="color: var(--text-muted); width: 36px; text-align: center; flex-shrink: 0;">--</span>`;
+                html += `<span style="color: var(--text-muted); width: 28px; text-align: center; flex-shrink: 0;">--</span>`;
             }
         }
         html += '</div>';

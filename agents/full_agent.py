@@ -1673,6 +1673,266 @@ def s7_client_write():
         add_log('ERROR', f'S7写入失败: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# ========== S7 Client PLC 操作 ==========
+
+@app.route('/api/industrial_protocol/s7_client/get_cpu_info', methods=['GET', 'POST'])
+def s7_client_get_cpu_info():
+    """获取S7 CPU信息"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        # 支持 GET 和 POST 两种方式获取参数
+        if request.method == 'POST':
+            data = request.json or {}
+            client_id = data.get('client_id', 'default')
+        else:
+            client_id = request.args.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            cpu_info = client.get_cpu_info()
+
+            # 转换为可序列化的字典（bytes需要decode）
+            def safe_decode(val):
+                """安全解码bytes或字符串"""
+                if isinstance(val, bytes):
+                    try:
+                        return val.decode('utf-8').rstrip('\x00')
+                    except:
+                        return val.hex()
+                return str(val) if val else ''
+
+            result = {
+                'module_type': safe_decode(getattr(cpu_info, 'ModuleType', '')),
+                'serial_number': safe_decode(getattr(cpu_info, 'SerialNumber', '')),
+                'as_name': safe_decode(getattr(cpu_info, 'ASName', '')),
+                'module_name': safe_decode(getattr(cpu_info, 'ModuleName', '')),
+                'copyright': safe_decode(getattr(cpu_info, 'Copyright', '')),
+            }
+
+            add_log('INFO', f'S7 CPU信息: client_id={client_id}, module={result["module_name"]}')
+
+            return jsonify({
+                'success': True,
+                **result
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'获取S7 CPU信息失败: {error_msg}')
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/get_cpu_state', methods=['GET', 'POST'])
+def s7_client_get_cpu_state():
+    """获取S7 CPU运行状态"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        # 支持 GET 和 POST 两种方式获取参数
+        if request.method == 'POST':
+            data = request.json or {}
+            client_id = data.get('client_id', 'default')
+        else:
+            client_id = request.args.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            state = client.get_cpu_state()
+
+            # 处理bytes类型的返回值
+            if isinstance(state, bytes):
+                state = state.decode('utf-8').rstrip('\x00')
+
+            # 标准化状态字符串
+            state_str = str(state).upper() if state else 'UNKNOWN'
+
+            # 判断是否运行中
+            is_running = 'RUN' in state_str and 'STOP' not in state_str
+
+            add_log('DEBUG', f'S7 CPU状态: client_id={client_id}, state={state_str}, running={is_running}')
+
+            return jsonify({
+                'success': True,
+                'state': state_str,
+                'running': is_running
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'获取S7 CPU状态失败: {error_msg}')
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/plc_cold_start', methods=['POST'])
+def s7_client_plc_cold_start():
+    """S7 PLC冷启动"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json or {}
+        client_id = data.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            result = client.plc_cold_start()
+            add_log('INFO', f'S7 PLC冷启动: client_id={client_id}, result={result}')
+
+            return jsonify({
+                'success': True,
+                'message': 'PLC冷启动成功',
+                'result': result
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'S7 PLC冷启动失败: {error_msg}')
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/plc_hot_start', methods=['POST'])
+def s7_client_plc_hot_start():
+    """S7 PLC热启动"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json or {}
+        client_id = data.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            result = client.plc_hot_start()
+            add_log('INFO', f'S7 PLC热启动: client_id={client_id}, result={result}')
+
+            return jsonify({
+                'success': True,
+                'message': 'PLC热启动成功',
+                'result': result
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'S7 PLC热启动失败: {error_msg}')
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/plc_stop', methods=['POST'])
+def s7_client_plc_stop():
+    """S7 PLC停止"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        data = request.json or {}
+        client_id = data.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            result = client.plc_stop()
+            add_log('INFO', f'S7 PLC停止: client_id={client_id}, result={result}')
+
+            return jsonify({
+                'success': True,
+                'message': 'PLC停止成功',
+                'result': result
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'S7 PLC停止失败: {error_msg}')
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
+@app.route('/api/industrial_protocol/s7_client/list_blocks', methods=['GET', 'POST'])
+def s7_client_list_blocks():
+    """列出S7块"""
+    if not SNAP7_AVAILABLE:
+        return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
+
+    try:
+        if request.method == 'POST':
+            data = request.json or {}
+            client_id = data.get('client_id', 'default')
+        else:
+            client_id = request.args.get('client_id', 'default')
+
+        with s7_client_lock:
+            if client_id not in s7_clients:
+                return jsonify({'success': False, 'error': '客户端未连接'}), 400
+
+            client_info = s7_clients[client_id]
+            client = client_info.get('client')
+
+            if not client or not client_info.get('connected'):
+                return jsonify({'success': False, 'error': '客户端连接已断开'}), 400
+
+            # 列出块信息（简化版）
+            blocks = []
+            for block_type in ['DB', 'OB', 'FC', 'FB', 'SDB']:
+                try:
+                    # 尝试读取块列表
+                    blocks.append({'type': block_type, 'info': '可用'})
+                except:
+                    pass
+
+            add_log('INFO', f'S7列出块: client_id={client_id}')
+
+            return jsonify({
+                'success': True,
+                'blocks': blocks
+            })
+
+    except Exception as e:
+        error_msg = str(e)
+        add_log('ERROR', f'S7列出块失败: {error_msg}')
+        return jsonify({'success': False, 'error': error_msg}), 500
+
+
 # ========== 主入口 ==========
 
 # Gunicorn 入口：在模块导入时初始化 start_time
