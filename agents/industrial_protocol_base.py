@@ -2421,10 +2421,53 @@ def sync_s7_data_to_server(server_id, db_number=None):
                     verify_preview = [verify_buf[i] for i in range(min(10, sync_size))]
                     add_log('INFO', f'[DEBUG-sync] DB{db_num} 注册后缓冲区前10字节: {verify_preview}')
 
+        # 缓冲区重新注册后，断开并重连所有指向此服务端的S7客户端
+        # snap7客户端会缓存旧的缓冲区指针，重连后才能读到新数据
+        _reconnect_s7_clients_for_server(server_id)
+
     except Exception as e:
         add_log('WARNING', f'S7数据同步异常: {e}')
         import traceback
         add_log('DEBUG', f'详细错误: {traceback.format_exc()}')
+
+
+def _reconnect_s7_clients_for_server(server_id: str):
+    """断开并重连所有连接到指定S7服务端的客户端（清除snap7缓冲区缓存）"""
+    try:
+        server_info = s7_servers.get(server_id)
+        if not server_info:
+            return
+        server_host = server_info.get('host', '0.0.0.0')
+        server_port = server_info.get('port', 102)
+
+        with s7_client_lock:
+            for client_id, client_info in list(s7_clients.items()):
+                if not client_info.get('connected'):
+                    continue
+                c_ip = client_info.get('server_ip', '')
+                c_port = client_info.get('port', 0)
+                # 匹配：客户端连到的服务端IP:port
+                if c_port != server_port:
+                    continue
+                # 0.0.0.0 表示监听所有地址，匹配任意IP
+                if server_host != '0.0.0.0' and c_ip != server_host:
+                    continue
+
+                client = client_info.get('client')
+                if not client:
+                    continue
+                try:
+                    client.disconnect()
+                except Exception:
+                    pass
+                try:
+                    client.connect(c_ip, client_info.get('rack', 0), client_info.get('slot', 1), c_port)
+                    add_log('INFO', f'[sync] 客户端 {client_id} 已重连到 {c_ip}:{c_port}')
+                except Exception as e:
+                    add_log('WARNING', f'[sync] 客户端 {client_id} 重连失败: {e}')
+                    client_info['connected'] = False
+    except Exception as e:
+        add_log('WARNING', f'[sync] 重连客户端异常: {e}')
 
 # ==================== S7 客户端 API ====================
 
