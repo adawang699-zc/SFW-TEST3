@@ -2180,7 +2180,6 @@ function s7ClientStopRefresh() {
     document.getElementById('s7-stop-refresh-btn').style.display = 'none';
     document.getElementById('s7-refresh-btn').style.display = 'inline-flex';
 }
-}
 
 async function s7GetCpuInfo() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
