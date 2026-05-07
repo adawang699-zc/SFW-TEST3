@@ -638,85 +638,52 @@
                     </div>
                 </div>
 
-                <!-- DB块配置区域 - 表格布局 -->
+                <!-- DB块配置区域 - 切换式布局 -->
                 <div class="config-section" id="s7-server-db-section" style="display: none;">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                        <h5 style="margin: 0;">DB块数据配置</h5>
-                        <button class="btn btn-primary btn-sm" onclick="s7ServerRefreshAllDb()">刷新全部</button>
+                    <h5 style="margin-bottom: 12px;">DB块数据配置</h5>
+
+                    <!-- DB块选择器 -->
+                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                        <button class="btn btn-primary" id="s7-server-db-btn-1" onclick="s7ServerSelectDb(1)">DB1</button>
+                        <button class="btn btn-secondary" id="s7-server-db-btn-2" onclick="s7ServerSelectDb(2)">DB2</button>
+                        <button class="btn btn-secondary" id="s7-server-db-btn-3" onclick="s7ServerSelectDb(3)">DB3</button>
+                        <button class="btn btn-outline" onclick="s7ServerRefreshCurrentDb()" style="margin-left: auto;">刷新</button>
                         <label style="display: flex; align-items: center; gap: 4px; color: var(--text-secondary); font-size: 0.85rem;">
                             <input type="checkbox" id="s7-server-auto-refresh" onchange="toggleS7ServerAutoRefresh()">
-                            自动
+                            自动刷新
                         </label>
-                        <input type="number" id="s7-server-refresh-interval" class="form-input" value="1" style="width: 50px; height: 24px; font-size: 0.85rem;">
+                        <input type="number" id="s7-server-refresh-interval" class="form-input" value="2" style="width: 50px; height: 28px; font-size: 0.85rem;">
                         <span style="color: var(--text-muted); font-size: 0.85rem;">秒</span>
                     </div>
 
-                    <!-- DB块表格 -->
-                    <table style="width: 100%; border-collapse: collapse; background: var(--bg-dark); border-radius: 8px;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid var(--border);">
-                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">DB块</th>
-                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">大小</th>
-                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">起始地址</th>
-                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: left;">设置值(Hex)</th>
-                                <th style="padding: 8px 12px; color: var(--text-secondary); font-size: 0.85rem; text-align: center;">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr id="s7-db1-row">
-                                <td style="padding: 8px 12px; color: var(--primary); font-weight: 600;">DB1</td>
-                                <td style="padding: 8px 12px;"><input type="number" id="s7-db1-size" class="form-input" value="10" style="width: 60px; height: 24px; text-align: center;"></td>
-                                <td style="padding: 8px 12px;"><input type="number" id="s7-db1-start" class="form-input" value="0" style="width: 60px; height: 24px;"></td>
-                                <td style="padding: 8px 12px;"><input type="text" id="s7-db1-values" class="form-input" placeholder="00,01,02..." style="height: 24px;"></td>
-                                <td style="padding: 8px 12px; text-align: center;">
-                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(1)" style="padding: 2px 8px;">写</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(1)" style="padding: 2px 8px;">读</button>
-                                </td>
-                            </tr>
-                            <tr id="s7-db2-row" style="border-top: 1px solid var(--border);">
-                                <td style="padding: 8px 12px; color: var(--primary); font-weight: 600;">DB2</td>
-                                <td style="padding: 8px 12px;"><input type="number" id="s7-db2-size" class="form-input" value="100" style="width: 60px; height: 24px; text-align: center;"></td>
-                                <td style="padding: 8px 12px;"><input type="number" id="s7-db2-start" class="form-input" value="0" style="width: 60px; height: 24px;"></td>
-                                <td style="padding: 8px 12px;"><input type="text" id="s7-db2-values" class="form-input" placeholder="00,01,02..." style="height: 24px;"></td>
-                                <td style="padding: 8px 12px; text-align: center;">
-                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(2)" style="padding: 2px 8px;">写</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(2)" style="padding: 2px 8px;">读</button>
-                                </td>
-                            </tr>
-                            <tr id="s7-db3-row" style="border-top: 1px solid var(--border);">
-                                <td style="padding: 8px 12px; color: var(--primary); font-weight: 600;">DB3</td>
-                                <td style="padding: 8px 12px;"><input type="number" id="s7-db3-size" class="form-input" value="256" style="width: 60px; height: 24px; text-align: center;"></td>
-                                <td style="padding: 8px 12px;"><input type="number" id="s7-db3-start" class="form-input" value="0" style="width: 60px; height: 24px;"></td>
-                                <td style="padding: 8px 12px;"><input type="text" id="s7-db3-values" class="form-input" placeholder="00,01,02..." style="height: 24px;"></td>
-                                <td style="padding: 8px 12px; text-align: center;">
-                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(3)" style="padding: 2px 8px;">写</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(3)" style="padding: 2px 8px;">读</button>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <!-- 当前DB块配置 -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 12px; margin-bottom: 16px; background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
+                            <input type="number" id="s7-server-db-start" class="form-input" value="0" style="height: 32px;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.85rem;">读取大小(字节)</label>
+                            <input type="number" id="s7-server-db-size" class="form-input" value="64" style="height: 32px;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" style="font-size: 0.85rem;">设置值 (十六进制,逗号分隔)</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="s7-server-db-values" class="form-input" placeholder="10,20,30,40..." style="height: 32px; flex: 1;">
+                                <button class="btn btn-primary" onclick="s7ServerWriteDb()">写入</button>
+                                <button class="btn btn-secondary" onclick="s7ServerReadDb()">读取</button>
+                            </div>
+                        </div>
+                    </div>
 
-                    <!-- 数据显示区域 -->
-                    <div style="margin-top: 12px;">
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                            <div>
-                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px;">DB1 数据:</div>
-                                <div id="s7-db1-hex" style="font-family: 'Consolas', monospace; font-size: 0.75rem; background: var(--bg-card); border-radius: 4px; padding: 6px; max-height: 80px; overflow-y: auto; border: 1px solid var(--border);">
-                                    <span style="color: var(--text-muted);">等待数据...</span>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px;">DB2 数据:</div>
-                                <div id="s7-db2-hex" style="font-family: 'Consolas', monospace; font-size: 0.75rem; background: var(--bg-card); border-radius: 4px; padding: 6px; max-height: 80px; overflow-y: auto; border: 1px solid var(--border);">
-                                    <span style="color: var(--text-muted);">等待数据...</span>
-                                </div>
-                            </div>
-                            <div>
-                                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 4px;">DB3 数据:</div>
-                                <div id="s7-db3-hex" style="font-family: 'Consolas', monospace; font-size: 0.75rem; background: var(--bg-card); border-radius: 4px; padding: 6px; max-height: 80px; overflow-y: auto; border: 1px solid var(--border);">
-                                    <span style="color: var(--text-muted);">等待数据...</span>
-                                </div>
-                            </div>
+                    <!-- Hex Viewer - 大数据显示区域 -->
+                    <div style="background: var(--bg-dark); border-radius: 8px; padding: 12px; border: 1px solid var(--border);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="color: var(--primary); font-weight: 600;" id="s7-server-db-title">DB1 数据</span>
+                            <span style="color: var(--text-muted); font-size: 0.85rem;" id="s7-server-db-info">地址: 0-63</span>
+                        </div>
+                        <div id="s7-server-db-hex" style="font-family: 'Consolas', 'Courier New', monospace; font-size: 0.85rem; line-height: 1.6; background: var(--bg-card); border-radius: 4px; padding: 12px; min-height: 200px; max-height: 400px; overflow-y: auto;">
+                            <div style="color: var(--text-muted); text-align: center; padding: 40px;">等待数据...</div>
                         </div>
                     </div>
                 </div>
@@ -2410,8 +2377,8 @@ function updateS7ServerButtonState(running) {
         statusDiv.innerHTML = '<span class="status-badge status-running">运行中</span>';
         // 显示 DB 块配置区域
         if (dbSection) dbSection.style.display = 'block';
-        // 自动刷新所有 DB 块
-        s7ServerRefreshAllDb();
+        // 初始化 DB 块显示（默认选中 DB1 并读取数据）
+        initS7ServerDb();
     } else {
         btn.className = 'btn btn-success';
         btn.textContent = '启动监听';
@@ -2429,16 +2396,39 @@ function updateS7ServerButtonState(running) {
 // S7 Server 自动刷新定时器
 let s7ServerAutoRefreshTimer = null;
 
-// 设置单个 DB 块数据
-async function s7ServerSetDbData(dbNum) {
+// 当前选中的 DB 块
+let s7ServerCurrentDb = 1;
+
+// 选择 DB 块
+function s7ServerSelectDb(dbNum) {
+    s7ServerCurrentDb = dbNum;
+
+    // 更新按钮样式
+    for (let i = 1; i <= 3; i++) {
+        const btn = document.getElementById(`s7-server-db-btn-${i}`);
+        if (btn) {
+            btn.className = i === dbNum ? 'btn btn-primary' : 'btn btn-secondary';
+        }
+    }
+
+    // 更新标题
+    document.getElementById('s7-server-db-title').textContent = `DB${dbNum} 数据`;
+
+    // 自动读取数据
+    if (s7ServerRunning) {
+        s7ServerReadDb();
+    }
+}
+
+// 写入当前 DB 块数据
+async function s7ServerWriteDb() {
     if (!selectedServerAgentId || !s7ServerRunning) {
         showToast('请先启动 S7 Server', 'error');
         return;
     }
 
-    const size = parseInt(document.getElementById(`s7-db${dbNum}-size`).value) || 10;
-    const start = parseInt(document.getElementById(`s7-db${dbNum}-start`).value) || 0;
-    const valuesStr = document.getElementById(`s7-db${dbNum}-values`).value.trim();
+    const start = parseInt(document.getElementById('s7-server-db-start').value) || 0;
+    const valuesStr = document.getElementById('s7-server-db-values').value.trim();
 
     if (!valuesStr) {
         showToast('请输入设置值', 'error');
@@ -2451,96 +2441,124 @@ async function s7ServerSetDbData(dbNum) {
         agent_id: selectedServerAgentId,
         server_id: 'default',
         area: 'DB',
-        db_number: dbNum,
+        db_number: s7ServerCurrentDb,
         start: start,
         values: values
     };
 
     const result = await apiRequest('/api/industrial/s7_server/set_data/', 'POST', data);
     if (result.success) {
-        showToast(`DB${dbNum} 设置成功`, 'success');
-        s7ServerGetDbData(dbNum);  // 刷新显示
+        showToast(`DB${s7ServerCurrentDb} 写入成功`, 'success');
+        s7ServerReadDb();  // 刷新显示
     } else {
-        showToast(`DB${dbNum} 设置失败: ${result.message || result.error}`, 'error');
+        showToast(`DB${s7ServerCurrentDb} 写入失败: ${result.message || result.error}`, 'error');
     }
 }
 
-// 读取单个 DB 块数据并显示 Hex Viewer
-async function s7ServerGetDbData(dbNum) {
+// 读取当前 DB 块数据
+async function s7ServerReadDb() {
     if (!selectedServerAgentId || !s7ServerRunning) {
         showToast('请先启动 S7 Server', 'error');
         return;
     }
 
-    const size = parseInt(document.getElementById(`s7-db${dbNum}-size`).value) || 10;
-    const start = parseInt(document.getElementById(`s7-db${dbNum}-start`).value) || 0;
+    const start = parseInt(document.getElementById('s7-server-db-start').value) || 0;
+    const size = parseInt(document.getElementById('s7-server-db-size').value) || 64;
 
     const data = {
         agent_id: selectedServerAgentId,
         server_id: 'default',
         area: 'DB',
-        db_number: dbNum,
+        db_number: s7ServerCurrentDb,
         start: start,
         size: size
     };
 
     const result = await apiRequest('/api/industrial/s7_server/get_data/', 'POST', data);
-    if (result.success && result.data) {
-        updateDbHexViewer(dbNum, result.data, start);
+    if (result.success && result.values) {
+        updateS7ServerHexViewer(result.values, start);
     } else {
-        showToast(`DB${dbNum} 读取失败: ${result.message || result.error}`, 'error');
+        showToast(`DB${s7ServerCurrentDb} 读取失败: ${result.message || result.error}`, 'error');
     }
 }
 
-// 更新 DB 块 Hex Viewer 显示
-function updateDbHexViewer(dbNum, data, startAddr) {
-    const hexDiv = document.getElementById(`s7-db${dbNum}-hex`);
+// 刷新当前 DB 块
+async function s7ServerRefreshCurrentDb() {
+    s7ServerReadDb();
+}
+
+// 更新 S7 Server Hex Viewer 显示（统一显示区域）
+function updateS7ServerHexViewer(data, startAddr) {
+    const hexDiv = document.getElementById('s7-server-db-hex');
+    const infoDiv = document.getElementById('s7-server-db-info');
+
     if (!hexDiv) return;
 
     const bytesPerRow = 16;
     let html = '';
+
+    // 更新地址范围信息
+    if (infoDiv) {
+        infoDiv.textContent = `地址: ${startAddr}-${startAddr + data.length - 1} (${data.length} 字节)`;
+    }
+
+    // ASCII 显示区
+    const asciiDiv = document.getElementById('s7-server-db-ascii');
 
     for (let i = 0; i < data.length; i += bytesPerRow) {
         const addr = startAddr + i;
         const rowData = data.slice(i, i + bytesPerRow);
 
         // 地址列
-        const addrStr = addr.toString().padStart(4, '0');
-        html += `<div style="display: flex; gap: 4px;">`;
-        html += `<span style="color: var(--text-muted); min-width: 40px;">${addrStr}</span>`;
+        const addrStr = addr.toString().padStart(5, '0');
+        html += `<div style="display: flex; gap: 8px; padding: 2px 0;">`;
+        html += `<span style="color: var(--primary); min-width: 50px;">${addrStr}</span>`;
+        html += `<span style="color: var(--text-muted);">|</span>`;
 
         // 字节列
+        let asciiStr = '';
         for (let j = 0; j < bytesPerRow; j++) {
+            if (j === 8) {
+                html += `<span style="color: var(--text-muted); min-width: 8px;">-</span>`;
+            }
             if (j < rowData.length) {
-                const byte = (rowData[j] & 0xFF).toString(16).padStart(2, '0').toUpperCase();
-                html += `<span style="color: var(--text-primary); min-width: 20px;">${byte}</span>`;
+                const byte = rowData[j] & 0xFF;
+                const hex = byte.toString(16).padStart(2, '0').toUpperCase();
+                html += `<span style="color: var(--text-primary); min-width: 24px; text-align: center;">${hex}</span>`;
+                // ASCII 转换
+                if (byte >= 32 && byte <= 126) {
+                    asciiStr += String.fromCharCode(byte);
+                } else {
+                    asciiStr += '.';
+                }
             } else {
-                html += `<span style="color: var(--text-muted); min-width: 20px;">--</span>`;
+                html += `<span style="color: var(--text-muted); min-width: 24px; text-align: center;">--</span>`;
+                asciiStr += ' ';
             }
         }
+
+        html += `<span style="color: var(--text-muted); min-width: 8px;">|</span>`;
+        html += `<span style="color: var(--success); min-width: ${bytesPerRow * 8}px;">${asciiStr}</span>`;
         html += '</div>';
     }
 
     hexDiv.innerHTML = html;
 }
 
-// 刷新所有 DB 块
-async function s7ServerRefreshAllDb() {
-    if (!selectedServerAgentId || !s7ServerRunning) return;
-
-    for (let dbNum = 1; dbNum <= 3; dbNum++) {
-        await s7ServerGetDbData(dbNum);
-    }
+// S7 Server 启动后初始化 DB 块
+function initS7ServerDb() {
+    s7ServerSelectDb(1);  // 默认选中 DB1
+    s7ServerReadDb();     // 读取数据
 }
 
-// 开启/关闭自动刷新
+// 开启/关闭自动刷新（修改为刷新当前 DB）
 function toggleS7ServerAutoRefresh() {
     const checkbox = document.getElementById('s7-server-auto-refresh');
     const intervalInput = document.getElementById('s7-server-refresh-interval');
 
     if (checkbox.checked) {
-        const interval = (parseFloat(intervalInput.value) || 1) * 1000;
-        s7ServerAutoRefreshTimer = setInterval(s7ServerRefreshAllDb, interval);
+        const interval = (parseFloat(intervalInput.value) || 2) * 1000;
+        s7ServerAutoRefreshTimer = setInterval(s7ServerRefreshCurrentDb, interval);
         showToast('已开启自动刷新', 'info');
     } else {
         if (s7ServerAutoRefreshTimer) {
