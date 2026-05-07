@@ -1436,11 +1436,16 @@ def s7_server_set_data():
                 return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'})
 
         # 第二步：在锁外同步数据到服务器（避免死锁）
+        add_log('INFO', f'[set_data] area={area}, data_updated={data_updated}')
         if area == 'DB' and data_updated:
+            add_log('INFO', f'[set_data] 开始同步 DB{db_number} 到 ctypes 缓冲区')
             try:
                 sync_s7_data_to_server(server_id, db_number)
+                add_log('INFO', f'[set_data] 同步完成')
             except Exception as e:
                 add_log('WARNING', f'同步S7数据失败: {e}')
+                import traceback
+                add_log('DEBUG', f'详细错误: {traceback.format_exc()}')
 
         return jsonify({'success': True, 'message': '数据已设置'})
 
