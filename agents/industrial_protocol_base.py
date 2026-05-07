@@ -2948,14 +2948,19 @@ def s7_client_plc_stop():
         return jsonify({'success': False, 'error': error_msg}), 500
 
 
-@app.route('/api/industrial_protocol/s7_client/get_cpu_info', methods=['GET'])
+@app.route('/api/industrial_protocol/s7_client/get_cpu_info', methods=['GET', 'POST'])
 def s7_client_get_cpu_info():
     """获取S7 CPU信息"""
     if not SNAP7_AVAILABLE:
         return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
 
     try:
-        client_id = request.args.get('client_id', 'default')
+        # 支持 GET 和 POST 两种方式获取参数
+        if request.method == 'POST':
+            data = request.json or {}
+            client_id = data.get('client_id', 'default')
+        else:
+            client_id = request.args.get('client_id', 'default')
 
         with s7_client_lock:
             if client_id not in s7_clients:
@@ -3000,14 +3005,19 @@ def s7_client_get_cpu_info():
         return jsonify({'success': False, 'error': error_msg}), 500
 
 
-@app.route('/api/industrial_protocol/s7_client/get_cpu_state', methods=['GET'])
+@app.route('/api/industrial_protocol/s7_client/get_cpu_state', methods=['GET', 'POST'])
 def s7_client_get_cpu_state():
     """获取S7 CPU运行状态"""
     if not SNAP7_AVAILABLE:
         return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
 
     try:
-        client_id = request.args.get('client_id', 'default')
+        # 支持 GET 和 POST 两种方式获取参数
+        if request.method == 'POST':
+            data = request.json or {}
+            client_id = data.get('client_id', 'default')
+        else:
+            client_id = request.args.get('client_id', 'default')
 
         with s7_client_lock:
             if client_id not in s7_clients:
@@ -4216,20 +4226,15 @@ def s7_server_set_data():
                 except Exception as e:
                     add_log('WARNING', f'验证S7数据写入失败: {e}')
                 
-                # 简化数据同步逻辑（写入后仅同步，不重复注册区域）
-                # 注意：使用from_buffer时，数据会自动同步，不需要重新注册区域
+                # 数据同步：将s7_data_storage的数据同步到ctypes缓冲区
+                # 注意：必须每次都同步，否则客户端读不到最新数据
                 try:
-                    server_info = s7_servers.get(server_id)
-                    if server_info:
-                        if area == 'DB' and db_number is not None:
-                            # 仅同步，不重新注册区域（避免破坏已有映射）
-                            if not server_info.get('callback_registered', False):
-                                sync_s7_data_to_server(server_id, db_number)
-                            add_log('DEBUG', f'S7数据写入后已同步DB{db_number}（from_buffer自动同步）')
-                        else:
-                            # 其他区域同步所有数据
-                            if not server_info.get('callback_registered', False):
-                                sync_s7_data_to_server(server_id)
+                    if area == 'DB' and db_number is not None:
+                        sync_s7_data_to_server(server_id, db_number)
+                        add_log('DEBUG', f'S7数据写入后已同步DB{db_number}')
+                    else:
+                        sync_s7_data_to_server(server_id)
+                        add_log('DEBUG', f'S7数据写入后已同步所有DB')
                 except Exception as e:
                     add_log('WARNING', f'S7数据同步失败: {e}')
                 

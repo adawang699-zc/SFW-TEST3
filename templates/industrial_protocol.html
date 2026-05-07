@@ -138,9 +138,10 @@
 }
 .s7-hex-row {
     display: flex;
-    padding: 2px 12px;
+    padding: 4px 12px;
     cursor: pointer;
     transition: background-color 0.15s;
+    align-items: center;
 }
 .s7-hex-row:hover {
     background-color: var(--bg-dark);
@@ -159,13 +160,13 @@
 .s7-hex-bytes {
     flex: 1;
     display: flex;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: nowrap;
 }
 .s7-hex-byte {
-    width: 28px;
+    width: 36px;
     text-align: center;
-    padding: 2px 4px;
+    padding: 3px 4px;
     border-radius: 3px;
     cursor: pointer;
     transition: background-color 0.15s;
@@ -505,7 +506,7 @@
                     <div style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
                         <div class="form-group" style="min-width: 100px;">
                             <label class="form-label" style="font-size: 0.85rem;">区域</label>
-                            <select id="s7-area" class="form-input" style="height: 32px;" onchange="toggleS7DbNumber()">
+                            <select id="s7-area" class="form-input" style="height: 36px;" onchange="toggleS7DbNumber()">
                                 <option value="DB" selected>DB</option>
                                 <option value="I">I</option>
                                 <option value="Q">Q</option>
@@ -514,20 +515,20 @@
                         </div>
                         <div class="form-group" id="s7-db-number-group" style="min-width: 80px;">
                             <label class="form-label" style="font-size: 0.85rem;">DB号</label>
-                            <input type="number" id="s7-db-number" class="form-input" value="1" style="height: 32px; width: 70px;">
+                            <input type="number" id="s7-db-number" class="form-input" value="1" style="height: 36px; width: 70px;">
                         </div>
                         <div class="form-group" style="min-width: 80px;">
                             <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
-                            <input type="number" id="s7-start-address" class="form-input" value="0" style="height: 32px; width: 80px;">
+                            <input type="number" id="s7-start-address" class="form-input" value="0" style="height: 36px; width: 80px;">
                         </div>
                         <div class="form-group" style="min-width: 80px;">
                             <label class="form-label" style="font-size: 0.85rem;">数据个数</label>
-                            <input type="number" id="s7-read-count" class="form-input" value="160" style="height: 32px; width: 80px;">
+                            <input type="number" id="s7-read-count" class="form-input" value="160" style="height: 36px; width: 80px;">
                         </div>
-                        <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn" style="height: 32px;">读取</button>
-                        <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn" style="height: 32px;">写入</button>
-                        <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn" style="height: 32px; margin-left: auto;">刷新</button>
-                        <button class="btn btn-secondary" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none; height: 32px;">停止</button>
+                        <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">读取</button>
+                        <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">写入</button>
+                        <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center; margin-left: auto;">刷新</button>
+                        <button class="btn btn-secondary" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none; height: 36px; align-items: center; justify-content: center;">停止</button>
                     </div>
                 </div>
 
@@ -2039,8 +2040,8 @@ function updateS7ClientHexViewer(data, startAddr) {
 
         // 地址列
         const addrStr = addr.toString().padStart(4, '0');
-        html += `<div style="display: flex; gap: 4px; padding: 1px 0;">`;
-        html += `<span style="color: var(--primary); min-width: 45px;">${addrStr}</span>`;
+        html += `<div style="display: flex; gap: 6px; padding: 4px 0; align-items: center;">`;
+        html += `<span style="color: var(--primary); width: 70px; flex-shrink: 0;">${addrStr}</span>`;
         html += `<span style="color: var(--text-muted);">:</span>`;
 
         // 字节列（16字节）
@@ -2048,9 +2049,9 @@ function updateS7ClientHexViewer(data, startAddr) {
             if (j < rowData.length) {
                 const byte = rowData[j] & 0xFF;
                 const hex = byte.toString(16).padStart(2, '0').toUpperCase();
-                html += `<span style="color: var(--text-primary); min-width: 22px;">${hex}</span>`;
+                html += `<span style="color: var(--text-primary); width: 36px; text-align: center; flex-shrink: 0;">${hex}</span>`;
             } else {
-                html += `<span style="color: var(--text-muted); min-width: 22px;">--</span>`;
+                html += `<span style="color: var(--text-muted); width: 36px; text-align: center; flex-shrink: 0;">--</span>`;
             }
         }
         html += '</div>';
@@ -2391,8 +2392,8 @@ async function s7ServerReadDb() {
     };
 
     const result = await apiRequest('/api/industrial/s7_server/get_data/', 'POST', data);
-    if (result.success && result.values) {
-        updateS7ServerHexViewer(result.values);
+    if (result.success && (result.data || result.values)) {
+        updateS7ServerHexViewer(result.data || result.values);
     } else {
         showToast(`DB${s7ServerCurrentDb} 读取失败: ${result.message || result.error}`, 'error');
     }
@@ -2474,8 +2475,8 @@ function updateS7ServerHexViewer(data) {
 
         // 地址列
         const addrStr = addr.toString().padStart(4, '0');
-        html += `<div style="display: flex; gap: 4px; padding: 1px 0;">`;
-        html += `<span style="color: var(--primary); min-width: 45px;">${addrStr}</span>`;
+        html += `<div style="display: flex; gap: 6px; padding: 4px 0; align-items: center;">`;
+        html += `<span style="color: var(--primary); width: 70px; flex-shrink: 0;">${addrStr}</span>`;
         html += `<span style="color: var(--text-muted);">:</span>`;
 
         // 字节列（16字节）
@@ -2483,9 +2484,9 @@ function updateS7ServerHexViewer(data) {
             if (j < rowData.length) {
                 const byte = rowData[j] & 0xFF;
                 const hex = byte.toString(16).padStart(2, '0').toUpperCase();
-                html += `<span style="color: var(--text-primary); min-width: 22px;">${hex}</span>`;
+                html += `<span style="color: var(--text-primary); width: 36px; text-align: center; flex-shrink: 0;">${hex}</span>`;
             } else {
-                html += `<span style="color: var(--text-muted); min-width: 22px;">--</span>`;
+                html += `<span style="color: var(--text-muted); width: 36px; text-align: center; flex-shrink: 0;">--</span>`;
             }
         }
         html += '</div>';
