@@ -147,29 +147,55 @@ def step3_restart_django(ssh: paramiko.SSHClient) -> bool:
 
 
 def step4_restart_agents(ssh: paramiko.SSHClient) -> bool:
-    """步骤4: 重启 Agent 服务"""
+    """步骤4: 重启所有 Agent 服务"""
     print("\n[步骤4] 重启 Agent 服务...")
 
-    # 使用 sudo 重启 agent-eth1 服务
-    cmd = f"echo {UBUNTU_PASSWORD} | sudo -S systemctl restart agent-eth1.service"
+    # 获取所有运行中的 agent 服务
+    cmd = "systemctl list-units --type=service --state=running | grep 'agent-eth' | awk '{print $1}'"
     code, out, err = ssh_exec(ssh, cmd)
+    agent_services = [s.strip() for s in out.strip().split('\n') if s.strip()]
 
-    if code != 0 and "not found" not in err.lower():
-        print(f"  重启 agent-eth1 失败: {err}")
+    if not agent_services:
+        print("  未找到运行中的 agent 服务")
+        return True
+
+    print(f"  发现 {len(agent_services)} 个 agent 服务: {agent_services}")
+
+    # 重启所有 agent 服务
+    success_count = 0
+    for service in agent_services:
+        # 优先使用 namespace 版本的服务
+        ns_service = service.replace('.service', '-ns.service')
+        if '-ns' not in service:
+            # 检查是否有对应的 ns 服务
+            cmd_check = f"systemctl list-unit-files | grep '{ns_service}'"
+            code_check, out_check, _ = ssh_exec(ssh, cmd_check)
+            if out_check.strip():
+                service = ns_service
+
+        cmd = f"echo {UBUNTU_PASSWORD} | sudo -S systemctl restart {service}"
+        code, out, err = ssh_exec(ssh, cmd)
+        if code == 0:
+            print(f"  {service} 重启成功")
+            success_count += 1
+        else:
+            print(f"  {service} 重启失败: {err.strip()}")
 
     # 等待服务启动
-    time.sleep(2)
+    time.sleep(3)
 
-    # 检查服务状态
-    cmd = f"echo {UBUNTU_PASSWORD} | sudo -S systemctl status agent-eth1.service --no-pager"
-    code, out, err = ssh_exec(ssh, cmd)
+    # 验证所有服务状态
+    for service in agent_services:
+        ns_service = service.replace('.service', '-ns.service') if '-ns' not in service else service
+        cmd = f"systemctl is-active {ns_service}"
+        code, out, err = ssh_exec(ssh, cmd)
+        status = out.strip()
+        if status == 'active':
+            print(f"  {ns_service}: 运行中")
+        else:
+            print(f"  {ns_service}: {status}")
 
-    if "active (running)" in out:
-        print("  agent-eth1 服务运行正常")
-        return True
-    else:
-        print(f"  agent-eth1 服务状态异常: {out[:200]}")
-        return False
+    return success_count > 0
 
 
 def main():
