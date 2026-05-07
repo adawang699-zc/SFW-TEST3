@@ -2051,11 +2051,8 @@ function updateS7ClientHexViewer(data, startAddr) {
     const bytesPerRow = 16;
     let html = '';
 
-    // data 已经是从 startAddr 开始的数据，直接从索引 0 显示
-    const rowCount = Math.ceil(data.length / bytesPerRow);
-    const displayRows = Math.min(rowCount, 10);
-
-    for (let row = 0; row < displayRows; row++) {
+    // 固定显示10行，没有数据的地方显示"--"
+    for (let row = 0; row < 10; row++) {
         const addr = startAddr + row * bytesPerRow;
         const rowStartIndex = row * bytesPerRow;
         const rowData = data.slice(rowStartIndex, rowStartIndex + bytesPerRow);
@@ -2066,7 +2063,7 @@ function updateS7ClientHexViewer(data, startAddr) {
         html += `<span style="color: var(--primary); width: 55px; flex-shrink: 0;">${addrStr}</span>`;
         html += `<span style="color: var(--text-muted);">:</span>`;
 
-        // 字节列（16字节）
+        // 字节列（16字节），没有数据显示"--"
         for (let j = 0; j < bytesPerRow; j++) {
             if (j < rowData.length) {
                 const byte = rowData[j] & 0xFF;
@@ -2137,11 +2134,8 @@ async function s7ClientWrite() {
         showToast('写入成功', 'success');
 
         // 写入后刷新服务端显示（如果服务端正在运行）
-        if (s7ServerRunning && area === 'DB') {
-            // 通知服务端刷新对应DB块
-            if (s7ServerCurrentDb === dbNum) {
-                s7ServerReadDb();
-            }
+        if (s7ServerRunning && selectedServerAgentId) {
+            s7ServerReadDb();
         }
     } else {
         showToast('写入失败: ' + (result.message || result.error), 'error');
