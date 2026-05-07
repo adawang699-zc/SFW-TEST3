@@ -2134,8 +2134,18 @@ async function s7ClientWrite() {
     if (result.success) {
         showToast('写入成功', 'success');
 
-        // 写入后刷新服务端显示（如果服务端正在运行）
+        // 直接更新服务端存储（绕过snap7回调机制）
         if (s7ServerRunning && selectedServerAgentId) {
+            const serverData = {
+                agent_id: selectedServerAgentId,
+                server_id: 'default',
+                area: area,
+                db_number: dbNum,
+                start: startAddr,
+                values: s7ClientHexData
+            };
+            await apiRequest('/api/industrial/s7_server/set_data/', 'POST', serverData);
+            // 刷新服务端显示
             s7ServerReadDb();
         }
     } else {

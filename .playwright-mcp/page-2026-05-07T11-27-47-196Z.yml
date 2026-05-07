@@ -1,0 +1,312 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - link "防火墙测试平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 19:27:46"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 Agent 管理" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: Agent 管理
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "🔧 服务下发" [ref=e19] [cursor=pointer]:
+      - /url: /service-deploy/
+      - generic [ref=e20]: 🔧
+      - text: 服务下发
+    - link "⚙️ 工控协议" [ref=e22] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e23]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e25] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e26]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e28] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e29]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e31] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e32]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e34] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e35]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e37] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e38]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e40] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e41]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e43] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e44]: 🔑
+      - text: 授权管理
+  - generic [ref=e45]:
+    - generic [ref=e46]:
+      - generic [ref=e47]: 工控协议测试
+      - paragraph [ref=e48]: 支持 Modbus、S7、GOOSE、SV、DNP3、BACnet、Ethernet/IP、MMS 等工控协议的客户端和服务端模拟
+    - generic [ref=e49]:
+      - generic [ref=e50]: 协议选择
+      - generic [ref=e51]:
+        - generic [ref=e52] [cursor=pointer]: Modbus
+        - generic [ref=e53] [cursor=pointer]: S7
+        - generic [ref=e54] [cursor=pointer]: GOOSE/SV
+        - generic [ref=e55] [cursor=pointer]: DNP3
+        - generic [ref=e56] [cursor=pointer]: BACnet
+        - generic [ref=e57] [cursor=pointer]: ENIP
+        - generic [ref=e58] [cursor=pointer]: MMS
+        - generic [ref=e59] [cursor=pointer]: HTTP
+      - generic [ref=e390]:
+        - generic [ref=e391]:
+          - heading "S7 Client" [level=4] [ref=e392]
+          - generic [ref=e393]:
+            - heading "选择 Client Agent" [level=5] [ref=e394]
+            - generic [ref=e395]:
+              - generic [ref=e396] [cursor=pointer]: agent_eth1 (192.168.11.100)
+              - generic [ref=e397] [cursor=pointer]: agent_eth2 (192.168.12.100)
+          - generic [ref=e398]:
+            - generic [ref=e399]:
+              - generic [ref=e400]:
+                - generic [ref=e401]: 目标 IP
+                - textbox "192.168.1.100" [ref=e402]
+              - generic [ref=e403]:
+                - generic [ref=e404]: 端口
+                - spinbutton [ref=e405]: "102"
+              - generic [ref=e406]:
+                - generic [ref=e407]: Rack/Slot
+                - textbox "rack/slot" [ref=e408]: 0/1
+            - generic [ref=e409]:
+              - button "连接" [ref=e410] [cursor=pointer]
+              - generic [ref=e412]: 未连接
+        - generic [ref=e413]:
+          - heading "S7 Server" [level=4] [ref=e414]
+          - generic [ref=e415]:
+            - heading "选择 Server Agent" [level=5] [ref=e416]
+            - generic [ref=e417]:
+              - generic [ref=e418] [cursor=pointer]: agent_eth1 (192.168.11.100)
+              - generic [ref=e419] [cursor=pointer]: agent_eth2 (192.168.12.100)
+          - generic [ref=e420]:
+            - generic [ref=e422]:
+              - generic [ref=e423]: 监听端口
+              - spinbutton [ref=e424]: "102"
+            - generic [ref=e425]:
+              - button "停止监听" [ref=e431] [cursor=pointer]
+              - generic [ref=e432]: 运行中
+          - generic [ref=e433]:
+            - heading "DB块数据展示" [level=5] [ref=e434]
+            - generic [ref=e435]:
+              - button "DB1" [ref=e436] [cursor=pointer]
+              - button "DB2" [ref=e437] [cursor=pointer]
+              - button "DB3" [ref=e438] [cursor=pointer]
+              - button "刷新" [ref=e439] [cursor=pointer]
+              - button "随机" [active] [ref=e440] [cursor=pointer]
+              - button "重置" [ref=e441] [cursor=pointer]
+            - generic [ref=e442]:
+              - generic [ref=e443]: DB1 数据
+              - generic [ref=e444]:
+                - generic [ref=e636]:
+                  - generic [ref=e637]: "0000"
+                  - generic [ref=e638]: ":"
+                  - generic [ref=e639]: 3E
+                  - generic [ref=e640]: "62"
+                  - generic [ref=e641]: "77"
+                  - generic [ref=e642]: CE
+                  - generic [ref=e643]: 4F
+                  - generic [ref=e644]: "40"
+                  - generic [ref=e645]: F0
+                  - generic [ref=e646]: 2E
+                  - generic [ref=e647]: "59"
+                  - generic [ref=e648]: DB
+                  - generic [ref=e649]: "73"
+                  - generic [ref=e650]: "61"
+                  - generic [ref=e651]: D5
+                  - generic [ref=e652]: "82"
+                  - generic [ref=e653]: "06"
+                  - generic [ref=e654]: 6F
+                - generic [ref=e655]:
+                  - generic [ref=e656]: "0016"
+                  - generic [ref=e657]: ":"
+                  - generic [ref=e658]: 8D
+                  - generic [ref=e659]: "00"
+                  - generic [ref=e660]: "48"
+                  - generic [ref=e661]: "56"
+                  - generic [ref=e662]: "40"
+                  - generic [ref=e663]: 3D
+                  - generic [ref=e664]: "59"
+                  - generic [ref=e665]: ED
+                  - generic [ref=e666]: BE
+                  - generic [ref=e667]: 4C
+                  - generic [ref=e668]: "36"
+                  - generic [ref=e669]: A7
+                  - generic [ref=e670]: "84"
+                  - generic [ref=e671]: A6
+                  - generic [ref=e672]: A0
+                  - generic [ref=e673]: DF
+                - generic [ref=e674]:
+                  - generic [ref=e675]: "0032"
+                  - generic [ref=e676]: ":"
+                  - generic [ref=e677]: 4C
+                  - generic [ref=e678]: D1
+                  - generic [ref=e679]: C8
+                  - generic [ref=e680]: "33"
+                  - generic [ref=e681]: "01"
+                  - generic [ref=e682]: "93"
+                  - generic [ref=e683]: E1
+                  - generic [ref=e684]: 9B
+                  - generic [ref=e685]: FD
+                  - generic [ref=e686]: AC
+                  - generic [ref=e687]: "67"
+                  - generic [ref=e688]: "84"
+                  - generic [ref=e689]: "66"
+                  - generic [ref=e690]: 7B
+                  - generic [ref=e691]: AE
+                  - generic [ref=e692]: E0
+                - generic [ref=e693]:
+                  - generic [ref=e694]: "0048"
+                  - generic [ref=e695]: ":"
+                  - generic [ref=e696]: CE
+                  - generic [ref=e697]: "33"
+                  - generic [ref=e698]: E4
+                  - generic [ref=e699]: "31"
+                  - generic [ref=e700]: DE
+                  - generic [ref=e701]: "40"
+                  - generic [ref=e702]: 5E
+                  - generic [ref=e703]: CE
+                  - generic [ref=e704]: "35"
+                  - generic [ref=e705]: C8
+                  - generic [ref=e706]: "38"
+                  - generic [ref=e707]: A9
+                  - generic [ref=e708]: BD
+                  - generic [ref=e709]: 0A
+                  - generic [ref=e710]: 8A
+                  - generic [ref=e711]: EE
+                - generic [ref=e712]:
+                  - generic [ref=e713]: "0064"
+                  - generic [ref=e714]: ":"
+                  - generic [ref=e715]: "83"
+                  - generic [ref=e716]: EB
+                  - generic [ref=e717]: "15"
+                  - generic [ref=e718]: "62"
+                  - generic [ref=e719]: FD
+                  - generic [ref=e720]: "42"
+                  - generic [ref=e721]: C8
+                  - generic [ref=e722]: "76"
+                  - generic [ref=e723]: "45"
+                  - generic [ref=e724]: BB
+                  - generic [ref=e725]: "30"
+                  - generic [ref=e726]: "12"
+                  - generic [ref=e727]: "16"
+                  - generic [ref=e728]: "81"
+                  - generic [ref=e729]: 3C
+                  - generic [ref=e730]: 3E
+                - generic [ref=e731]:
+                  - generic [ref=e732]: "0080"
+                  - generic [ref=e733]: ":"
+                  - generic [ref=e734]: C8
+                  - generic [ref=e735]: "96"
+                  - generic [ref=e736]: "07"
+                  - generic [ref=e737]: "40"
+                  - generic [ref=e738]: "73"
+                  - generic [ref=e739]: BE
+                  - generic [ref=e740]: 1B
+                  - generic [ref=e741]: "28"
+                  - generic [ref=e742]: 4A
+                  - generic [ref=e743]: C8
+                  - generic [ref=e744]: "02"
+                  - generic [ref=e745]: D4
+                  - generic [ref=e746]: EB
+                  - generic [ref=e747]: AE
+                  - generic [ref=e748]: 7A
+                  - generic [ref=e749]: D9
+                - generic [ref=e750]:
+                  - generic [ref=e751]: "0096"
+                  - generic [ref=e752]: ":"
+                  - generic [ref=e753]: "67"
+                  - generic [ref=e754]: "37"
+                  - generic [ref=e755]: DF
+                  - generic [ref=e756]: DC
+                  - generic [ref=e757]: "23"
+                  - generic [ref=e758]: "66"
+                  - generic [ref=e759]: "59"
+                  - generic [ref=e760]: "68"
+                  - generic [ref=e761]: E7
+                  - generic [ref=e762]: 0A
+                  - generic [ref=e763]: BE
+                  - generic [ref=e764]: "78"
+                  - generic [ref=e765]: E2
+                  - generic [ref=e766]: B7
+                  - generic [ref=e767]: E8
+                  - generic [ref=e768]: 2A
+                - generic [ref=e769]:
+                  - generic [ref=e770]: "0112"
+                  - generic [ref=e771]: ":"
+                  - generic [ref=e772]: 8F
+                  - generic [ref=e773]: AF
+                  - generic [ref=e774]: 0D
+                  - generic [ref=e775]: 8A
+                  - generic [ref=e776]: ED
+                  - generic [ref=e777]: FE
+                  - generic [ref=e778]: C2
+                  - generic [ref=e779]: 7A
+                  - generic [ref=e780]: AF
+                  - generic [ref=e781]: "91"
+                  - generic [ref=e782]: E6
+                  - generic [ref=e783]: A2
+                  - generic [ref=e784]: EE
+                  - generic [ref=e785]: "92"
+                  - generic [ref=e786]: 6C
+                  - generic [ref=e787]: C6
+                - generic [ref=e788]:
+                  - generic [ref=e789]: "0128"
+                  - generic [ref=e790]: ":"
+                  - generic [ref=e791]: 9D
+                  - generic [ref=e792]: E4
+                  - generic [ref=e793]: "17"
+                  - generic [ref=e794]: EC
+                  - generic [ref=e795]: 9D
+                  - generic [ref=e796]: B2
+                  - generic [ref=e797]: "63"
+                  - generic [ref=e798]: EA
+                  - generic [ref=e799]: 9C
+                  - generic [ref=e800]: 4F
+                  - generic [ref=e801]: C0
+                  - generic [ref=e802]: "80"
+                  - generic [ref=e803]: 9B
+                  - generic [ref=e804]: 9F
+                  - generic [ref=e805]: "33"
+                  - generic [ref=e806]: 1E
+                - generic [ref=e807]:
+                  - generic [ref=e808]: "0144"
+                  - generic [ref=e809]: ":"
+                  - generic [ref=e810]: BE
+                  - generic [ref=e811]: CB
+                  - generic [ref=e812]: "12"
+                  - generic [ref=e813]: "89"
+                  - generic [ref=e814]: "73"
+                  - generic [ref=e815]: "34"
+                  - generic [ref=e816]: "50"
+                  - generic [ref=e817]: "20"
+                  - generic [ref=e818]: 7C
+                  - generic [ref=e819]: "87"
+                  - generic [ref=e820]: CB
+                  - generic [ref=e821]: "53"
+                  - generic [ref=e822]: C7
+                  - generic [ref=e823]: FF
+                  - generic [ref=e824]: 9C
+                  - generic [ref=e825]: AB
+  - generic [ref=e826]: DB1 随机数据已生成
