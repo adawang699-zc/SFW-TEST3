@@ -1569,7 +1569,16 @@ def s7_client_status():
 
 @app.route('/api/industrial_protocol/s7_client/read', methods=['POST'])
 def s7_client_read():
-    """读取S7服务器数据"""
+    """读取S7服务器数据
+
+    支持数据类型:
+    - BYTE: 1字节/个
+    - WORD: 2字节/个
+    - DWORD: 4字节/个
+    - INT: 2字节/个
+    - DINT: 4字节/个
+    - REAL: 4字节/个
+    """
     if not SNAP7_AVAILABLE:
         return jsonify({'success': False, 'error': 'python-snap7不可用'}), 500
 
@@ -1579,7 +1588,18 @@ def s7_client_read():
         area = data.get('area', 'DB')
         db_number = data.get('db_number', 1)
         start = data.get('start', 0)
-        size = data.get('size', 1)
+        amount = data.get('size', 10)  # 数据个数
+        data_type = data.get('data_type', 'BYTE')  # 数据类型
+
+        # 每种数据类型的字节数
+        bytes_per_element = {
+            'BYTE': 1, 'CHAR': 1,
+            'WORD': 2, 'INT': 2,
+            'DWORD': 4, 'DINT': 4, 'REAL': 4,
+        }
+
+        # 计算实际需要读取的字节数
+        byte_size = amount * bytes_per_element.get(data_type.upper(), 1)
 
         with s7_client_lock:
             if client_id not in s7_clients:
@@ -1589,28 +1609,70 @@ def s7_client_read():
             if not client:
                 return jsonify({'success': False, 'error': '客户端连接丢失'}), 500
 
-            # 读取数据
+            # 读取数据（按字节数读取）
             if area == 'DB':
-                result = client.read_area(snap7_area.DB, db_number, start, size)
+                result = client.read_area(snap7_area.DB, db_number, start, byte_size)
             elif area == 'I' or area == 'PE':
-                result = client.read_area(snap7_area.PE, 0, start, size)
+                result = client.read_area(snap7_area.PE, 0, start, byte_size)
             elif area == 'Q' or area == 'PA':
-                result = client.read_area(snap7_area.PA, 0, start, size)
+                result = client.read_area(snap7_area.PA, 0, start, byte_size)
             elif area == 'M' or area == 'MK':
-                result = client.read_area(snap7_area.MK, 0, start, size)
+                result = client.read_area(snap7_area.MK, 0, start, byte_size)
             else:
                 return jsonify({'success': False, 'error': f'不支持的区域类型: {area}'}), 400
 
-            # 转换为整数列表
-            values = list(result) if result else []
+            # 转换为字节列表
+            raw_bytes = list(result) if result else []
+
+            # 根据数据类型解析数据
+            parsed_values = []
+            elem_size = bytes_per_element.get(data_type.upper(), 1)
+
+            for i in range(amount):
+                elem_start = i * elem_size
+                elem_bytes = raw_bytes[elem_start:elem_start + elem_size]
+
+                if len(elem_bytes) < elem_size:
+                    break
+
+                if data_type.upper() == 'BYTE':
+                    parsed_values.append(elem_bytes[0])
+                elif data_type.upper() == 'WORD':
+                    # 大端序: 高字节在前
+                    value = (elem_bytes[0] << 8) | elem_bytes[1]
+                    parsed_values.append(value)
+                elif data_type.upper() == 'DWORD':
+                    value = (elem_bytes[0] << 24) | (elem_bytes[1] << 16) | (elem_bytes[2] << 8) | elem_bytes[3]
+                    parsed_values.append(value)
+                elif data_type.upper() == 'INT':
+                    # INT 是有符号的 16 位
+                    value = (elem_bytes[0] << 8) | elem_bytes[1]
+                    if value >= 0x8000:
+                        value -= 0x10000
+                    parsed_values.append(value)
+                elif data_type.upper() == 'DINT':
+                    # DINT 是有符号的 32 位
+                    value = (elem_bytes[0] << 24) | (elem_bytes[1] << 16) | (elem_bytes[2] << 8) | elem_bytes[3]
+                    if value >= 0x80000000:
+                        value -= 0x100000000
+                    parsed_values.append(value)
+                elif data_type.upper() == 'REAL':
+                    # REAL 是浮点数 (4字节)
+                    import struct
+                    value = struct.unpack('>f', bytes(elem_bytes))[0]
+                    parsed_values.append(round(value, 2))  # 保留2位小数
+                else:
+                    parsed_values.append(elem_bytes[0])
 
             return jsonify({
                 'success': True,
-                'values': values,
+                'values': parsed_values,
+                'data': raw_bytes,  # 同时返回原始字节用于 hex viewer
                 'area': area,
                 'db_number': db_number,
                 'start': start,
-                'size': size
+                'size': amount,
+                'data_type': data_type
             })
 
     except Exception as e:

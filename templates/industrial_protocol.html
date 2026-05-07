@@ -527,7 +527,18 @@
                         </div>
                         <div class="form-group" style="min-width: 80px;">
                             <label class="form-label" style="font-size: 0.85rem;">数据个数</label>
-                            <input type="number" id="s7-read-count" class="form-input" value="160" style="height: 36px; width: 80px;">
+                            <input type="number" id="s7-read-count" class="form-input" value="10" style="height: 36px; width: 80px;">
+                        </div>
+                        <div class="form-group" style="min-width: 100px;">
+                            <label class="form-label" style="font-size: 0.85rem;">数据类型</label>
+                            <select id="s7-data-type" class="form-input" style="height: 36px; width: 100px;">
+                                <option value="BYTE" selected>BYTE</option>
+                                <option value="WORD">WORD</option>
+                                <option value="DWORD">DWORD</option>
+                                <option value="INT">INT</option>
+                                <option value="DINT">DINT</option>
+                                <option value="REAL">REAL</option>
+                            </select>
                         </div>
                         <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">读取</button>
                         <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn" style="height: 36px; display: inline-flex; align-items: center; justify-content: center;">写入</button>
@@ -2040,9 +2051,14 @@ function updateS7ClientHexViewer(data, startAddr) {
     const bytesPerRow = 16;
     let html = '';
 
-    for (let row = 0; row < 10; row++) {
+    // data 已经是从 startAddr 开始的数据，直接从索引 0 显示
+    const rowCount = Math.ceil(data.length / bytesPerRow);
+    const displayRows = Math.min(rowCount, 10);
+
+    for (let row = 0; row < displayRows; row++) {
         const addr = startAddr + row * bytesPerRow;
-        const rowData = data.slice(addr, addr + bytesPerRow);
+        const rowStartIndex = row * bytesPerRow;
+        const rowData = data.slice(rowStartIndex, rowStartIndex + bytesPerRow);
 
         // 地址列
         const addrStr = addr.toString().padStart(4, '0');
@@ -2069,9 +2085,37 @@ function updateS7ClientHexViewer(data, startAddr) {
 async function s7ClientRead() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
+    const area = document.getElementById('s7-area').value;
     const dbNum = parseInt(document.getElementById('s7-db-number').value);
+    const dataType = document.getElementById('s7-data-type').value;
     const titleEl = document.getElementById('s7-client-hex-title');
-    if (titleEl) titleEl.textContent = `DB${dbNum} 数据`;
+    if (titleEl) {
+        if (area === 'DB') {
+            titleEl.textContent = `DB${dbNum} 数据 (${dataType})`;
+        } else {
+            titleEl.textContent = `${area} 数据 (${dataType})`;
+        }
+    }
+
+    const data = {
+        agent_id: selectedClientAgentId,
+        area: area,
+        db_number: dbNum,
+        start: parseInt(document.getElementById('s7-start-address').value),
+        size: parseInt(document.getElementById('s7-read-count').value) || 10,
+        data_type: dataType
+    };
+
+    const result = await apiRequest('/api/industrial/s7_client/read/', 'POST', data);
+    if (result.success) {
+        const readData = result.data || result.values || [];
+        s7ClientHexData = readData;
+        updateS7ClientHexViewer(readData, parseInt(document.getElementById('s7-start-address').value));
+        showToast('读取成功', 'success');
+    } else {
+        showToast('读取失败: ' + (result.message || result.error), 'error');
+    }
+}
 
     const data = {
         agent_id: selectedClientAgentId,
@@ -2129,8 +2173,8 @@ async function s7ClientRefresh() {
     // 先读取一次
     await s7ClientRead();
 
-    // 启动定时刷新（默认1秒）
-    const interval = 1;
+    // 启动定时刷新（默认2秒）
+    const interval = 2;
 
     if (s7ClientRefreshTimer) clearInterval(s7ClientRefreshTimer);
 
@@ -2144,7 +2188,7 @@ async function s7ClientRefresh() {
 
     document.getElementById('s7-stop-refresh-btn').style.display = 'inline-flex';
     document.getElementById('s7-refresh-btn').style.display = 'none';
-    showToast(`自动刷新已启动`, 'success');
+    showToast(`自动刷新已启动 (${interval}秒)`, 'success');
 }
 
 function s7ClientStopRefresh() {
@@ -2153,6 +2197,8 @@ function s7ClientStopRefresh() {
         s7ClientRefreshTimer = null;
     }
     document.getElementById('s7-stop-refresh-btn').style.display = 'none';
+    document.getElementById('s7-refresh-btn').style.display = 'inline-flex';
+}
 }
 
 async function s7GetCpuInfo() {
