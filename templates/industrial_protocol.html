@@ -502,61 +502,41 @@
                 <!-- 数据配置区域（连接成功后显示） -->
                 <div class="config-section" id="s7-client-data-config" style="display: none;">
                     <h5 style="margin-bottom: 12px;">数据配置</h5>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label class="form-label">区域类型</label>
-                            <select id="s7-area" class="form-input" onchange="toggleS7DbNumber()">
-                                <option value="DB" selected>DB (数据块)</option>
-                                <option value="I">I (输入)</option>
-                                <option value="Q">Q (输出)</option>
-                                <option value="M">M (标记)</option>
+                    <div style="display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="form-group" style="min-width: 100px;">
+                            <label class="form-label" style="font-size: 0.85rem;">区域</label>
+                            <select id="s7-area" class="form-input" style="height: 32px;" onchange="toggleS7DbNumber()">
+                                <option value="DB" selected>DB</option>
+                                <option value="I">I</option>
+                                <option value="Q">Q</option>
+                                <option value="M">M</option>
                             </select>
                         </div>
-                        <div class="form-group" id="s7-db-number-group">
-                            <label class="form-label">DB 编号</label>
-                            <input type="number" id="s7-db-number" class="form-input" value="1">
+                        <div class="form-group" id="s7-db-number-group" style="min-width: 80px;">
+                            <label class="form-label" style="font-size: 0.85rem;">DB号</label>
+                            <input type="number" id="s7-db-number" class="form-input" value="1" style="height: 32px; width: 70px;">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">起始地址</label>
-                            <input type="number" id="s7-start-address" class="form-input" value="0">
+                        <div class="form-group" style="min-width: 80px;">
+                            <label class="form-label" style="font-size: 0.85rem;">起始地址</label>
+                            <input type="number" id="s7-start-address" class="form-input" value="0" style="height: 32px; width: 80px;">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">数据个数</label>
-                            <input type="number" id="s7-read-count" class="form-input" value="160">
+                        <div class="form-group" style="min-width: 80px;">
+                            <label class="form-label" style="font-size: 0.85rem;">数据个数</label>
+                            <input type="number" id="s7-read-count" class="form-input" value="160" style="height: 32px; width: 80px;">
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">数据类型</label>
-                            <select id="s7-data-type" class="form-input">
-                                <option value="BYTE">Byte (1字节)</option>
-                                <option value="WORD">Word (2字节)</option>
-                                <option value="DWORD">DWord (4字节)</option>
-                                <option value="REAL">Real (4字节)</option>
-                                <option value="INT">Int (2字节)</option>
-                                <option value="DINT">DInt (4字节)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">刷新间隔 (秒)</label>
-                            <input type="number" id="s7-refresh-interval" class="form-input" value="1" min="0.1" max="60" step="0.1">
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn">读取</button>
-                        <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn">写入</button>
-                        <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn">刷新</button>
-                        <button class="btn btn-secondary" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none;">停止刷新</button>
+                        <button class="btn btn-primary" onclick="s7ClientRead()" id="s7-read-btn" style="height: 32px;">读取</button>
+                        <button class="btn btn-warning" onclick="s7ClientWrite()" id="s7-write-btn" style="height: 32px;">写入</button>
+                        <button class="btn btn-success" onclick="s7ClientRefresh()" id="s7-refresh-btn" style="height: 32px; margin-left: auto;">刷新</button>
+                        <button class="btn btn-secondary" onclick="s7ClientStopRefresh()" id="s7-stop-refresh-btn" style="display: none; height: 32px;">停止</button>
                     </div>
                 </div>
 
-                <!-- Hex Viewer 区域 -->
+                <!-- Hex Viewer 区域 - 与服务端一致 -->
                 <div class="config-section" id="s7-client-hex-section" style="display: none;">
-                    <h5 style="margin-bottom: 12px;">数据查看器 (十六进制)</h5>
-                    <div class="s7-hex-viewer" id="s7-client-hex-viewer">
-                        <div class="s7-hex-header">
-                            <span class="s7-hex-address-label">地址</span>
-                            <span class="s7-hex-bytes-label">字节值 (十六进制)</span>
-                        </div>
-                        <div class="s7-hex-content" id="s7-client-hex-content">
+                    <h5 style="margin-bottom: 12px;">数据查看器</h5>
+                    <div style="background: var(--bg-dark); border-radius: 8px; padding: 12px; border: 1px solid var(--border);">
+                        <div style="color: var(--primary); font-weight: 600; margin-bottom: 8px;" id="s7-client-hex-title">DB1 数据</div>
+                        <div id="s7-client-hex-content" style="font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9rem; line-height: 1.7; background: var(--bg-card); border-radius: 4px; padding: 8px;">
                         </div>
                     </div>
                 </div>
@@ -643,7 +623,7 @@
                     <h5 style="margin-bottom: 12px;">DB块数据展示</h5>
 
                     <!-- DB块选择器 + 操作按钮 -->
-                    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                         <button class="btn btn-primary" id="s7-server-db-btn-1" onclick="s7ServerSelectDb(1)">DB1</button>
                         <button class="btn btn-secondary" id="s7-server-db-btn-2" onclick="s7ServerSelectDb(2)">DB2</button>
                         <button class="btn btn-secondary" id="s7-server-db-btn-3" onclick="s7ServerSelectDb(3)">DB3</button>
@@ -651,38 +631,11 @@
                         <button class="btn btn-outline" onclick="s7ServerResetDb()">重置</button>
                     </div>
 
-                    <!-- Hex Viewer - 固定160字节显示（10行x16字节） -->
+                    <!-- Hex Viewer - 固定160字节显示（10行x16字节），占满宽度 -->
                     <div style="background: var(--bg-dark); border-radius: 8px; padding: 12px; border: 1px solid var(--border);">
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-                            <span style="color: var(--primary); font-weight: 600;" id="s7-server-db-title">DB1 数据</span>
-                            <span style="color: var(--text-muted); font-size: 0.85rem;" id="s7-server-db-info">地址: 0-159 (160字节)</span>
+                        <div style="color: var(--primary); font-weight: 600; margin-bottom: 8px;" id="s7-server-db-title">DB1 数据</div>
+                        <div id="s7-server-db-hex" style="font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9rem; line-height: 1.7; background: var(--bg-card); border-radius: 4px; padding: 8px;">
                         </div>
-                        <div id="s7-server-db-hex" style="font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9rem; line-height: 1.8; background: var(--bg-card); border-radius: 4px; padding: 12px; min-height: 220px;">
-                            <div style="color: var(--text-muted); text-align: center; padding: 40px;">等待数据...</div>
-                        </div>
-                    </div>
-                </div>
-                                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                                    <button class="btn btn-primary btn-sm" onclick="s7ServerSetDbData(3)">设置</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="s7ServerGetDbData(3)">读取</button>
-                                </div>
-                                <!-- Hex Viewer -->
-                                <div id="s7-db3-hex" style="margin-top: 12px; font-family: 'Consolas', monospace; font-size: 0.8rem; background: var(--bg-card); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto;">
-                                    <div style="color: var(--text-muted); text-align: center;">等待数据...</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 刷新全部按钮 -->
-                    <div style="margin-top: 16px; display: flex; gap: 12px;">
-                        <button class="btn btn-primary" onclick="s7ServerRefreshAllDb()">刷新全部DB块</button>
-                        <label style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);">
-                            <input type="checkbox" id="s7-server-auto-refresh" onchange="toggleS7ServerAutoRefresh()">
-                            自动刷新
-                        </label>
-                        <input type="number" id="s7-server-refresh-interval" class="form-input" value="1" style="width: 60px; height: 28px;" title="刷新间隔(秒)">
-                        <span style="color: var(--text-muted);">秒</span>
                     </div>
                 </div>
             </div>
@@ -2060,6 +2013,50 @@ function toggleS7DbNumber() {
     const area = document.getElementById('s7-area').value;
     const dbGroup = document.getElementById('s7-db-number-group');
     dbGroup.style.display = area === 'DB' ? 'block' : 'none';
+
+    // 更新标题
+    const title = document.getElementById('s7-client-hex-title');
+    if (title) {
+        if (area === 'DB') {
+            title.textContent = `DB${document.getElementById('s7-db-number').value} 数据`;
+        } else {
+            title.textContent = `${area} 数据`;
+        }
+    }
+}
+
+// 客户端 Hex Viewer 更新（与服务端格式一致）
+function updateS7ClientHexViewer(data, startAddr) {
+    const hexDiv = document.getElementById('s7-client-hex-content');
+    if (!hexDiv) return;
+
+    const bytesPerRow = 16;
+    let html = '';
+
+    for (let row = 0; row < 10; row++) {
+        const addr = startAddr + row * bytesPerRow;
+        const rowData = data.slice(addr, addr + bytesPerRow);
+
+        // 地址列
+        const addrStr = addr.toString().padStart(4, '0');
+        html += `<div style="display: flex; gap: 4px; padding: 1px 0;">`;
+        html += `<span style="color: var(--primary); min-width: 45px;">${addrStr}</span>`;
+        html += `<span style="color: var(--text-muted);">:</span>`;
+
+        // 字节列（16字节）
+        for (let j = 0; j < bytesPerRow; j++) {
+            if (j < rowData.length) {
+                const byte = rowData[j] & 0xFF;
+                const hex = byte.toString(16).padStart(2, '0').toUpperCase();
+                html += `<span style="color: var(--text-primary); min-width: 22px;">${hex}</span>`;
+            } else {
+                html += `<span style="color: var(--text-muted); min-width: 22px;">--</span>`;
+            }
+        }
+        html += '</div>';
+    }
+
+    hexDiv.innerHTML = html;
 }
 
 async function s7ClientRead() {
@@ -2070,27 +2067,14 @@ async function s7ClientRead() {
         area: document.getElementById('s7-area').value,
         db_number: parseInt(document.getElementById('s7-db-number').value),
         start: parseInt(document.getElementById('s7-start-address').value),
-        size: parseInt(document.getElementById('s7-read-count').value),
-        data_type: document.getElementById('s7-data-type').value
+        size: parseInt(document.getElementById('s7-read-count').value) || 160
     };
 
     const result = await apiRequest('/api/industrial/s7_client/read/', 'POST', data);
     if (result.success) {
         const readData = result.data || result.values || [];
-        s7ClientHexData = readData.slice(0, parseInt(document.getElementById('s7-read-count').value));
-
-        // 更新 hex viewer
-        const content = document.getElementById('s7-client-hex-content');
-        const byteElements = content.querySelectorAll('.s7-hex-byte');
-
-        readData.forEach((value, index) => {
-            if (byteElements[index]) {
-                const byteValue = parseInt(value) & 0xFF;
-                byteElements[index].textContent = byteValue.toString(16).padStart(2, '0').toUpperCase();
-                byteElements[index].classList.remove('modified');
-            }
-        });
-
+        s7ClientHexData = readData;
+        updateS7ClientHexViewer(readData, parseInt(document.getElementById('s7-start-address').value));
         showToast('读取成功', 'success');
     } else {
         showToast('读取失败: ' + (result.message || result.error), 'error');
@@ -2100,34 +2084,36 @@ async function s7ClientRead() {
 async function s7ClientWrite() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
-    // 收集 hex viewer 中的数据
-    const content = document.getElementById('s7-client-hex-content');
-    const byteElements = content.querySelectorAll('.s7-hex-byte:not(.s7-hex-byte-empty)');
-    const writeData = [];
-
-    byteElements.forEach(el => {
-        const byteValue = parseInt(el.textContent, 16) || 0;
-        writeData.push(byteValue);
-    });
+    const startAddr = parseInt(document.getElementById('s7-start-address').value);
+    const area = document.getElementById('s7-area').value;
+    const dbNum = parseInt(document.getElementById('s7-db-number').value);
 
     const data = {
         agent_id: selectedClientAgentId,
-        area: document.getElementById('s7-area').value,
-        db_number: parseInt(document.getElementById('s7-db-number').value),
-        start: parseInt(document.getElementById('s7-start-address').value),
-        data: writeData,
-        data_type: document.getElementById('s7-data-type').value
+        area: area,
+        db_number: dbNum,
+        start: startAddr,
+        data: s7ClientHexData
     };
 
     const result = await apiRequest('/api/industrial/s7_client/write/', 'POST', data);
     if (result.success) {
         showToast('写入成功', 'success');
-        // 清除修改标记
-        byteElements.forEach(el => el.classList.remove('modified'));
+
+        // 写入后刷新服务端显示（如果服务端正在运行）
+        if (s7ServerRunning && area === 'DB') {
+            // 通知服务端刷新对应DB块
+            if (s7ServerCurrentDb === dbNum) {
+                s7ServerReadDb();
+            }
+        }
     } else {
         showToast('写入失败: ' + (result.message || result.error), 'error');
     }
 }
+
+// 客户端自动刷新定时器
+let s7ClientRefreshTimer = null;
 
 async function s7ClientRefresh() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
@@ -2135,8 +2121,8 @@ async function s7ClientRefresh() {
     // 先读取一次
     await s7ClientRead();
 
-    // 启动定时刷新
-    const interval = parseFloat(document.getElementById('s7-refresh-interval').value) || 1;
+    // 启动定时刷新（默认1秒）
+    const interval = 1;
 
     if (s7ClientRefreshTimer) clearInterval(s7ClientRefreshTimer);
 
@@ -2149,7 +2135,8 @@ async function s7ClientRefresh() {
     }, interval * 1000);
 
     document.getElementById('s7-stop-refresh-btn').style.display = 'inline-block';
-    showToast(`自动刷新已启动 (${interval}s)`, 'success');
+    document.getElementById('s7-refresh-btn').style.display = 'none';
+    showToast(`自动刷新已启动`, 'success');
 }
 
 function s7ClientStopRefresh() {
