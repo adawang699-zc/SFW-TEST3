@@ -2393,21 +2393,33 @@ def sync_s7_data_to_server(server_id, db_number=None):
                 for i in range(sync_size):
                     c_buffer[i] = db_data[i]
 
+                # DEBUG: 验证新缓冲区数据
+                new_buf_preview = [c_buffer[i] for i in range(min(10, sync_size))]
+                storage_preview = [db_data[i] for i in range(min(10, sync_size))]
+                add_log('INFO', f'[DEBUG-sync] DB{db_num} storage前10字节: {storage_preview}')
+                add_log('INFO', f'[DEBUG-sync] DB{db_num} 新缓冲区前10字节: {new_buf_preview}')
+
                 # 强制 snap7 服务器重新加载缓冲区：先注销旧区域，再注册新区域
                 if server:
                     try:
                         server.unregister_area(SRV_AREA_DB, db_num)
-                    except Exception:
-                        pass  # 忽略注销错误（可能未注册）
+                        add_log('INFO', f'[DEBUG-sync] DB{db_num} unregister_area 成功')
+                    except Exception as e:
+                        add_log('INFO', f'[DEBUG-sync] DB{db_num} unregister_area: {e}')
                     try:
                         server.register_area(SRV_AREA_DB, db_num, c_buffer)
+                        add_log('INFO', f'[DEBUG-sync] DB{db_num} register_area 成功 (新缓冲区 id={id(c_buffer)})')
                     except Exception as e:
                         add_log('WARNING', f'DB{db_num} 重新注册失败: {e}')
 
                 # 更新引用（保持新缓冲区存活，防止GC回收）
                 server_info['ctypes_buffers'][db_num] = c_buffer
 
-                add_log('DEBUG', f'S7数据同步: DB{db_num} -> 新ctypes缓冲区 ({sync_size}字节)')
+                # DEBUG: 验证注册后的缓冲区
+                verify_buf = server_info['ctypes_buffers'].get(db_num)
+                if verify_buf:
+                    verify_preview = [verify_buf[i] for i in range(min(10, sync_size))]
+                    add_log('INFO', f'[DEBUG-sync] DB{db_num} 注册后缓冲区前10字节: {verify_preview}')
 
     except Exception as e:
         add_log('WARNING', f'S7数据同步异常: {e}')
