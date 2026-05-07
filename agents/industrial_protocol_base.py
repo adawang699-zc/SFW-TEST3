@@ -1029,7 +1029,7 @@ def save_s7_db_to_database(server_id, db_number, data):
 # init_s7_database()  # 将在add_log函数定义后调用
 
 # Modbus服务器专用日志文件
-MODBUS_SERVER_LOG_FILE = 'modbus_server.log'
+MODBUS_SERVER_LOG_FILE = 'industrial_protocol.log'
 modbus_server_logger = None
 modbus_server_logger_lock = threading.Lock()
 
@@ -1040,7 +1040,7 @@ def setup_modbus_server_logger():
         with modbus_server_logger_lock:
             if modbus_server_logger is None:
                 # 创建日志记录器
-                modbus_server_logger = logging.getLogger('modbus_server')
+                modbus_server_logger = logging.getLogger('industrial_protocol')
                 modbus_server_logger.setLevel(logging.DEBUG)
                 
                 # 避免重复添加处理器
@@ -2393,33 +2393,19 @@ def sync_s7_data_to_server(server_id, db_number=None):
                 for i in range(sync_size):
                     c_buffer[i] = db_data[i]
 
-                # DEBUG: 验证新缓冲区数据
-                new_buf_preview = [c_buffer[i] for i in range(min(10, sync_size))]
-                storage_preview = [db_data[i] for i in range(min(10, sync_size))]
-                add_log('INFO', f'[DEBUG-sync] DB{db_num} storage前10字节: {storage_preview}')
-                add_log('INFO', f'[DEBUG-sync] DB{db_num} 新缓冲区前10字节: {new_buf_preview}')
-
                 # 强制 snap7 服务器重新加载缓冲区：先注销旧区域，再注册新区域
                 if server:
                     try:
                         server.unregister_area(SRV_AREA_DB, db_num)
-                        add_log('INFO', f'[DEBUG-sync] DB{db_num} unregister_area 成功')
-                    except Exception as e:
-                        add_log('INFO', f'[DEBUG-sync] DB{db_num} unregister_area: {e}')
+                    except Exception:
+                        pass
                     try:
                         server.register_area(SRV_AREA_DB, db_num, c_buffer)
-                        add_log('INFO', f'[DEBUG-sync] DB{db_num} register_area 成功 (新缓冲区 id={id(c_buffer)})')
                     except Exception as e:
                         add_log('WARNING', f'DB{db_num} 重新注册失败: {e}')
 
                 # 更新引用（保持新缓冲区存活，防止GC回收）
                 server_info['ctypes_buffers'][db_num] = c_buffer
-
-                # DEBUG: 验证注册后的缓冲区
-                verify_buf = server_info['ctypes_buffers'].get(db_num)
-                if verify_buf:
-                    verify_preview = [verify_buf[i] for i in range(min(10, sync_size))]
-                    add_log('INFO', f'[DEBUG-sync] DB{db_num} 注册后缓冲区前10字节: {verify_preview}')
 
         # 缓冲区重新注册后，断开并重连所有指向此服务端的S7客户端
         # snap7客户端会缓存旧的缓冲区指针，重连后才能读到新数据

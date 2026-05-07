@@ -1346,7 +1346,6 @@ def s7_server_get_data():
                 else:
                     data_bytes = bytearray(size)
                 values = [int(b) for b in data_bytes]
-                add_log('INFO', f'[DEBUG-get_data] area={area}, db={db_number}, start={start}, size={size}, 返回值={values[:10]}...')
                 return jsonify({
                     'success': True,
                     'values': values,
@@ -1438,10 +1437,8 @@ def s7_server_set_data():
 
         # 第二步：在锁外同步数据到服务器（避免死锁）
         if area == 'DB' and data_updated:
-            add_log('INFO', f'[DEBUG-set_data] area={area}, db={db_number}, start={start}, 写入值={list(data_bytes[:10])}...')
             try:
                 sync_s7_data_to_server(server_id, db_number)
-                add_log('INFO', f'[DEBUG-set_data] sync_s7_data_to_server 完成')
             except Exception as e:
                 add_log('WARNING', f'同步S7数据失败: {e}')
 
@@ -1606,7 +1603,6 @@ def s7_client_read():
 
             # 转换为整数列表
             values = list(result) if result else []
-            add_log('INFO', f'[DEBUG-read] area={area}, db={db_number}, start={start}, size={size}, 返回值={values[:10]}...')
 
             return jsonify({
                 'success': True,
