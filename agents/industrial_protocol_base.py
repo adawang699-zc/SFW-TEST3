@@ -2333,22 +2333,24 @@ def register_s7_areas(server_id, db_list=None):
 def sync_s7_data_to_server(server_id, db_number=None):
     """
     将s7_data_storage的数据同步到服务器
-    优先使用server.db（如果支持自动注册），否则使用ctypes缓冲区（手动注册方式）
+    使用ctypes缓冲区同步（手动注册方式）
     """
     if not SNAP7_AVAILABLE:
         return
-    
+
     try:
         with s7_server_lock:
             if server_id not in s7_servers:
+                add_log('WARNING', f'sync_s7_data: server_id={server_id} 不存在')
                 return
             server_info = s7_servers.get(server_id)
             if not server_info:
+                add_log('WARNING', f'sync_s7_data: server_info 为空')
                 return
-            
-            server = server_info['server']
+
             storage = s7_data_storage.get(server_id)
             if not storage:
+                add_log('WARNING', f'sync_s7_data: storage 不存在')
                 return
 
             # 确定需要同步的DB列表
@@ -2357,30 +2359,36 @@ def sync_s7_data_to_server(server_id, db_number=None):
             else:
                 db_list = [1, 2, 3]
 
-            # 使用ctypes缓冲区同步（这是实际工作的方式）
-            # 注意：server.db[db_num] = db_data 只是字典操作，不会更新 snap7 服务器数据
+            # 使用ctypes缓冲区同步
             if 'ctypes_buffers' not in server_info:
                 add_log('WARNING', '未找到ctypes_buffers，数据同步失败')
                 return
 
             for db_num in db_list:
                 if db_num not in storage['db']:
+                    add_log('WARNING', f'sync_s7_data: DB{db_num} 不在 storage 中')
                     continue
                 if db_num not in server_info['ctypes_buffers']:
+                    add_log('WARNING', f'sync_s7_data: DB{db_num} 不在 ctypes_buffers 中')
                     continue
-                
+
                 db_data = storage['db'][db_num]
                 c_buffer = server_info['ctypes_buffers'][db_num]
-                
+
                 # 同步数据：将bytearray复制到ctypes缓冲区
                 sync_size = min(len(c_buffer), len(db_data))
                 for i in range(sync_size):
                     c_buffer[i] = db_data[i]
-                
-                add_log('DEBUG', f'S7数据同步: DB{db_num}已同步到ctypes缓冲区 ({sync_size}字节)')
-                
+
+                # 验证同步结果（前5字节）
+                verify = [c_buffer[i] for i in range(min(5, sync_size))]
+                expected = [db_data[i] for i in range(min(5, sync_size))]
+                add_log('INFO', f'S7数据同步: DB{db_num} -> ctypes ({sync_size}字节), 验证: {verify} == {expected}')
+
     except Exception as e:
         add_log('WARNING', f'S7数据同步异常: {e}')
+        import traceback
+        add_log('DEBUG', f'详细错误: {traceback.format_exc()}')
 
 # ==================== S7 客户端 API ====================
 
