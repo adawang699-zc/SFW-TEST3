@@ -2121,18 +2121,38 @@ async function s7ClientWrite() {
     const startAddr = parseInt(document.getElementById('s7-start-address').value);
     const area = document.getElementById('s7-area').value;
     const dbNum = parseInt(document.getElementById('s7-db-number').value);
+    const dataCount = parseInt(document.getElementById('s7-read-count').value) || 1;
+    const dataType = document.getElementById('s7-data-type').value;
+
+    // 数据类型对应的字节数
+    const bytesPerElement = {
+        'BYTE': 1, 'CHAR': 1,
+        'WORD': 2, 'INT': 2,
+        'DWORD': 4, 'DINT': 4, 'REAL': 4
+    };
+    const byteSize = bytesPerElement[dataType] || 1;
+    const totalBytes = dataCount * byteSize;
+
+    // 从数据查看器中取前 totalBytes 个字节
+    const writeData = s7ClientHexData.slice(0, totalBytes);
+
+    if (writeData.length < totalBytes) {
+        showToast(`数据不足：需要 ${totalBytes} 字节，当前只有 ${s7ClientHexData.length} 字节`, 'error');
+        return;
+    }
 
     const data = {
         agent_id: selectedClientAgentId,
         area: area,
         db_number: dbNum,
         start: startAddr,
-        data: s7ClientHexData
+        data: writeData,
+        data_type: dataType
     };
 
     const result = await apiRequest('/api/industrial/s7_client/write/', 'POST', data);
     if (result.success) {
-        showToast('写入成功', 'success');
+        showToast(`写入成功: ${dataCount}个${dataType}数据 (${totalBytes}字节)`, 'success');
 
         // 直接更新服务端存储（绕过snap7回调机制）
         if (s7ServerRunning && selectedServerAgentId) {
@@ -2142,7 +2162,7 @@ async function s7ClientWrite() {
                 area: area,
                 db_number: dbNum,
                 start: startAddr,
-                values: s7ClientHexData
+                values: writeData
             };
             await apiRequest('/api/industrial/s7_server/set_data/', 'POST', serverData);
             // 刷新服务端显示
