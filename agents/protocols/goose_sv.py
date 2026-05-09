@@ -60,66 +60,58 @@ class ServiceManager:
         self.goose_packet_count = 0
         self.sv_packet_count = 0
         self.lock = threading.Lock()
-        
-        # 尝试导入GOOSE/SV服务类
+
+        # 尝试导入GOOSE/SV服务类（本地模块）
         self.goose_sender_class = None
         self.sv_sender_class = None
-        
-        # 尝试从多个路径导入
-        import sys
-        import os
-        
-        # 尝试添加goose_sv目录到路径（如果存在）
-        # 1. 开发环境路径
-        # 2. Agent运行时的相对路径（与industrial_protocol_agent.py同目录下的goose_sv）
-        # 3. 绝对路径（开发环境）
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        possible_paths = [
-            os.path.join(script_dir, 'goose_sv'),  # Agent运行时路径
-            os.path.join(script_dir, '..', 'apps', 'goose_sv'),  # 开发环境相对路径
-            os.path.join(os.path.dirname(script_dir), 'apps', 'goose_sv'),  # 另一种相对路径
-            'D:\\自动化测试\\SFW_CONFIG\\apps\\goose_sv',  # 绝对路径（开发环境）
-        ]
-        
-        for path in possible_paths:
-            abs_path = os.path.abspath(path)
-            if os.path.exists(abs_path) and abs_path not in sys.path:
-                sys.path.insert(0, abs_path)
-                print(f"[DEBUG] 添加路径到sys.path: {abs_path}")
-        
+
+        # 本地导入（sender文件已在本目录）
         try:
-            from goose_sender import GooseSenderService
+            from agents.protocols.goose_sender import GooseSenderService
             self.goose_sender_class = GooseSenderService
             print("[OK] GooseSenderService导入成功")
-        except ImportError as e:
-            print(f"[WARNING] GooseSenderService导入失败: {e}")
-            print("提示: 如果使用GOOSE功能，请确保goose_sender模块可用")
-            import traceback
-            traceback.print_exc()
-        
+        except ImportError:
+            try:
+                from goose_sender import GooseSenderService
+                self.goose_sender_class = GooseSenderService
+                print("[OK] GooseSenderService导入成功 (相对导入)")
+            except ImportError as e:
+                print(f"[WARNING] GooseSenderService导入失败: {e}")
+                import traceback
+                traceback.print_exc()
+
         try:
-            from sv_sender import SVSenderService
+            from agents.protocols.sv_sender import SVSenderService
             self.sv_sender_class = SVSenderService
             print("[OK] SVSenderService导入成功")
-        except ImportError as e:
-            print(f"[WARNING] SVSenderService导入失败: {e}")
-            print("提示: 如果使用SV功能，请确保sv_sender模块可用")
-            import traceback
-            traceback.print_exc()
-        
+        except ImportError:
+            try:
+                from sv_sender import SVSenderService
+                self.sv_sender_class = SVSenderService
+                print("[OK] SVSenderService导入成功 (相对导入)")
+            except ImportError as e:
+                print(f"[WARNING] SVSenderService导入失败: {e}")
+                import traceback
+                traceback.print_exc()
+
         self.ethercat_sender = None
         self.ethercat_config = None
         self.ethercat_running = False
         self.ethercat_packet_count = 0
         self.ethercat_sender_class = None
         try:
-            from ethercat_sender import EthercatSenderService
+            from agents.protocols.ethercat_sender import EthercatSenderService
             self.ethercat_sender_class = EthercatSenderService
             print("[OK] EthercatSenderService导入成功")
-        except ImportError as e:
-            print(f"[WARNING] EthercatSenderService导入失败: {e}")
-            import traceback
-            traceback.print_exc()
+        except ImportError:
+            try:
+                from ethercat_sender import EthercatSenderService
+                self.ethercat_sender_class = EthercatSenderService
+                print("[OK] EthercatSenderService导入成功 (相对导入)")
+            except ImportError as e:
+                print(f"[WARNING] EthercatSenderService导入失败: {e}")
+                import traceback
+                traceback.print_exc()
 
         self.powerlink_sender = None
         self.powerlink_config = None
@@ -127,13 +119,18 @@ class ServiceManager:
         self.powerlink_packet_count = 0
         self.powerlink_sender_class = None
         try:
-            from powerlink_sender import PowerlinkSenderService
+            from agents.protocols.powerlink_sender import PowerlinkSenderService
             self.powerlink_sender_class = PowerlinkSenderService
             print("[OK] PowerlinkSenderService导入成功")
-        except ImportError as e:
-            print(f"[WARNING] PowerlinkSenderService导入失败: {e}")
-            import traceback
-            traceback.print_exc()
+        except ImportError:
+            try:
+                from powerlink_sender import PowerlinkSenderService
+                self.powerlink_sender_class = PowerlinkSenderService
+                print("[OK] PowerlinkSenderService导入成功 (相对导入)")
+            except ImportError as e:
+                print(f"[WARNING] PowerlinkSenderService导入失败: {e}")
+                import traceback
+                traceback.print_exc()
 
         self.dcp_sender = None
         self.dcp_config = None
@@ -141,15 +138,22 @@ class ServiceManager:
         self.dcp_packet_count = 0
         self.dcp_sender_class = None
         try:
-            from dcp_sender import DcpSenderService, get_suboptions_for_option, OPTION_MAP
+            from agents.protocols.dcp_sender import DcpSenderService, get_suboptions_for_option, OPTION_MAP
             self.dcp_sender_class = DcpSenderService
             self.dcp_suboptions_fn = get_suboptions_for_option
             self.dcp_option_map = OPTION_MAP
             print("[OK] DcpSenderService导入成功")
-        except ImportError as e:
-            print(f"[WARNING] DcpSenderService导入失败: {e}")
-            import traceback
-            traceback.print_exc()
+        except ImportError:
+            try:
+                from dcp_sender import DcpSenderService, get_suboptions_for_option, OPTION_MAP
+                self.dcp_sender_class = DcpSenderService
+                self.dcp_suboptions_fn = get_suboptions_for_option
+                self.dcp_option_map = OPTION_MAP
+                print("[OK] DcpSenderService导入成功 (相对导入)")
+            except ImportError as e:
+                print(f"[WARNING] DcpSenderService导入失败: {e}")
+                import traceback
+                traceback.print_exc()
     
     def start_goose(self, config: Dict[str, Any]) -> Tuple[bool, str, Optional[Dict]]:
         """启动GOOSE服务"""
@@ -162,25 +166,14 @@ class ServiceManager:
             
             try:
                 # 从config中提取参数
-                interface = config.get('interface', '以太网')
+                interface = config.get('interface', 'eth0')
                 appid = config.get('appid', 256)
                 gocb_ref = config.get('gocb_ref', "IED1/LLN0$GO$GSE1")
                 dataset = config.get('dataset', "IED1/LLN0$DataSet1")
                 data_content = config.get('data_content', {"Switch_1": True, "Switch_2": False})
-                
-                # 将友好名称解析为 Scapy 可用的接口名（兼容 Win7/Win10 差异）
-                try:
-                    from network_utils import find_interface_by_name, validate_interface
-                    resolved = find_interface_by_name(interface)
-                    if resolved:
-                        interface = resolved
-                    is_valid, msg = validate_interface(interface)
-                    if not is_valid:
-                        return False, f'GOOSE服务启动失败（网卡验证失败: {msg}）', None
-                except ImportError:
-                    pass  # 无 network_utils 时沿用原逻辑
-                
-                # 创建GOOSE发送服务实例（传入网卡名称，已解析为 Scapy 名）
+
+                # 直接使用传入的接口名称（无需解析，已在Agent层处理）
+                # 创建GOOSE发送服务实例
                 self.goose_sender = self.goose_sender_class(iface=interface)
                 
                 # 重置报文计数
@@ -264,7 +257,7 @@ class ServiceManager:
             
             try:
                 # 从config中提取参数
-                interface = config.get('interface', '以太网')
+                interface = config.get('interface', 'eth0')
                 appid = config.get('appid', 16409)
                 svid = config.get('svid', 'SV_Line1')
                 smp_rate = config.get('smp_rate', 50)
@@ -276,20 +269,9 @@ class ServiceManager:
                     "Current_B": 1050,
                     "Current_C": 1010
                 })
-                
-                # 将友好名称解析为 Scapy 可用的接口名（兼容 Win7/Win10 差异）
-                try:
-                    from network_utils import find_interface_by_name, validate_interface
-                    resolved = find_interface_by_name(interface)
-                    if resolved:
-                        interface = resolved
-                    is_valid, msg = validate_interface(interface)
-                    if not is_valid:
-                        return False, f'SV服务启动失败（网卡验证失败: {msg}）', None
-                except ImportError:
-                    pass
-                
-                # 创建SV发送服务实例（传入网卡名称，已解析为 Scapy 名）
+
+                # 直接使用传入的接口名称（无需解析，已在Agent层处理）
+                # 创建SV发送服务实例
                 self.sv_sender = self.sv_sender_class(iface=interface)
                 
                 # 重置报文计数
@@ -370,23 +352,15 @@ class ServiceManager:
             if self.ethercat_sender_class is None:
                 return False, 'EthercatSenderService 未导入，请检查 ethercat_sender 模块', None
             try:
-                interface = config.get('interface', '以太网')
+                interface = config.get('interface', 'eth0')
                 data_unit_type = int(config.get('data_unit_type', 1))
                 command_codes = config.get('command_codes', [0x00])
                 if not command_codes:
                     return False, '请至少选择一种命令码', None
                 if data_unit_type not in (1,):
                     return False, '当前仅支持数据单元类型 1 (Ethercat DLPDU)', None
-                try:
-                    from network_utils import find_interface_by_name, validate_interface
-                    resolved = find_interface_by_name(interface)
-                    if resolved:
-                        interface = resolved
-                    is_valid, msg = validate_interface(interface)
-                    if not is_valid:
-                        return False, f'EtherCAT 启动失败（网卡验证失败: {msg}）', None
-                except ImportError:
-                    pass
+
+                # 直接使用传入的接口名称（无需解析，已在Agent层处理）
                 self.ethercat_sender = self.ethercat_sender_class(iface=interface)
                 if hasattr(self.ethercat_sender, 'reset_packet_count'):
                     self.ethercat_sender.reset_packet_count()
@@ -451,7 +425,7 @@ class ServiceManager:
             if self.powerlink_sender_class is None:
                 return False, 'PowerlinkSenderService 未导入，请检查 powerlink_sender 模块', None
             try:
-                interface = config.get('interface', '以太网')
+                interface = config.get('interface', 'eth0')
                 service_types = config.get('service_types', ['SoC'])
                 sa = config.get('sa', 240)
                 da = config.get('da', 17)
@@ -525,7 +499,7 @@ class ServiceManager:
             if self.dcp_sender_class is None:
                 return False, 'DcpSenderService 未导入，请检查 dcp_sender 模块', None
             try:
-                interface = config.get('interface', '以太网')
+                interface = config.get('interface', 'eth0')
                 self.dcp_sender = self.dcp_sender_class(iface=interface)
                 if hasattr(self.dcp_sender, 'reset_packet_count'):
                     self.dcp_sender.reset_packet_count()
