@@ -667,13 +667,10 @@
     <!-- GOOSE/SV Tab -->
     <div id="goose-sv-content" class="protocol-content">
         <div class="config-section">
-            <div class="form-group">
-                <label class="form-label">选择网卡</label>
-                <select id="goose-sv-interface" class="form-input">
-                    <option value="">-- 加载中 --</option>
-                </select>
+            <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
+            <div id="goose-sv-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="color: var(--text-muted);">加载中...</span>
             </div>
-            <button class="btn btn-secondary" onclick="loadGooseSvInterfaces()">获取网卡列表</button>
         </div>
 
         <div class="client-server-grid">
@@ -1239,6 +1236,7 @@ let selectedServerAgentIp = null;
 let ethercatAgentId = null;
 let powerlinkAgentId = null;
 let dcpAgentId = null;
+let gooseSvAgentId = null;
 let agentsData = [];  // 保存 Agent 数据
 
 // ========== 全局连接状态追踪 ==========
@@ -1363,6 +1361,7 @@ async function loadAgents() {
             renderProtocolAgentSelector('ethercat-agent-selector', runningAgents, 'ethercat');
             renderProtocolAgentSelector('powerlink-agent-selector', runningAgents, 'powerlink');
             renderProtocolAgentSelector('dcp-agent-selector', runningAgents, 'dcp');
+            renderProtocolAgentSelector('goose-sv-agent-selector', runningAgents, 'goose-sv');
         } else {
             document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
@@ -1371,6 +1370,7 @@ async function loadAgents() {
             document.getElementById('ethercat-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('powerlink-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('goose-sv-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
         }
     } catch (e) {
         document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
@@ -1380,6 +1380,7 @@ async function loadAgents() {
         document.getElementById('ethercat-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('powerlink-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('goose-sv-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
     }
 }
 
@@ -1450,6 +1451,14 @@ function selectProtocolAgent(agentId, protocol, ip) {
         });
         document.getElementById('dcp-toggle-btn').disabled = false;
         showToast(`已选择 ${agentId} (${ip}) 作为 DCP 发送网卡`, 'success');
+    } else if (protocol === 'goose-sv') {
+        if (agentId === gooseSvAgentId) return;
+        gooseSvAgentId = agentId;
+        document.querySelectorAll('#goose-sv-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        showToast(`已选择 ${agentId} (${ip}) 作为 GOOSE/SV 网卡`, 'success');
     }
 }
 
@@ -2817,27 +2826,11 @@ function initS7ServerDb() {
 }
 
 // ========== GOOSE/SV ==========
-async function loadGooseSvInterfaces() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedServerAgentId });
-    if (result.success && result.interfaces) {
-        const select = document.getElementById('goose-sv-interface');
-        select.innerHTML = '';
-        result.interfaces.forEach(iface => {
-            select.innerHTML += `<option value="${iface}">${iface}</option>`;
-        });
-    } else {
-        showToast('获取网卡失败: ' + (result.message || result.error), 'error');
-    }
-}
-
 async function gooseStart() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
+    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedServerAgentId,
-        interface: document.getElementById('goose-sv-interface').value,
+        agent_id: gooseSvAgentId,
         go_id: document.getElementById('goose-id').value
     };
 
@@ -2852,9 +2845,9 @@ async function gooseStart() {
 }
 
 async function gooseStop() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
+    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: selectedServerAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: gooseSvAgentId });
     if (result.success) {
         activeConnections.goose = false;
         document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
@@ -2865,9 +2858,9 @@ async function gooseStop() {
 }
 
 async function gooseStatus() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
+    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: selectedServerAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: gooseSvAgentId });
     if (result.success) {
         document.getElementById('goose-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
     } else {
@@ -2876,13 +2869,46 @@ async function gooseStatus() {
 }
 
 async function svStart() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
+    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedServerAgentId,
-        interface: document.getElementById('goose-sv-interface').value,
+        agent_id: gooseSvAgentId,
         sv_id: document.getElementById('sv-id').value
     };
+
+    const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
+    if (result.success) {
+        activeConnections.sv = true;
+        document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
+        showToast('SV 接收已启动', 'success');
+    } else {
+        showToast('启动失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function svStop() {
+    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: gooseSvAgentId });
+    if (result.success) {
+        activeConnections.sv = false;
+        document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+        showToast('已停止', 'success');
+    } else {
+        showToast('停止失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function svStatus() {
+    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: gooseSvAgentId });
+    if (result.success) {
+        document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
+    } else {
+        showToast('获取状态失败: ' + (result.message || result.error), 'error');
+    }
+}
 
     const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
     if (result.success) {
