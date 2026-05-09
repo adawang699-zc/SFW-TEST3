@@ -257,6 +257,9 @@
         <div class="protocol-tab active" onclick="switchTab('modbus')">Modbus</div>
         <div class="protocol-tab" onclick="switchTab('s7')">S7</div>
         <div class="protocol-tab" onclick="switchTab('goose-sv')">GOOSE/SV</div>
+        <div class="protocol-tab" onclick="switchTab('ethercat')">EtherCAT</div>
+        <div class="protocol-tab" onclick="switchTab('powerlink')">POWERLINK</div>
+        <div class="protocol-tab" onclick="switchTab('dcp')">PNRT-DCP</div>
         <div class="protocol-tab" onclick="switchTab('dnp3')">DNP3</div>
         <div class="protocol-tab" onclick="switchTab('bacnet')">BACnet</div>
         <div class="protocol-tab" onclick="switchTab('enip')">ENIP</div>
@@ -708,6 +711,201 @@
                     <div id="sv-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
                 </div>
                 <div id="sv-data" style="margin-top: 12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EtherCAT Tab -->
+    <div id="ethercat-content" class="protocol-content">
+        <div class="config-section">
+            <div class="form-group">
+                <label class="form-label">选择网卡</label>
+                <select id="ethercat-interface" class="form-input">
+                    <option value="">-- 请先选择 Agent --</option>
+                </select>
+                <button class="btn btn-secondary" onclick="loadEthercatInterfaces()" style="margin-left: 8px;">获取网卡</button>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h4 style="color: var(--primary); margin-bottom: 12px;">EtherCAT 发送配置</h4>
+            <div class="form-group">
+                <label class="form-label">数据单元类型</label>
+                <select id="ethercat-data-unit-type" class="form-input">
+                    <option value="1" selected>1 - EtherCAT DLPDU</option>
+                </select>
+                <small style="color: var(--text-muted);">当前仅支持类型 1</small>
+            </div>
+
+            <div class="form-group" style="margin-top: 16px;">
+                <label class="form-label">命令码 <small style="color: var(--text-muted);">(可多选，选多少发送多少)</small></label>
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <input type="checkbox" id="ethercat-select-all" onchange="toggleAllEthercatCmds()">
+                    <label style="margin-left: 8px; color: var(--text-muted);">全选</label>
+                </div>
+                <div id="ethercat-command-checkboxes" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="0" onchange="updateEthercatSelectAll()"> 1-NOP 空操作</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="1" onchange="updateEthercatSelectAll()"> 2-APRD 物理读</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="2" onchange="updateEthercatSelectAll()"> 3-APWR 物理写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="3" onchange="updateEthercatSelectAll()"> 4-APRW 物理读写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="4" onchange="updateEthercatSelectAll()"> 5-FPRD 配置读</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="5" onchange="updateEthercatSelectAll()"> 6-FPWR 配置写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="6" onchange="updateEthercatSelectAll()"> 7-FPRW 配置读写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="7" onchange="updateEthercatSelectAll()"> 8-保留命令</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="8" onchange="updateEthercatSelectAll()"> 9-BRD 广播读</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="9" onchange="updateEthercatSelectAll()"> 10-BWR 广播写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="10" onchange="updateEthercatSelectAll()"> 11-LRD 逻辑读</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="11" onchange="updateEthercatSelectAll()"> 12-LWR 逻辑写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="12" onchange="updateEthercatSelectAll()"> 13-LRW 逻辑读写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="13" onchange="updateEthercatSelectAll()"> 14-LRMW 逻辑读改写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="14" onchange="updateEthercatSelectAll()"> 15-ARMW 物理读改写</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="ethercat-cmd" value="15" onchange="updateEthercatSelectAll()"> 16-FRMW 配置读改写</label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn btn-success" id="ethercat-toggle-btn" onclick="ethercatToggle()" disabled>启动</button>
+                <button class="btn btn-secondary" onclick="ethercatStatus()">状态</button>
+            </div>
+            <div id="ethercat-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                <span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="ethercat-packet-count">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- POWERLINK Tab -->
+    <div id="powerlink-content" class="protocol-content">
+        <div class="config-section">
+            <div class="form-group">
+                <label class="form-label">选择网卡</label>
+                <select id="powerlink-interface" class="form-input">
+                    <option value="">-- 请先选择 Agent --</option>
+                </select>
+                <button class="btn btn-secondary" onclick="loadPowerlinkInterfaces()" style="margin-left: 8px;">获取网卡</button>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h4 style="color: var(--primary); margin-bottom: 12px;">POWERLINK 发送配置</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">源节点号 SA <small style="color: var(--text-muted);">(0-255)</small></label>
+                    <input type="number" id="powerlink-sa" class="form-input" min="0" max="255" value="240">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">目标节点号 DA <small style="color: var(--text-muted);">(0-255)</small></label>
+                    <input type="number" id="powerlink-da" class="form-input" min="0" max="255" value="17">
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 16px;">
+                <label class="form-label">服务类型 <small style="color: var(--text-muted);">(可多选)</small></label>
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <input type="checkbox" id="powerlink-select-all" onchange="toggleAllPowerlinkSvc()">
+                    <label style="margin-left: 8px; color: var(--text-muted);">全选</label>
+                </div>
+                <div id="powerlink-service-checkboxes" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="powerlink-svc" value="SoC" onchange="updatePowerlinkSelectAll()"> SoC 周期起始</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="powerlink-svc" value="Preq" onchange="updatePowerlinkSelectAll()"> Preq 轮询请求</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="powerlink-svc" value="Pres" onchange="updatePowerlinkSelectAll()"> Pres 轮询响应</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="powerlink-svc" value="SoA" onchange="updatePowerlinkSelectAll()"> SoA 异步起始</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="powerlink-svc" value="ASnd" onchange="updatePowerlinkSelectAll()"> ASnd 异步发送</label>
+                    <label style="display: flex; align-items: center;"><input type="checkbox" class="powerlink-svc" value="AMNI" onchange="updatePowerlinkSelectAll()"> AMNI 管理节点指示</label>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn btn-success" id="powerlink-toggle-btn" onclick="powerlinkToggle()" disabled>启动</button>
+                <button class="btn btn-secondary" onclick="powerlinkStatus()">状态</button>
+            </div>
+            <div id="powerlink-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                <span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="powerlink-packet-count">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PNRT-DCP Tab -->
+    <div id="dcp-content" class="protocol-content">
+        <div class="config-section">
+            <div class="form-group">
+                <label class="form-label">选择网卡</label>
+                <select id="dcp-interface" class="form-input">
+                    <option value="">-- 请先选择 Agent --</option>
+                </select>
+                <button class="btn btn-secondary" onclick="loadDcpInterfaces()" style="margin-left: 8px;">获取网卡</button>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h4 style="color: var(--primary); margin-bottom: 12px;">PNRT-DCP 发送配置</h4>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">帧类型</label>
+                    <select id="dcp-frame-type" class="form-input" onchange="updateDcpSuboptions()">
+                        <option value="HELLO">HELLO (0xFEFC)</option>
+                        <option value="GETORSET" selected>GETORSET (0xFEFD)</option>
+                        <option value="IDENT_REQ">IDENT_REQ (0xFEFF)</option>
+                        <option value="IDENT_RES">IDENT_RES (0xFEFE)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">服务码</label>
+                    <select id="dcp-service-code" class="form-input">
+                        <option value="GET" selected>GET</option>
+                        <option value="SET">SET</option>
+                        <option value="IDENTIFY">IDENTIFY</option>
+                        <option value="HELLO">HELLO</option>
+                        <option value="RESERV">RESERV</option>
+                        <option value="MANU">MANU</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">服务类型</label>
+                    <select id="dcp-service-type" class="form-input">
+                        <option value="request" selected>request</option>
+                        <option value="response_success">response_success</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 16px;">
+                <label class="form-label">选项</label>
+                <select id="dcp-option" class="form-input" onchange="updateDcpSuboptions()">
+                    <option value="IP" selected>IP</option>
+                    <option value="DEVICE">DEVICE</option>
+                    <option value="DHCP">DHCP</option>
+                    <option value="RESERVED">RESERVED</option>
+                    <option value="CONTROL">CONTROL</option>
+                    <option value="DEVICEINITIATIVE">DEVICEINITIATIVE</option>
+                    <option value="NME_PARAMS">NME_PARAMS</option>
+                    <option value="MANUF_X80">MANUF_X80</option>
+                    <option value="MANUF_X81">MANUF_X81</option>
+                    <option value="MANUF_X82">MANUF_X82</option>
+                    <option value="MANUF_X83">MANUF_X83</option>
+                    <option value="MANUF_X84">MANUF_X84</option>
+                    <option value="MANUF_X85">MANUF_X85</option>
+                    <option value="MANUF_X86">MANUF_X86</option>
+                    <option value="ALLSECECTOR">ALLSECECTOR</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-top: 16px;">
+                <label class="form-label">子选项 <small style="color: var(--text-muted);">(可多选)</small></label>
+                <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <input type="checkbox" id="dcp-suboption-select-all" onchange="toggleAllDcpSuboptions()">
+                    <label style="margin-left: 8px; color: var(--text-muted);">全选</label>
+                </div>
+                <div id="dcp-suboption-checkboxes" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                    <!-- 动态填充 -->
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 8px; margin-top: 16px;">
+                <button class="btn btn-success" id="dcp-toggle-btn" onclick="dcpToggle()" disabled>启动</button>
+                <button class="btn btn-secondary" onclick="dcpStatus()">状态</button>
+            </div>
+            <div id="dcp-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                <span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="dcp-packet-count">0</span></span>
             </div>
         </div>
     </div>
@@ -2661,6 +2859,417 @@ async function svStatus() {
         document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
     } else {
         showToast('获取状态失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+// ========== EtherCAT ==========
+let ethercatRunning = false;
+let ethercatStatusPollingInterval = null;
+
+async function loadEthercatInterfaces() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success && result.interfaces) {
+        const select = document.getElementById('ethercat-interface');
+        select.innerHTML = '<option value="">请选择网卡</option>';
+        result.interfaces.forEach(iface => {
+            const option = document.createElement('option');
+            option.value = iface.name;
+            option.textContent = `${iface.display_name || iface.name} (${iface.ip || '无IP'})`;
+            select.appendChild(option);
+        });
+        document.getElementById('ethercat-toggle-btn').disabled = false;
+        showToast('网卡列表加载成功', 'success');
+    } else {
+        showToast('加载网卡失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+function toggleAllEthercatCmds() {
+    const selectAll = document.getElementById('ethercat-select-all');
+    const checkboxes = document.querySelectorAll('.ethercat-cmd');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+function updateEthercatSelectAll() {
+    const checkboxes = document.querySelectorAll('.ethercat-cmd');
+    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+    document.getElementById('ethercat-select-all').checked = allChecked;
+}
+
+async function ethercatToggle() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const interfaceName = document.getElementById('ethercat-interface').value;
+    if (!interfaceName) { showToast('请选择网卡', 'warning'); return; }
+
+    const dataUnitType = parseInt(document.getElementById('ethercat-data-unit-type').value, 10);
+    if (dataUnitType !== 1) { showToast('当前仅支持数据单元类型 1', 'warning'); return; }
+
+    const checked = document.querySelectorAll('.ethercat-cmd:checked');
+    const commandCodes = Array.from(checked).map(cb => parseInt(cb.value, 10));
+    if (commandCodes.length === 0) { showToast('请至少选择一种命令码', 'warning'); return; }
+
+    const btn = document.getElementById('ethercat-toggle-btn');
+
+    if (!ethercatRunning) {
+        const data = {
+            agent_id: selectedClientAgentId,
+            interface: interfaceName,
+            data_unit_type: dataUnitType,
+            command_codes: commandCodes
+        };
+
+        const result = await apiRequest('/api/industrial/goose_sv/ethercat/start/', 'POST', data);
+        if (result.success) {
+            ethercatRunning = true;
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('ethercat-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="ethercat-packet-count">0</span></span>';
+            startEthercatStatusPolling();
+            showToast('EtherCAT 服务启动成功', 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
+    } else {
+        const result = await apiRequest('/api/industrial/goose_sv/ethercat/stop/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success) {
+            ethercatRunning = false;
+            stopEthercatStatusPolling();
+            btn.textContent = '启动';
+            btn.className = 'btn btn-success';
+            document.getElementById('ethercat-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="ethercat-packet-count">0</span></span>';
+            showToast('EtherCAT 服务已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
+    }
+}
+
+async function ethercatStatus() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/ethercat/status/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success && result.data) {
+        const count = result.data.packet_count || 0;
+        document.getElementById('ethercat-packet-count').textContent = count;
+        if (result.data.running) {
+            ethercatRunning = true;
+            const btn = document.getElementById('ethercat-toggle-btn');
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('ethercat-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="ethercat-packet-count">' + count + '</span></span>';
+        }
+    }
+}
+
+function startEthercatStatusPolling() {
+    if (ethercatStatusPollingInterval) return;
+    ethercatStatusPollingInterval = setInterval(async () => {
+        if (!ethercatRunning || !selectedClientAgentId) {
+            stopEthercatStatusPolling();
+            return;
+        }
+        const result = await apiRequest('/api/industrial/goose_sv/ethercat/status/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success && result.data) {
+            document.getElementById('ethercat-packet-count').textContent = result.data.packet_count || 0;
+        }
+    }, 1000);
+}
+
+function stopEthercatStatusPolling() {
+    if (ethercatStatusPollingInterval) {
+        clearInterval(ethercatStatusPollingInterval);
+        ethercatStatusPollingInterval = null;
+    }
+}
+
+// ========== POWERLINK ==========
+let powerlinkRunning = false;
+let powerlinkStatusPollingInterval = null;
+
+async function loadPowerlinkInterfaces() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success && result.interfaces) {
+        const select = document.getElementById('powerlink-interface');
+        select.innerHTML = '<option value="">请选择网卡</option>';
+        result.interfaces.forEach(iface => {
+            const option = document.createElement('option');
+            option.value = iface.name;
+            option.textContent = `${iface.display_name || iface.name} (${iface.ip || '无IP'})`;
+            select.appendChild(option);
+        });
+        document.getElementById('powerlink-toggle-btn').disabled = false;
+        showToast('网卡列表加载成功', 'success');
+    } else {
+        showToast('加载网卡失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+function toggleAllPowerlinkSvc() {
+    const selectAll = document.getElementById('powerlink-select-all');
+    const checkboxes = document.querySelectorAll('.powerlink-svc');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+function updatePowerlinkSelectAll() {
+    const checkboxes = document.querySelectorAll('.powerlink-svc');
+    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+    document.getElementById('powerlink-select-all').checked = allChecked;
+}
+
+async function powerlinkToggle() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const interfaceName = document.getElementById('powerlink-interface').value;
+    if (!interfaceName) { showToast('请选择网卡', 'warning'); return; }
+
+    const sa = parseInt(document.getElementById('powerlink-sa').value, 10);
+    const da = parseInt(document.getElementById('powerlink-da').value, 10);
+    const saVal = isNaN(sa) ? 240 : Math.max(0, Math.min(255, sa));
+    const daVal = isNaN(da) ? 17 : Math.max(0, Math.min(255, da));
+
+    const checked = document.querySelectorAll('.powerlink-svc:checked');
+    const serviceTypes = Array.from(checked).map(cb => cb.value);
+    if (serviceTypes.length === 0) { showToast('请至少选择一种服务类型', 'warning'); return; }
+
+    const btn = document.getElementById('powerlink-toggle-btn');
+
+    if (!powerlinkRunning) {
+        const data = {
+            agent_id: selectedClientAgentId,
+            interface: interfaceName,
+            service_types: serviceTypes,
+            sa: saVal,
+            da: daVal
+        };
+
+        const result = await apiRequest('/api/industrial/goose_sv/powerlink/start/', 'POST', data);
+        if (result.success) {
+            powerlinkRunning = true;
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('powerlink-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="powerlink-packet-count">0</span></span>';
+            startPowerlinkStatusPolling();
+            showToast('POWERLINK 服务启动成功', 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
+    } else {
+        const result = await apiRequest('/api/industrial/goose_sv/powerlink/stop/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success) {
+            powerlinkRunning = false;
+            stopPowerlinkStatusPolling();
+            btn.textContent = '启动';
+            btn.className = 'btn btn-success';
+            document.getElementById('powerlink-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="powerlink-packet-count">0</span></span>';
+            showToast('POWERLINK 服务已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
+    }
+}
+
+async function powerlinkStatus() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/powerlink/status/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success && result.data) {
+        const count = result.data.packet_count || 0;
+        document.getElementById('powerlink-packet-count').textContent = count;
+        if (result.data.running) {
+            powerlinkRunning = true;
+            const btn = document.getElementById('powerlink-toggle-btn');
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('powerlink-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="powerlink-packet-count">' + count + '</span></span>';
+        }
+    }
+}
+
+function startPowerlinkStatusPolling() {
+    if (powerlinkStatusPollingInterval) return;
+    powerlinkStatusPollingInterval = setInterval(async () => {
+        if (!powerlinkRunning || !selectedClientAgentId) {
+            stopPowerlinkStatusPolling();
+            return;
+        }
+        const result = await apiRequest('/api/industrial/goose_sv/powerlink/status/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success && result.data) {
+            document.getElementById('powerlink-packet-count').textContent = result.data.packet_count || 0;
+        }
+    }, 1000);
+}
+
+function stopPowerlinkStatusPolling() {
+    if (powerlinkStatusPollingInterval) {
+        clearInterval(powerlinkStatusPollingInterval);
+        powerlinkStatusPollingInterval = null;
+    }
+}
+
+// ========== PNRT-DCP ==========
+let dcpRunning = false;
+let dcpStatusPollingInterval = null;
+
+const DCP_OPTION_SUBOPTIONS = {
+    'IP': [{v: 0x01, l: '0x01 MAC address'}, {v: 0x02, l: '0x02 IP parameter'}, {v: 0x03, l: '0x03 Full IP suite'}],
+    'DEVICE': [{v: 0x01, l: '0x01 Type of Station'}, {v: 0x02, l: '0x02 Name of Station'}, {v: 0x03, l: '0x03 Device ID'}, {v: 0x04, l: '0x04 Device Role'}, {v: 0x05, l: '0x05 Device Options'}, {v: 0x06, l: '0x06 Alias Name'}, {v: 0x07, l: '0x07 Device Instance'}, {v: 0x08, l: '0x08 OEM Device ID'}],
+    'DHCP': [{v: 0x0C, l: '0x0C Host name'}, {v: 0x2B, l: '0x2B Vendor specific'}, {v: 0x36, l: '0x36 Server identifier'}, {v: 0x37, l: '0x37 Parameter request list'}, {v: 0x3C, l: '0x3C Class identifier'}, {v: 0x3D, l: '0x3D DHCP client identifier'}, {v: 0x51, l: '0x51 FQDN'}, {v: 0x61, l: '0x61 UUID/GUID'}, {v: 0xFF, l: '0xFF Control DHCP'}],
+    'RESERVED': [{v: 0x01, l: '0x01 Reserved'}],
+    'CONTROL': [{v: 0x01, l: '0x01 Start Transaction'}, {v: 0x02, l: '0x02 End Transaction'}, {v: 0x03, l: '0x03 Signal'}, {v: 0x04, l: '0x04 Response'}, {v: 0x05, l: '0x05 Reset Factory'}, {v: 0x06, l: '0x06 Reset to Factory'}],
+    'DEVICEINITIATIVE': [{v: 0x01, l: '0x01 Device Initiative'}],
+    'NME_PARAMS': [{v: 0x01, l: '0x01 NME Domain Name'}, {v: 0x02, l: '0x02 NME Manager'}, {v: 0x03, l: '0x03 NME Param UUID'}, {v: 0x04, l: '0x04 NME Agent'}, {v: 0x05, l: '0x05 CIM Interface'}],
+    'MANUF_X80': [{v: 0x01, l: '0x01 Manufacturer 0x80'}],
+    'MANUF_X81': [{v: 0x01, l: '0x01 Manufacturer 0x81'}],
+    'MANUF_X82': [{v: 0x01, l: '0x01 Manufacturer 0x82'}],
+    'MANUF_X83': [{v: 0x01, l: '0x01 Manufacturer 0x83'}],
+    'MANUF_X84': [{v: 0x01, l: '0x01 Manufacturer 0x84'}],
+    'MANUF_X85': [{v: 0x01, l: '0x01 Manufacturer 0x85'}],
+    'MANUF_X86': [{v: 0x01, l: '0x01 Manufacturer 0x86'}],
+    'ALLSECECTOR': [{v: 0xFF, l: '0xFF ALL Selector'}]
+};
+
+function updateDcpSuboptions() {
+    const option = document.getElementById('dcp-option').value;
+    const container = document.getElementById('dcp-suboption-checkboxes');
+    const list = DCP_OPTION_SUBOPTIONS[option] || DCP_OPTION_SUBOPTIONS['IP'];
+
+    container.innerHTML = '';
+    list.forEach(item => {
+        const label = document.createElement('label');
+        label.style.cssText = 'display: flex; align-items: center;';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'dcp-suboption-cb';
+        cb.value = item.v;
+        cb.onchange = updateDcpSuboptionSelectAll;
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(' ' + item.l));
+        container.appendChild(label);
+    });
+    document.getElementById('dcp-suboption-select-all').checked = false;
+}
+
+function toggleAllDcpSuboptions() {
+    const selectAll = document.getElementById('dcp-suboption-select-all');
+    const checkboxes = document.querySelectorAll('.dcp-suboption-cb');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+}
+
+function updateDcpSuboptionSelectAll() {
+    const checkboxes = document.querySelectorAll('.dcp-suboption-cb');
+    const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+    document.getElementById('dcp-suboption-select-all').checked = allChecked;
+}
+
+async function loadDcpInterfaces() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success && result.interfaces) {
+        const select = document.getElementById('dcp-interface');
+        select.innerHTML = '<option value="">请选择网卡</option>';
+        result.interfaces.forEach(iface => {
+            const option = document.createElement('option');
+            option.value = iface.name;
+            option.textContent = `${iface.display_name || iface.name} (${iface.ip || '无IP'})`;
+            select.appendChild(option);
+        });
+        document.getElementById('dcp-toggle-btn').disabled = false;
+        showToast('网卡列表加载成功', 'success');
+    } else {
+        showToast('加载网卡失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function dcpToggle() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const interfaceName = document.getElementById('dcp-interface').value;
+    if (!interfaceName) { showToast('请选择网卡', 'warning'); return; }
+
+    const checked = document.querySelectorAll('.dcp-suboption-cb:checked');
+    const suboptions = Array.from(checked).map(cb => parseInt(cb.value, 10));
+    if (suboptions.length === 0) { showToast('请至少选择一个子选项', 'warning'); return; }
+
+    const btn = document.getElementById('dcp-toggle-btn');
+
+    if (!dcpRunning) {
+        const data = {
+            agent_id: selectedClientAgentId,
+            interface: interfaceName,
+            frame_type: document.getElementById('dcp-frame-type').value,
+            service_code: document.getElementById('dcp-service-code').value,
+            service_type: document.getElementById('dcp-service-type').value,
+            option: document.getElementById('dcp-option').value,
+            suboptions: suboptions
+        };
+
+        const result = await apiRequest('/api/industrial/goose_sv/dcp/start/', 'POST', data);
+        if (result.success) {
+            dcpRunning = true;
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('dcp-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="dcp-packet-count">0</span></span>';
+            startDcpStatusPolling();
+            showToast('DCP 服务启动成功', 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
+    } else {
+        const result = await apiRequest('/api/industrial/goose_sv/dcp/stop/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success) {
+            dcpRunning = false;
+            stopDcpStatusPolling();
+            btn.textContent = '启动';
+            btn.className = 'btn btn-success';
+            document.getElementById('dcp-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="dcp-packet-count">0</span></span>';
+            showToast('DCP 服务已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
+    }
+}
+
+async function dcpStatus() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const result = await apiRequest('/api/industrial/goose_sv/dcp/status/', 'POST', { agent_id: selectedClientAgentId });
+    if (result.success && result.data) {
+        const count = result.data.packet_count || 0;
+        document.getElementById('dcp-packet-count').textContent = count;
+        if (result.data.running) {
+            dcpRunning = true;
+            const btn = document.getElementById('dcp-toggle-btn');
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('dcp-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="dcp-packet-count">' + count + '</span></span>';
+        }
+    }
+}
+
+function startDcpStatusPolling() {
+    if (dcpStatusPollingInterval) return;
+    dcpStatusPollingInterval = setInterval(async () => {
+        if (!dcpRunning || !selectedClientAgentId) {
+            stopDcpStatusPolling();
+            return;
+        }
+        const result = await apiRequest('/api/industrial/goose_sv/dcp/status/', 'POST', { agent_id: selectedClientAgentId });
+        if (result.success && result.data) {
+            document.getElementById('dcp-packet-count').textContent = result.data.packet_count || 0;
+        }
+    }, 1000);
+}
+
+function stopDcpStatusPolling() {
+    if (dcpStatusPollingInterval) {
+        clearInterval(dcpStatusPollingInterval);
+        dcpStatusPollingInterval = null;
     }
 }
 
