@@ -2910,40 +2910,6 @@ async function svStatus() {
     }
 }
 
-    const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
-    if (result.success) {
-        activeConnections.sv = true;
-        document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
-        showToast('SV 接收已启动', 'success');
-    } else {
-        showToast('启动失败: ' + (result.message || result.error), 'error');
-    }
-}
-
-async function svStop() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedServerAgentId });
-    if (result.success) {
-        activeConnections.sv = false;
-        document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
-        showToast('已停止', 'success');
-    } else {
-        showToast('停止失败: ' + (result.message || result.error), 'error');
-    }
-}
-
-async function svStatus() {
-    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: selectedServerAgentId });
-    if (result.success) {
-        document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
-    } else {
-        showToast('获取状态失败: ' + (result.message || result.error), 'error');
-    }
-}
-
 // ========== EtherCAT ==========
 let ethercatRunning = false;
 let ethercatStatusPollingInterval = null;
