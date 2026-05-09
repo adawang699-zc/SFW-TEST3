@@ -382,11 +382,11 @@ _goose_sv_api_imported = False
 _goose_sv_manager = None
 
 def _ensure_goose_sv_api():
-    """确保goose_sv_api模块可以被导入"""
+    """确保 goose_sv 模块可以被导入"""
     global _goose_sv_api_imported, _goose_sv_manager
     if _goose_sv_api_imported:
         return _goose_sv_manager
-    
+
     # 获取当前脚本所在目录（兼容exe环境）
     try:
         if hasattr(sys, 'frozen') and sys.frozen:
@@ -401,62 +401,35 @@ def _ensure_goose_sv_api():
         # 如果__file__不存在，尝试使用当前工作目录
         script_dir = os.getcwd()
         print(f"[GOOSE-SV] 使用当前工作目录: {script_dir}")
-    
+
     print(f"[GOOSE-SV] 当前脚本目录: {script_dir}")
-    print(f"[GOOSE-SV] sys.path前5个: {sys.path[:5]}")
-    
-    # 确保当前目录在sys.path中
-    if script_dir not in sys.path:
-        sys.path.insert(0, script_dir)
-        print(f"[GOOSE-SV] 已添加路径到sys.path: {script_dir}")
-    
-    # 检查goose_sv_api.py文件是否存在
-    goose_sv_api_path = os.path.join(script_dir, 'goose_sv_api.py')
-    print(f"[GOOSE-SV] 检查文件: {goose_sv_api_path}")
-    if os.path.exists(goose_sv_api_path):
-        print(f"[GOOSE-SV] [OK] 文件存在: {goose_sv_api_path}")
-    else:
-        print(f"[GOOSE-SV] [FAIL] 文件不存在: {goose_sv_api_path}")
-        # 尝试查找其他可能的位置
-        possible_paths = [
-            os.path.join(script_dir, 'goose_sv_api.py'),
-            os.path.join(os.getcwd(), 'goose_sv_api.py'),
-            'C:\\packet_agent\\goose_sv_api.py',  # Agent运行时路径
-        ]
-        for path in possible_paths:
-            abs_path = os.path.abspath(path)
-            if os.path.exists(abs_path):
-                print(f"[GOOSE-SV] [OK] 找到文件: {abs_path}")
-                parent_dir = os.path.dirname(abs_path)
-                if parent_dir not in sys.path:
-                    sys.path.insert(0, parent_dir)
-                    print(f"[GOOSE-SV] 已添加父目录到sys.path: {parent_dir}")
-                break
-        else:
-            print(f"[GOOSE-SV] [FAIL] 在所有可能位置都未找到goose_sv_api.py")
-    
+
+    # 确保 protocols 目录在 sys.path 中
+    protocols_dir = os.path.join(script_dir, 'protocols')
+    if protocols_dir not in sys.path:
+        sys.path.insert(0, protocols_dir)
+        print(f"[GOOSE-SV] 已添加 protocols 目录到 sys.path: {protocols_dir}")
+
     try:
-        # 尝试导入
-        print("[GOOSE-SV] 开始导入goose_sv_api模块...")
-        import goose_sv_api
-        print(f"[GOOSE-SV] [OK] 模块导入成功: {goose_sv_api}")
-        print(f"[GOOSE-SV] 模块文件路径: {getattr(goose_sv_api, '__file__', 'unknown')}")
-        
-        # 检查manager是否存在
-        if not hasattr(goose_sv_api, 'manager'):
-            raise AttributeError("goose_sv_api模块中没有manager属性")
-        
-        manager = goose_sv_api.manager
+        # 尝试导入 goose_sv 模块（正确路径：protocols/goose_sv.py）
+        print("[GOOSE-SV] 开始导入 goose_sv 模块...")
+        import goose_sv
+        print(f"[GOOSE-SV] [OK] 模块导入成功: {goose_sv}")
+        print(f"[GOOSE-SV] 模块文件路径: {getattr(goose_sv, '__file__', 'unknown')}")
+
+        # 检查 manager 是否存在
+        if not hasattr(goose_sv, 'manager'):
+            raise AttributeError("goose_sv 模块中没有 manager 属性")
+
+        manager = goose_sv.manager
         _goose_sv_manager = manager
         _goose_sv_api_imported = True
-        print("[GOOSE-SV] [OK] 成功获取manager实例")
+        print("[GOOSE-SV] [OK] 成功获取 manager 实例")
         return manager
     except ImportError as e:
         error_msg = str(e)
         print(f"[GOOSE-SV] [FAIL] 导入失败 (ImportError): {error_msg}")
-        print(f"[GOOSE-SV] 错误类型: {type(e).__name__}")
         import traceback
-        print("[GOOSE-SV] 完整错误堆栈:")
         traceback.print_exc()
         raise
     except AttributeError as e:
@@ -468,7 +441,6 @@ def _ensure_goose_sv_api():
     except Exception as e:
         error_msg = str(e)
         print(f"[GOOSE-SV] [FAIL] 其他异常: {error_msg}")
-        print(f"[GOOSE-SV] 异常类型: {type(e).__name__}")
         import traceback
         traceback.print_exc()
         raise
@@ -619,36 +591,267 @@ def sv_status_fallback():
         response.headers['Access-Control-Allow-Origin'] = '*'
         return response, 500
 
-print("[OK] GOOSE/SV备用路由注册成功")
+print("[OK] GOOSE/SV 备用路由注册成功")
 
-# 注册GOOSE/SV Blueprint（用于其他路由）
+# ==================== EtherCAT 备用路由 ====================
+
+@app.route('/api/industrial_protocol/goose-sv/ethercat/start', methods=['POST', 'OPTIONS'])
+def ethercat_start_fallback():
+    """启动 EtherCAT 服务（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        data = request.json or {}
+        success, message, result = manager.start_ethercat(data)
+        response = jsonify({'success': True, 'message': message, 'data': result}) if success else jsonify({'success': False, 'error': message})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200 if success else 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'启动 EtherCAT 服务异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+@app.route('/api/industrial_protocol/goose-sv/ethercat/stop', methods=['POST', 'OPTIONS'])
+def ethercat_stop_fallback():
+    """停止 EtherCAT 服务（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        success, message = manager.stop_ethercat()
+        response = jsonify({'success': True, 'message': message}) if success else jsonify({'success': False, 'error': message})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200 if success else 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'停止 EtherCAT 服务异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+@app.route('/api/industrial_protocol/goose-sv/ethercat/status', methods=['GET', 'POST', 'OPTIONS'])
+def ethercat_status_fallback():
+    """获取 EtherCAT 服务状态（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        status = manager.get_ethercat_status()
+        response = jsonify({'success': True, 'data': status})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'获取 EtherCAT 状态异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+print("[OK] EtherCAT 备用路由注册成功")
+
+# ==================== POWERLINK 备用路由 ====================
+
+@app.route('/api/industrial_protocol/goose-sv/powerlink/start', methods=['POST', 'OPTIONS'])
+def powerlink_start_fallback():
+    """启动 POWERLINK 服务（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        data = request.json or {}
+        success, message, result = manager.start_powerlink(data)
+        response = jsonify({'success': True, 'message': message, 'data': result}) if success else jsonify({'success': False, 'error': message})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200 if success else 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'启动 POWERLINK 服务异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+@app.route('/api/industrial_protocol/goose-sv/powerlink/stop', methods=['POST', 'OPTIONS'])
+def powerlink_stop_fallback():
+    """停止 POWERLINK 服务（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        success, message = manager.stop_powerlink()
+        response = jsonify({'success': True, 'message': message}) if success else jsonify({'success': False, 'error': message})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200 if success else 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'停止 POWERLINK 服务异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+@app.route('/api/industrial_protocol/goose-sv/powerlink/status', methods=['GET', 'POST', 'OPTIONS'])
+def powerlink_status_fallback():
+    """获取 POWERLINK 服务状态（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        status = manager.get_powerlink_status()
+        response = jsonify({'success': True, 'data': status})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'获取 POWERLINK 状态异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+print("[OK] POWERLINK 备用路由注册成功")
+
+# ==================== DCP 备用路由 ====================
+
+@app.route('/api/industrial_protocol/goose-sv/dcp/start', methods=['POST', 'OPTIONS'])
+def dcp_start_fallback():
+    """启动 DCP 服务（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        data = request.json or {}
+        success, message, result = manager.start_dcp(data)
+        response = jsonify({'success': True, 'message': message, 'data': result}) if success else jsonify({'success': False, 'error': message})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200 if success else 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'启动 DCP 服务异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+@app.route('/api/industrial_protocol/goose-sv/dcp/stop', methods=['POST', 'OPTIONS'])
+def dcp_stop_fallback():
+    """停止 DCP 服务（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        success, message = manager.stop_dcp()
+        response = jsonify({'success': True, 'message': message}) if success else jsonify({'success': False, 'error': message})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200 if success else 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'停止 DCP 服务异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+@app.route('/api/industrial_protocol/goose-sv/dcp/status', methods=['GET', 'POST', 'OPTIONS'])
+def dcp_status_fallback():
+    """获取 DCP 服务状态（备用路由）"""
+    if request.method == 'OPTIONS':
+        response = make_response('', 200)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With, Accept'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Max-Age'] = '3600'
+        return response
+    try:
+        manager = _ensure_goose_sv_api()
+        status = manager.get_dcp_status()
+        response = jsonify({'success': True, 'data': status})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 200
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        response = jsonify({'success': False, 'error': f'获取 DCP 状态异常: {str(e)}'})
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        return response, 500
+
+print("[OK] DCP 备用路由注册成功")
+
+# 注册 GOOSE/SV Blueprint（用于其他路由）
 try:
-    print("[DEBUG] 开始导入goose_sv_api模块...")
-    from goose_sv_api import goose_sv_bp
-    print(f"[DEBUG] goose_sv_bp导入成功: {goose_sv_bp}")
-    print(f"[DEBUG] Blueprint名称: {goose_sv_bp.name}")
-    
+    print("[DEBUG] 开始导入 goose_sv 模块...")
+    from protocols.goose_sv import goose_sv_bp
+    print(f"[DEBUG] goose_sv_bp 导入成功: {goose_sv_bp}")
+    print(f"[DEBUG] Blueprint 名称: {goose_sv_bp.name}")
+
     app.register_blueprint(goose_sv_bp, url_prefix='/api/industrial_protocol/goose-sv')
-    print("[OK] GOOSE/SV Blueprint注册成功")
-    
+    print("[OK] GOOSE/SV Blueprint 注册成功")
+
     # 打印所有注册的路由（用于调试）
-    print("[DEBUG] 已注册的GOOSE/SV路由:")
+    print("[DEBUG] 已注册的 GOOSE/SV 路由:")
     goose_sv_routes_found = False
     for rule in app.url_map.iter_rules():
         rule_str = rule.rule.lower()
-        if 'goose' in rule_str or 'sv' in rule_str:
+        if 'goose-sv' in rule_str or 'ethercat' in rule_str or 'powerlink' in rule_str or 'dcp' in rule_str:
             print(f"  {rule.rule} -> {rule.endpoint} [{', '.join(rule.methods)}]")
             goose_sv_routes_found = True
-    
+
     if not goose_sv_routes_found:
-        print("[WARNING] 未找到GOOSE/SV相关路由，可能注册失败")
+        print("[WARNING] 未找到 GOOSE/SV 相关路由，可能注册失败")
 except ImportError as e:
-    print(f"[WARNING] GOOSE/SV Blueprint注册失败: {e}")
-    print("提示: 如果使用GOOSE/SV功能，请确保goose_sv_api模块可用")
+    print(f"[WARNING] GOOSE/SV Blueprint 注册失败: {e}")
+    print("提示: 如果使用 GOOSE/SV 功能，请确保 protocols/goose_sv 模块可用")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"[WARNING] GOOSE/SV Blueprint注册异常: {e}")
+    print(f"[WARNING] GOOSE/SV Blueprint 注册异常: {e}")
     import traceback
     traceback.print_exc()
 
