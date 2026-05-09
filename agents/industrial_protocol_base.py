@@ -185,7 +185,7 @@ if PYMODBUS_AVAILABLE:
 app = Flask(__name__)
 # 配置CORS，允许所有来源、所有方法和所有头部
 # 包括Blueprint路由
-CORS(app, 
+CORS(app,
      resources={
          r"/api/*": {
              "origins": "*",
@@ -195,6 +195,10 @@ CORS(app,
          }
      }
 )
+
+# 创建 Blueprint 供其他模块导入
+from flask import Blueprint
+industrial_bp = Blueprint('industrial_protocol', __name__, url_prefix='/api/industrial_protocol')
 
 # 在app级别添加CORS处理（在注册Blueprint之前）
 @app.before_request

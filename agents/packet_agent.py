@@ -128,7 +128,27 @@ class FullFeatureAgent(BaseAgent):
         self.register_api('/api/stop_replay', self._api_stop_replay, ['POST'])
         self.register_api('/api/replay_stats', self._api_replay_stats, ['GET'])
 
-        # ========== 综合统计 ==========
+        # ========== 导入工业协议路由 ==========
+        try:
+            from agents.industrial_protocol_base import app as industrial_app
+            # 复制 industrial_app 的所有路由到 self.app
+            for rule in industrial_app.url_map.iter_rules():
+                if rule.endpoint != 'static' and rule.rule.startswith('/api/industrial_protocol'):
+                    # 获取对应的视图函数
+                    view_func = industrial_app.view_functions.get(rule.endpoint)
+                    if view_func:
+                        # 注册到 self.app
+                        self.app.add_url_rule(
+                            rule.rule,
+                            rule.endpoint,
+                            view_func,
+                            methods=list(rule.methods - {'HEAD', 'OPTIONS'})
+                        )
+            logger.info("工业协议路由导入成功")
+        except ImportError as e:
+            logger.warning(f"工业协议路由导入失败: {e}")
+        except Exception as e:
+            logger.error(f"工业协议路由合并错误: {e}")
         self.register_api('/api/full_stats', self._api_full_stats, ['GET'])
 
     # ========== 报文发送功能实现 ==========
