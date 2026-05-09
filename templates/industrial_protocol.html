@@ -718,12 +718,9 @@
     <!-- EtherCAT Tab -->
     <div id="ethercat-content" class="protocol-content">
         <div class="config-section">
-            <div class="form-group">
-                <label class="form-label">选择网卡</label>
-                <select id="ethercat-interface" class="form-input">
-                    <option value="">-- 请先选择 Agent --</option>
-                </select>
-                <button class="btn btn-secondary" onclick="loadEthercatInterfaces()" style="margin-left: 8px;">获取网卡</button>
+            <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
+            <div id="ethercat-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="color: var(--text-muted);">加载中...</span>
             </div>
         </div>
 
@@ -776,12 +773,9 @@
     <!-- POWERLINK Tab -->
     <div id="powerlink-content" class="protocol-content">
         <div class="config-section">
-            <div class="form-group">
-                <label class="form-label">选择网卡</label>
-                <select id="powerlink-interface" class="form-input">
-                    <option value="">-- 请先选择 Agent --</option>
-                </select>
-                <button class="btn btn-secondary" onclick="loadPowerlinkInterfaces()" style="margin-left: 8px;">获取网卡</button>
+            <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
+            <div id="powerlink-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="color: var(--text-muted);">加载中...</span>
             </div>
         </div>
 
@@ -827,12 +821,9 @@
     <!-- PNRT-DCP Tab -->
     <div id="dcp-content" class="protocol-content">
         <div class="config-section">
-            <div class="form-group">
-                <label class="form-label">选择网卡</label>
-                <select id="dcp-interface" class="form-input">
-                    <option value="">-- 请先选择 Agent --</option>
-                </select>
-                <button class="btn btn-secondary" onclick="loadDcpInterfaces()" style="margin-left: 8px;">获取网卡</button>
+            <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
+            <div id="dcp-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="color: var(--text-muted);">加载中...</span>
             </div>
         </div>
 
@@ -1245,6 +1236,9 @@ let selectedClientAgentId = null;
 let selectedServerAgentId = null;
 let selectedClientAgentIp = null;
 let selectedServerAgentIp = null;
+let ethercatAgentId = null;
+let powerlinkAgentId = null;
+let dcpAgentId = null;
 let agentsData = [];  // 保存 Agent 数据
 
 // ========== 全局连接状态追踪 ==========
@@ -1365,17 +1359,27 @@ async function loadAgents() {
             renderAgentSelector('modbus-server-agent-selector', runningAgents, 'server');
             renderAgentSelector('s7-client-agent-selector', runningAgents, 'client');
             renderAgentSelector('s7-server-agent-selector', runningAgents, 'server');
+            // EtherCAT、POWERLINK、DCP 协议的 Agent 选择器
+            renderProtocolAgentSelector('ethercat-agent-selector', runningAgents, 'ethercat');
+            renderProtocolAgentSelector('powerlink-agent-selector', runningAgents, 'powerlink');
+            renderProtocolAgentSelector('dcp-agent-selector', runningAgents, 'dcp');
         } else {
             document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('s7-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('s7-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('ethercat-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('powerlink-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
         }
     } catch (e) {
         document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('s7-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('s7-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('ethercat-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('powerlink-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
     }
 }
 
@@ -1395,6 +1399,58 @@ function renderAgentSelector(containerId, agents, type) {
         `;
     });
     container.innerHTML = html;
+}
+
+// EtherCAT/POWERLINK/DCP 协议的 Agent 选择器渲染
+function renderProtocolAgentSelector(containerId, agents, protocol) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    let html = '';
+    agents.forEach(agent => {
+        const ip = agent.ip_address || 'N/A';
+        html += `
+            <div class="agent-selector-btn" onclick="selectProtocolAgent('${agent.agent_id}', '${protocol}', '${ip}')"
+                 data-agent-id="${agent.agent_id}" data-protocol="${protocol}" data-ip="${ip}"
+                 style="cursor: pointer; border: 2px solid var(--border); padding: 8px 12px; border-radius: 6px; display: inline-block; margin: 2px;">
+                <span style="font-weight: bold; color: var(--primary);">${agent.agent_id}</span>
+                <span style="color: var(--text-muted); font-size: 0.8rem;">(${ip})</span>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+}
+
+// EtherCAT/POWERLINK/DCP 协议的 Agent 选择
+function selectProtocolAgent(agentId, protocol, ip) {
+    // 更新对应协议的 Agent ID
+    if (protocol === 'ethercat') {
+        if (agentId === ethercatAgentId) return;
+        ethercatAgentId = agentId;
+        document.querySelectorAll('#ethercat-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        document.getElementById('ethercat-toggle-btn').disabled = false;
+        showToast(`已选择 ${agentId} (${ip}) 作为 EtherCAT 发送网卡`, 'success');
+    } else if (protocol === 'powerlink') {
+        if (agentId === powerlinkAgentId) return;
+        powerlinkAgentId = agentId;
+        document.querySelectorAll('#powerlink-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        document.getElementById('powerlink-toggle-btn').disabled = false;
+        showToast(`已选择 ${agentId} (${ip}) 作为 POWERLINK 发送网卡`, 'success');
+    } else if (protocol === 'dcp') {
+        if (agentId === dcpAgentId) return;
+        dcpAgentId = agentId;
+        document.querySelectorAll('#dcp-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        document.getElementById('dcp-toggle-btn').disabled = false;
+        showToast(`已选择 ${agentId} (${ip}) 作为 DCP 发送网卡`, 'success');
+    }
 }
 
 function selectAgent(agentId, type, ip) {
@@ -2866,26 +2922,6 @@ async function svStatus() {
 let ethercatRunning = false;
 let ethercatStatusPollingInterval = null;
 
-async function loadEthercatInterfaces() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedClientAgentId });
-    if (result.success && result.interfaces) {
-        const select = document.getElementById('ethercat-interface');
-        select.innerHTML = '<option value="">请选择网卡</option>';
-        result.interfaces.forEach(iface => {
-            const option = document.createElement('option');
-            option.value = iface.name;
-            option.textContent = `${iface.display_name || iface.name} (${iface.ip || '无IP'})`;
-            select.appendChild(option);
-        });
-        document.getElementById('ethercat-toggle-btn').disabled = false;
-        showToast('网卡列表加载成功', 'success');
-    } else {
-        showToast('加载网卡失败: ' + (result.message || result.error), 'error');
-    }
-}
-
 function toggleAllEthercatCmds() {
     const selectAll = document.getElementById('ethercat-select-all');
     const checkboxes = document.querySelectorAll('.ethercat-cmd');
@@ -2899,10 +2935,7 @@ function updateEthercatSelectAll() {
 }
 
 async function ethercatToggle() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const interfaceName = document.getElementById('ethercat-interface').value;
-    if (!interfaceName) { showToast('请选择网卡', 'warning'); return; }
+    if (!ethercatAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const dataUnitType = parseInt(document.getElementById('ethercat-data-unit-type').value, 10);
     if (dataUnitType !== 1) { showToast('当前仅支持数据单元类型 1', 'warning'); return; }
@@ -2915,8 +2948,7 @@ async function ethercatToggle() {
 
     if (!ethercatRunning) {
         const data = {
-            agent_id: selectedClientAgentId,
-            interface: interfaceName,
+            agent_id: ethercatAgentId,
             data_unit_type: dataUnitType,
             command_codes: commandCodes
         };
@@ -2933,7 +2965,7 @@ async function ethercatToggle() {
             showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        const result = await apiRequest('/api/industrial/goose_sv/ethercat/stop/', 'POST', { agent_id: selectedClientAgentId });
+        const result = await apiRequest('/api/industrial/goose_sv/ethercat/stop/', 'POST', { agent_id: ethercatAgentId });
         if (result.success) {
             ethercatRunning = false;
             stopEthercatStatusPolling();
@@ -2948,9 +2980,9 @@ async function ethercatToggle() {
 }
 
 async function ethercatStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    if (!ethercatAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/ethercat/status/', 'POST', { agent_id: selectedClientAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/ethercat/status/', 'POST', { agent_id: ethercatAgentId });
     if (result.success && result.data) {
         const count = result.data.packet_count || 0;
         document.getElementById('ethercat-packet-count').textContent = count;
@@ -2967,11 +2999,11 @@ async function ethercatStatus() {
 function startEthercatStatusPolling() {
     if (ethercatStatusPollingInterval) return;
     ethercatStatusPollingInterval = setInterval(async () => {
-        if (!ethercatRunning || !selectedClientAgentId) {
+        if (!ethercatRunning || !ethercatAgentId) {
             stopEthercatStatusPolling();
             return;
         }
-        const result = await apiRequest('/api/industrial/goose_sv/ethercat/status/', 'POST', { agent_id: selectedClientAgentId });
+        const result = await apiRequest('/api/industrial/goose_sv/ethercat/status/', 'POST', { agent_id: ethercatAgentId });
         if (result.success && result.data) {
             document.getElementById('ethercat-packet-count').textContent = result.data.packet_count || 0;
         }
@@ -2989,26 +3021,6 @@ function stopEthercatStatusPolling() {
 let powerlinkRunning = false;
 let powerlinkStatusPollingInterval = null;
 
-async function loadPowerlinkInterfaces() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedClientAgentId });
-    if (result.success && result.interfaces) {
-        const select = document.getElementById('powerlink-interface');
-        select.innerHTML = '<option value="">请选择网卡</option>';
-        result.interfaces.forEach(iface => {
-            const option = document.createElement('option');
-            option.value = iface.name;
-            option.textContent = `${iface.display_name || iface.name} (${iface.ip || '无IP'})`;
-            select.appendChild(option);
-        });
-        document.getElementById('powerlink-toggle-btn').disabled = false;
-        showToast('网卡列表加载成功', 'success');
-    } else {
-        showToast('加载网卡失败: ' + (result.message || result.error), 'error');
-    }
-}
-
 function toggleAllPowerlinkSvc() {
     const selectAll = document.getElementById('powerlink-select-all');
     const checkboxes = document.querySelectorAll('.powerlink-svc');
@@ -3022,10 +3034,7 @@ function updatePowerlinkSelectAll() {
 }
 
 async function powerlinkToggle() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const interfaceName = document.getElementById('powerlink-interface').value;
-    if (!interfaceName) { showToast('请选择网卡', 'warning'); return; }
+    if (!powerlinkAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const sa = parseInt(document.getElementById('powerlink-sa').value, 10);
     const da = parseInt(document.getElementById('powerlink-da').value, 10);
@@ -3040,8 +3049,7 @@ async function powerlinkToggle() {
 
     if (!powerlinkRunning) {
         const data = {
-            agent_id: selectedClientAgentId,
-            interface: interfaceName,
+            agent_id: powerlinkAgentId,
             service_types: serviceTypes,
             sa: saVal,
             da: daVal
@@ -3059,7 +3067,7 @@ async function powerlinkToggle() {
             showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        const result = await apiRequest('/api/industrial/goose_sv/powerlink/stop/', 'POST', { agent_id: selectedClientAgentId });
+        const result = await apiRequest('/api/industrial/goose_sv/powerlink/stop/', 'POST', { agent_id: powerlinkAgentId });
         if (result.success) {
             powerlinkRunning = false;
             stopPowerlinkStatusPolling();
@@ -3074,9 +3082,9 @@ async function powerlinkToggle() {
 }
 
 async function powerlinkStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    if (!powerlinkAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/powerlink/status/', 'POST', { agent_id: selectedClientAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/powerlink/status/', 'POST', { agent_id: powerlinkAgentId });
     if (result.success && result.data) {
         const count = result.data.packet_count || 0;
         document.getElementById('powerlink-packet-count').textContent = count;
@@ -3093,11 +3101,11 @@ async function powerlinkStatus() {
 function startPowerlinkStatusPolling() {
     if (powerlinkStatusPollingInterval) return;
     powerlinkStatusPollingInterval = setInterval(async () => {
-        if (!powerlinkRunning || !selectedClientAgentId) {
+        if (!powerlinkRunning || !powerlinkAgentId) {
             stopPowerlinkStatusPolling();
             return;
         }
-        const result = await apiRequest('/api/industrial/goose_sv/powerlink/status/', 'POST', { agent_id: selectedClientAgentId });
+        const result = await apiRequest('/api/industrial/goose_sv/powerlink/status/', 'POST', { agent_id: powerlinkAgentId });
         if (result.success && result.data) {
             document.getElementById('powerlink-packet-count').textContent = result.data.packet_count || 0;
         }
@@ -3166,31 +3174,8 @@ function updateDcpSuboptionSelectAll() {
     document.getElementById('dcp-suboption-select-all').checked = allChecked;
 }
 
-async function loadDcpInterfaces() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/interfaces/', 'POST', { agent_id: selectedClientAgentId });
-    if (result.success && result.interfaces) {
-        const select = document.getElementById('dcp-interface');
-        select.innerHTML = '<option value="">请选择网卡</option>';
-        result.interfaces.forEach(iface => {
-            const option = document.createElement('option');
-            option.value = iface.name;
-            option.textContent = `${iface.display_name || iface.name} (${iface.ip || '无IP'})`;
-            select.appendChild(option);
-        });
-        document.getElementById('dcp-toggle-btn').disabled = false;
-        showToast('网卡列表加载成功', 'success');
-    } else {
-        showToast('加载网卡失败: ' + (result.message || result.error), 'error');
-    }
-}
-
 async function dcpToggle() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-
-    const interfaceName = document.getElementById('dcp-interface').value;
-    if (!interfaceName) { showToast('请选择网卡', 'warning'); return; }
+    if (!dcpAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
     const checked = document.querySelectorAll('.dcp-suboption-cb:checked');
     const suboptions = Array.from(checked).map(cb => parseInt(cb.value, 10));
@@ -3200,8 +3185,7 @@ async function dcpToggle() {
 
     if (!dcpRunning) {
         const data = {
-            agent_id: selectedClientAgentId,
-            interface: interfaceName,
+            agent_id: dcpAgentId,
             frame_type: document.getElementById('dcp-frame-type').value,
             service_code: document.getElementById('dcp-service-code').value,
             service_type: document.getElementById('dcp-service-type').value,
@@ -3221,7 +3205,7 @@ async function dcpToggle() {
             showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     } else {
-        const result = await apiRequest('/api/industrial/goose_sv/dcp/stop/', 'POST', { agent_id: selectedClientAgentId });
+        const result = await apiRequest('/api/industrial/goose_sv/dcp/stop/', 'POST', { agent_id: dcpAgentId });
         if (result.success) {
             dcpRunning = false;
             stopDcpStatusPolling();
@@ -3236,9 +3220,9 @@ async function dcpToggle() {
 }
 
 async function dcpStatus() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    if (!dcpAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/dcp/status/', 'POST', { agent_id: selectedClientAgentId });
+    const result = await apiRequest('/api/industrial/goose_sv/dcp/status/', 'POST', { agent_id: dcpAgentId });
     if (result.success && result.data) {
         const count = result.data.packet_count || 0;
         document.getElementById('dcp-packet-count').textContent = count;
@@ -3255,11 +3239,11 @@ async function dcpStatus() {
 function startDcpStatusPolling() {
     if (dcpStatusPollingInterval) return;
     dcpStatusPollingInterval = setInterval(async () => {
-        if (!dcpRunning || !selectedClientAgentId) {
+        if (!dcpRunning || !dcpAgentId) {
             stopDcpStatusPolling();
             return;
         }
-        const result = await apiRequest('/api/industrial/goose_sv/dcp/status/', 'POST', { agent_id: selectedClientAgentId });
+        const result = await apiRequest('/api/industrial/goose_sv/dcp/status/', 'POST', { agent_id: dcpAgentId });
         if (result.success && result.data) {
             document.getElementById('dcp-packet-count').textContent = result.data.packet_count || 0;
         }
