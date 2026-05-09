@@ -3970,6 +3970,12 @@ def _proxy_industrial_request(agent_id, protocol_path, method='GET', data=None, 
         if status != 'running':
             return {'success': False, 'error': 'Agent 未运行'}
 
+        # 确保 data 不为 None，并添加 interface 字段（使用 Agent 绑定的网卡名称）
+        if data is None:
+            data = {}
+        if 'interface' not in data:
+            data['interface'] = agent.interface.name
+
         # 构建 endpoint（带 params）
         endpoint = f'/api/industrial_protocol/{protocol_path}'
         if params:
