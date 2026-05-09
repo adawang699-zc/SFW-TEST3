@@ -10,7 +10,10 @@ except ImportError:
 import threading
 import time
 import logging
-from asn1_encoder import IEC61850Encoder
+try:
+    from agents.protocols.asn1_encoder import IEC61850Encoder
+except ImportError:
+    from asn1_encoder import IEC61850Encoder
 
 logger = logging.getLogger(__name__)
 
