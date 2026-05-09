@@ -1,0 +1,134 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - link "防火墙测试平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 17:01:51"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 Agent 管理" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: Agent 管理
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "🔧 服务下发" [ref=e19] [cursor=pointer]:
+      - /url: /service-deploy/
+      - generic [ref=e20]: 🔧
+      - text: 服务下发
+    - link "⚙️ 工控协议" [ref=e22] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e23]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e25] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e26]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e28] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e29]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e31] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e32]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e34] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e35]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e37] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e38]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e40] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e41]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e43] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e44]: 🔑
+      - text: 授权管理
+  - generic [ref=e45]:
+    - generic [ref=e46]:
+      - generic [ref=e47]: 工控协议测试
+      - paragraph [ref=e48]: 支持 Modbus、S7、GOOSE、SV、DNP3、BACnet、Ethernet/IP、MMS 等工控协议的客户端和服务端模拟
+    - generic [ref=e49]:
+      - generic [ref=e50]: 协议选择
+      - generic [ref=e51]:
+        - generic [ref=e52] [cursor=pointer]: Modbus
+        - generic [ref=e53] [cursor=pointer]: S7
+        - generic [ref=e54] [cursor=pointer]: GOOSE/SV
+        - generic [ref=e55] [cursor=pointer]: EtherCAT
+        - generic [ref=e56] [cursor=pointer]: POWERLINK
+        - generic [ref=e57] [cursor=pointer]: PNRT-DCP
+        - generic [ref=e58] [cursor=pointer]: DNP3
+        - generic [ref=e59] [cursor=pointer]: BACnet
+        - generic [ref=e60] [cursor=pointer]: ENIP
+        - generic [ref=e61] [cursor=pointer]: MMS
+        - generic [ref=e62] [cursor=pointer]: HTTP
+      - generic [ref=e499]:
+        - generic [ref=e500]:
+          - heading "选择 Agent（网卡）" [level=5] [ref=e501]
+          - generic [ref=e502]:
+            - generic [ref=e503] [cursor=pointer]: agent_eth1 (192.168.11.100)
+            - generic [ref=e504] [cursor=pointer]: agent_eth2 (192.168.12.100)
+        - generic [ref=e505]:
+          - heading "PNRT-DCP 发送配置" [level=4] [ref=e506]
+          - generic [ref=e507]:
+            - generic [ref=e508]:
+              - generic [ref=e509]: 帧类型
+              - combobox [ref=e510]:
+                - option "HELLO (0xFEFC)"
+                - option "GETORSET (0xFEFD)" [selected]
+                - option "IDENT_REQ (0xFEFF)"
+                - option "IDENT_RES (0xFEFE)"
+            - generic [ref=e511]:
+              - generic [ref=e512]: 服务码
+              - combobox [ref=e513]:
+                - option "GET" [selected]
+                - option "SET"
+                - option "IDENTIFY"
+                - option "HELLO"
+                - option "RESERV"
+                - option "MANU"
+            - generic [ref=e514]:
+              - generic [ref=e515]: 服务类型
+              - combobox [ref=e516]:
+                - option "request" [selected]
+                - option "response_success"
+          - generic [ref=e517]:
+            - generic [ref=e518]: 选项
+            - combobox [ref=e519]:
+              - option "IP" [selected]
+              - option "DEVICE"
+              - option "DHCP"
+              - option "RESERVED"
+              - option "CONTROL"
+              - option "DEVICEINITIATIVE"
+              - option "NME_PARAMS"
+              - option "MANUF_X80"
+              - option "MANUF_X81"
+              - option "MANUF_X82"
+              - option "MANUF_X83"
+              - option "MANUF_X84"
+              - option "MANUF_X85"
+              - option "MANUF_X86"
+              - option "ALLSECECTOR"
+          - generic [ref=e520]:
+            - generic [ref=e521]: 子选项 (可多选)
+            - generic [ref=e522]:
+              - checkbox [ref=e523]
+              - generic [ref=e524]: 全选
+          - generic [ref=e525]:
+            - button "启动" [active] [ref=e526] [cursor=pointer]
+            - button "状态" [ref=e527] [cursor=pointer]
+          - generic [ref=e529]: 状态：未启动 | 已发送报文：0
+  - generic [ref=e531]: 请至少选择一个子选项
