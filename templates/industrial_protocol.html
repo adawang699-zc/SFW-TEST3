@@ -666,48 +666,55 @@
 
     <!-- GOOSE/SV Tab -->
     <div id="goose-sv-content" class="protocol-content">
-        <div class="config-section">
-            <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
-            <div id="goose-sv-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-                <span style="color: var(--text-muted);">加载中...</span>
-            </div>
-        </div>
-
         <div class="client-server-grid">
-            <!-- GOOSE -->
-            <div>
-                <h4 style="color: var(--primary); margin-bottom: 12px;">GOOSE 接收器</h4>
-                <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">GOOSE ID</label>
-                        <input type="text" id="goose-id" class="form-input" placeholder="GOOSE1">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-success" onclick="gooseStart()">启动接收</button>
-                        <button class="btn btn-danger" onclick="gooseStop()">停止</button>
-                        <button class="btn btn-secondary" onclick="gooseStatus()">状态</button>
-                    </div>
-                    <div id="goose-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+            <!-- GOOSE 发送 -->
+            <div class="config-section">
+                <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
+                <div id="goose-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <span style="color: var(--text-muted);">加载中...</span>
                 </div>
-                <div id="goose-data" style="margin-top: 12px;"></div>
             </div>
 
-            <!-- SV -->
-            <div>
-                <h4 style="color: var(--primary); margin-bottom: 12px;">SV 接收器</h4>
-                <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">SV ID</label>
-                        <input type="text" id="sv-id" class="form-input" placeholder="SV1">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-success" onclick="svStart()">启动接收</button>
-                        <button class="btn btn-danger" onclick="svStop()">停止</button>
-                        <button class="btn btn-secondary" onclick="svStatus()">状态</button>
-                    </div>
-                    <div id="sv-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+            <div class="config-section">
+                <h4 style="color: var(--primary); margin-bottom: 12px;">GOOSE 发送配置</h4>
+                <div class="form-group">
+                    <label class="form-label">数据集 (Dataset)</label>
+                    <input type="text" id="goose-dataset" class="form-input" placeholder="IED1/LLN0$DataSet1" value="IED1/LLN0$DataSet1">
+                    <small style="color: var(--text-muted);">GOOSE 数据集名称</small>
                 </div>
-                <div id="sv-data" style="margin-top: 12px;"></div>
+
+                <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button class="btn btn-success" id="goose-toggle-btn" onclick="gooseToggle()" disabled>启动</button>
+                    <button class="btn btn-secondary" onclick="gooseStatus()">状态</button>
+                </div>
+                <div id="goose-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                    <span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="goose-packet-count">0</span></span>
+                </div>
+            </div>
+
+            <!-- SV 发送 -->
+            <div class="config-section">
+                <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Agent（网卡）</h5>
+                <div id="sv-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                    <span style="color: var(--text-muted);">加载中...</span>
+                </div>
+            </div>
+
+            <div class="config-section">
+                <h4 style="color: var(--primary); margin-bottom: 12px;">SV 发送配置</h4>
+                <div class="form-group">
+                    <label class="form-label">数据集 (Dataset)</label>
+                    <input type="text" id="sv-dataset" class="form-input" placeholder="IED1/LLN0$DataSet1" value="IED1/LLN0$DataSet1">
+                    <small style="color: var(--text-muted);">SV 数据集名称</small>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-top: 16px;">
+                    <button class="btn btn-success" id="sv-toggle-btn" onclick="svToggle()" disabled>启动</button>
+                    <button class="btn btn-secondary" onclick="svStatus()">状态</button>
+                </div>
+                <div id="sv-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                    <span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="sv-packet-count">0</span></span>
+                </div>
             </div>
         </div>
     </div>
@@ -1236,7 +1243,9 @@ let selectedServerAgentIp = null;
 let ethercatAgentId = null;
 let powerlinkAgentId = null;
 let dcpAgentId = null;
-let gooseSvAgentId = null;
+let gooseAgentId = null;
+let svAgentId = null;
+let gooseSvAgentId = null;  // 已废弃，保留兼容
 let agentsData = [];  // 保存 Agent 数据
 
 // ========== 全局连接状态追踪 ==========
@@ -1361,7 +1370,8 @@ async function loadAgents() {
             renderProtocolAgentSelector('ethercat-agent-selector', runningAgents, 'ethercat');
             renderProtocolAgentSelector('powerlink-agent-selector', runningAgents, 'powerlink');
             renderProtocolAgentSelector('dcp-agent-selector', runningAgents, 'dcp');
-            renderProtocolAgentSelector('goose-sv-agent-selector', runningAgents, 'goose-sv');
+            renderProtocolAgentSelector('goose-agent-selector', runningAgents, 'goose');
+            renderProtocolAgentSelector('sv-agent-selector', runningAgents, 'sv');
         } else {
             document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
@@ -1370,7 +1380,8 @@ async function loadAgents() {
             document.getElementById('ethercat-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('powerlink-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
-            document.getElementById('goose-sv-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('goose-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('sv-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
         }
     } catch (e) {
         document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
@@ -1451,14 +1462,24 @@ function selectProtocolAgent(agentId, protocol, ip) {
         });
         document.getElementById('dcp-toggle-btn').disabled = false;
         showToast(`已选择 ${agentId} (${ip}) 作为 DCP 发送网卡`, 'success');
-    } else if (protocol === 'goose-sv') {
-        if (agentId === gooseSvAgentId) return;
-        gooseSvAgentId = agentId;
-        document.querySelectorAll('#goose-sv-agent-selector .agent-selector-btn').forEach(btn => {
+    } else if (protocol === 'goose') {
+        if (agentId === gooseAgentId) return;
+        gooseAgentId = agentId;
+        document.querySelectorAll('#goose-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
-        showToast(`已选择 ${agentId} (${ip}) 作为 GOOSE/SV 网卡`, 'success');
+        document.getElementById('goose-toggle-btn').disabled = false;
+        showToast(`已选择 ${agentId} (${ip}) 作为 GOOSE 发送网卡`, 'success');
+    } else if (protocol === 'sv') {
+        if (agentId === svAgentId) return;
+        svAgentId = agentId;
+        document.querySelectorAll('#sv-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        document.getElementById('sv-toggle-btn').disabled = false;
+        showToast(`已选择 ${agentId} (${ip}) 作为 SV 发送网卡`, 'success');
     }
 }
 
@@ -2825,88 +2846,165 @@ function initS7ServerDb() {
     s7ServerReadDb();     // 读取数据
 }
 
-// ========== GOOSE/SV ==========
-async function gooseStart() {
-    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+// ========== GOOSE/SV 发送 ==========
+let gooseRunning = false;
+let gooseStatusPollingInterval = null;
+let svRunning = false;
+let svStatusPollingInterval = null;
 
-    const data = {
-        agent_id: gooseSvAgentId,
-        go_id: document.getElementById('goose-id').value
-    };
+async function gooseToggle() {
+    if (!gooseAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/goose/start/', 'POST', data);
-    if (result.success) {
-        activeConnections.goose = true;
-        document.getElementById('goose-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
-        showToast('GOOSE 接收已启动', 'success');
+    const dataset = document.getElementById('goose-dataset').value;
+    if (!dataset) { showToast('请输入数据集名称', 'warning'); return; }
+
+    const btn = document.getElementById('goose-toggle-btn');
+
+    if (!gooseRunning) {
+        const data = {
+            agent_id: gooseAgentId,
+            dataset: dataset
+        };
+
+        const result = await apiRequest('/api/industrial/goose_sv/goose/start/', 'POST', data);
+        if (result.success) {
+            gooseRunning = true;
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('goose-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="goose-packet-count">0</span></span>';
+            startGooseStatusPolling();
+            showToast('GOOSE 发送服务启动成功', 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
     } else {
-        showToast('启动失败: ' + (result.message || result.error), 'error');
-    }
-}
-
-async function gooseStop() {
-    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
-
-    const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: gooseSvAgentId });
-    if (result.success) {
-        activeConnections.goose = false;
-        document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
-        showToast('已停止', 'success');
-    } else {
-        showToast('停止失败: ' + (result.message || result.error), 'error');
+        const result = await apiRequest('/api/industrial/goose_sv/goose/stop/', 'POST', { agent_id: gooseAgentId });
+        if (result.success) {
+            gooseRunning = false;
+            stopGooseStatusPolling();
+            btn.textContent = '启动';
+            btn.className = 'btn btn-success';
+            document.getElementById('goose-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="goose-packet-count">0</span></span>';
+            showToast('GOOSE 发送服务已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
     }
 }
 
 async function gooseStatus() {
-    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!gooseAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: gooseSvAgentId });
-    if (result.success) {
-        document.getElementById('goose-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
-    } else {
-        showToast('获取状态失败: ' + (result.message || result.error), 'error');
+    const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: gooseAgentId });
+    if (result.success && result.data) {
+        const count = result.data.packet_count || 0;
+        document.getElementById('goose-packet-count').textContent = count;
+        if (result.data.running) {
+            gooseRunning = true;
+            const btn = document.getElementById('goose-toggle-btn');
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('goose-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="goose-packet-count">' + count + '</span></span>';
+        }
     }
 }
 
-async function svStart() {
-    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+function startGooseStatusPolling() {
+    if (gooseStatusPollingInterval) return;
+    gooseStatusPollingInterval = setInterval(async () => {
+        if (!gooseRunning || !gooseAgentId) {
+            stopGooseStatusPolling();
+            return;
+        }
+        const result = await apiRequest('/api/industrial/goose_sv/goose/status/', 'POST', { agent_id: gooseAgentId });
+        if (result.success && result.data) {
+            document.getElementById('goose-packet-count').textContent = result.data.packet_count || 0;
+        }
+    }, 1000);
+}
 
-    const data = {
-        agent_id: gooseSvAgentId,
-        sv_id: document.getElementById('sv-id').value
-    };
-
-    const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
-    if (result.success) {
-        activeConnections.sv = true;
-        document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">接收中</span>';
-        showToast('SV 接收已启动', 'success');
-    } else {
-        showToast('启动失败: ' + (result.message || result.error), 'error');
+function stopGooseStatusPolling() {
+    if (gooseStatusPollingInterval) {
+        clearInterval(gooseStatusPollingInterval);
+        gooseStatusPollingInterval = null;
     }
 }
 
-async function svStop() {
-    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+async function svToggle() {
+    if (!svAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: gooseSvAgentId });
-    if (result.success) {
-        activeConnections.sv = false;
-        document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
-        showToast('已停止', 'success');
+    const dataset = document.getElementById('sv-dataset').value;
+    if (!dataset) { showToast('请输入数据集名称', 'warning'); return; }
+
+    const btn = document.getElementById('sv-toggle-btn');
+
+    if (!svRunning) {
+        const data = {
+            agent_id: svAgentId,
+            dataset: dataset
+        };
+
+        const result = await apiRequest('/api/industrial/goose_sv/sv/start/', 'POST', data);
+        if (result.success) {
+            svRunning = true;
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="sv-packet-count">0</span></span>';
+            startSvStatusPolling();
+            showToast('SV 发送服务启动成功', 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
     } else {
-        showToast('停止失败: ' + (result.message || result.error), 'error');
+        const result = await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: svAgentId });
+        if (result.success) {
+            svRunning = false;
+            stopSvStatusPolling();
+            btn.textContent = '启动';
+            btn.className = 'btn btn-success';
+            document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">状态：未启动 | 已发送报文：<span id="sv-packet-count">0</span></span>';
+            showToast('SV 发送服务已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
     }
 }
 
 async function svStatus() {
-    if (!gooseSvAgentId) { showToast('请先选择 Agent', 'error'); return; }
+    if (!svAgentId) { showToast('请先选择 Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: gooseSvAgentId });
-    if (result.success) {
-        document.getElementById('sv-data').innerHTML = `<div class="hex-display">${JSON.stringify(result)}</div>`;
-    } else {
-        showToast('获取状态失败: ' + (result.message || result.error), 'error');
+    const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: svAgentId });
+    if (result.success && result.data) {
+        const count = result.data.packet_count || 0;
+        document.getElementById('sv-packet-count').textContent = count;
+        if (result.data.running) {
+            svRunning = true;
+            const btn = document.getElementById('sv-toggle-btn');
+            btn.textContent = '停止';
+            btn.className = 'btn btn-danger';
+            document.getElementById('sv-status').innerHTML = '<span style="color: var(--success);">状态：运行中 | 已发送报文：<span id="sv-packet-count">' + count + '</span></span>';
+        }
+    }
+}
+
+function startSvStatusPolling() {
+    if (svStatusPollingInterval) return;
+    svStatusPollingInterval = setInterval(async () => {
+        if (!svRunning || !svAgentId) {
+            stopSvStatusPolling();
+            return;
+        }
+        const result = await apiRequest('/api/industrial/goose_sv/sv/status/', 'POST', { agent_id: svAgentId });
+        if (result.success && result.data) {
+            document.getElementById('sv-packet-count').textContent = result.data.packet_count || 0;
+        }
+    }, 1000);
+}
+
+function stopSvStatusPolling() {
+    if (svStatusPollingInterval) {
+        clearInterval(svStatusPollingInterval);
+        svStatusPollingInterval = null;
     }
 }
 
