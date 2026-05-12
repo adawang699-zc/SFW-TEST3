@@ -907,77 +907,102 @@
 
     <!-- DNP3 Tab -->
     <div id="dnp3-content" class="protocol-content">
+        <div style="margin-bottom: 12px; padding: 8px; background: var(--bg-secondary); border-radius: 4px; border-left: 3px solid var(--primary);">
+            <strong style="color: var(--primary);">DNP3 (pydnp3 跨平台版本)</strong>
+            <span style="color: var(--text-muted); font-size: 0.9em;"> - 支持 Linux/macOS，需要安装 pydnp3</span>
+        </div>
         <div class="client-server-grid">
             <!-- DNP3 Client -->
             <div>
-                <h4 style="color: var(--primary); margin-bottom: 12px;">DNP3 Client</h4>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">DNP3 Client (Master)</h4>
                 <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">目标 IP</label>
-                        <input type="text" id="dnp3-client-ip" class="form-input" placeholder="192.168.1.100">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Client Agent</h5>
+                    <div id="dnp3-client-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <span style="color: var(--text-muted);">加载中...</span>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">端口</label>
-                        <input type="number" id="dnp3-client-port" class="form-input" value="20000">
+                </div>
+                <div class="config-section">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">连接配置</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">目标 IP</label>
+                            <input type="text" id="dnp3-client-ip" class="form-input" placeholder="192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" id="dnp3-client-port" class="form-input" value="20000">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Master Address (本机)</label>
+                            <input type="number" id="dnp3-master-addr" class="form-input" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Outstation Address (远端)</label>
+                            <input type="number" id="dnp3-outstation-addr" class="form-input" value="10">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label"> Master Address</label>
-                        <input type="number" id="dnp3-master-addr" class="form-input" value="1">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label"> Outstation Address</label>
-                        <input type="number" id="dnp3-outstation-addr" class="form-input" value="10">
-                    </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-success" onclick="dnp3ClientConnect()">连接</button>
                         <button class="btn btn-danger" onclick="dnp3ClientDisconnect()">断开</button>
                         <button class="btn btn-secondary" onclick="dnp3ClientStatus()">状态</button>
                     </div>
-                    <div id="dnp3-client-status" style="margin-top: 8px; color: var(--text-muted);">未连接</div>
+                    <div id="dnp3-client-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                        <span style="color: var(--text-muted);">未连接</span>
+                    </div>
                 </div>
 
                 <div class="config-section">
-                    <h5>读取数据</h5>
-                    <div class="form-group">
-                        <label class="form-label">对象类型</label>
-                        <select id="dnp3-object-type" class="form-input">
-                            <option value="12">Binary Input</option>
-                            <option value="1">Binary Output</option>
-                            <option value="22">Analog Input</option>
-                            <option value="32" selected>Analog Output</option>
-                        </select>
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">数据操作</h5>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                        <button class="btn btn-primary" onclick="dnp3ClientRead()">读取 (Class0)</button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">起始地址</label>
-                        <input type="number" id="dnp3-read-address" class="form-input" value="0">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">写入索引</label>
+                            <input type="number" id="dnp3-write-index" class="form-input" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">写入值</label>
+                            <input type="number" id="dnp3-write-value" class="form-input" value="100" step="0.1">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">数量</label>
-                        <input type="number" id="dnp3-read-count" class="form-input" value="10">
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button class="btn btn-warning" onclick="dnp3ClientWrite()">写入 (SelectAndOperate)</button>
+                        <button class="btn btn-info" onclick="dnp3ClientDirectOperate()">直接执行 (DirectOperate)</button>
                     </div>
-                    <button class="btn btn-primary" onclick="dnp3ClientRead()">读取</button>
                     <div id="dnp3-read-result" style="margin-top: 12px;"></div>
                 </div>
             </div>
 
             <!-- DNP3 Server -->
             <div>
-                <h4 style="color: var(--primary); margin-bottom: 12px;">DNP3 Server</h4>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">DNP3 Server (Outstation)</h4>
                 <div class="config-section">
-                    <div class="form-group">
-                        <label class="form-label">监听端口</label>
-                        <input type="number" id="dnp3-server-port" class="form-input" value="20000">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Server Agent</h5>
+                    <div id="dnp3-server-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <span style="color: var(--text-muted);">加载中...</span>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label"> Outstation Address</label>
-                        <input type="number" id="dnp3-server-addr" class="form-input" value="10">
+                </div>
+                <div class="config-section">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">服务端配置</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">监听端口</label>
+                            <input type="number" id="dnp3-server-port" class="form-input" value="20000">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Outstation Address</label>
+                            <input type="number" id="dnp3-server-addr" class="form-input" value="10">
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-success" onclick="dnp3ServerStart()">启动</button>
                         <button class="btn btn-danger" onclick="dnp3ServerStop()">停止</button>
                         <button class="btn btn-secondary" onclick="dnp3ServerStatus()">状态</button>
                     </div>
-                    <div id="dnp3-server-status" style="margin-top: 8px; color: var(--text-muted);">未启动</div>
+                    <div id="dnp3-server-status" style="margin-top: 8px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+                        <span style="color: var(--text-muted);">未启动</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1372,6 +1397,9 @@ async function loadAgents() {
             renderProtocolAgentSelector('dcp-agent-selector', runningAgents, 'dcp');
             renderProtocolAgentSelector('goose-agent-selector', runningAgents, 'goose');
             renderProtocolAgentSelector('sv-agent-selector', runningAgents, 'sv');
+            // DNP3 协议的 Agent 选择器
+            renderAgentSelector('dnp3-client-agent-selector', runningAgents, 'client');
+            renderAgentSelector('dnp3-server-agent-selector', runningAgents, 'server');
         } else {
             document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
@@ -1382,6 +1410,8 @@ async function loadAgents() {
             document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('goose-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('sv-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('dnp3-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('dnp3-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
         }
     } catch (e) {
         document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
@@ -1392,6 +1422,8 @@ async function loadAgents() {
         document.getElementById('powerlink-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('dcp-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('goose-sv-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('dnp3-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('dnp3-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
     }
 }
 
@@ -1524,6 +1556,10 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
+        document.querySelectorAll('#dnp3-client-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
         showToast(`已选择 ${agentId} (${ip}) 作为 Client Agent`, 'success');
     } else if (type === 'server') {
         selectedServerAgentId = agentId;
@@ -1533,6 +1569,10 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
         document.querySelectorAll('#s7-server-agent-selector .agent-selector-btn').forEach(btn => {
+            btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
+            btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
+        });
+        document.querySelectorAll('#dnp3-server-agent-selector .agent-selector-btn').forEach(btn => {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
@@ -3347,101 +3387,232 @@ function stopDcpStatusPolling() {
     }
 }
 
-// ========== DNP3 Client ==========
+// ========== DNP3 Client (pydnp3 跨平台) ==========
 async function dnp3ClientConnect() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedClientAgentId,
-        ip: document.getElementById('dnp3-client-ip').value,
-        port: parseInt(document.getElementById('dnp3-client-port').value),
-        master_address: parseInt(document.getElementById('dnp3-master-addr').value),
-        outstation_address: parseInt(document.getElementById('dnp3-outstation-addr').value)
+        client_id: selectedClientAgentId,
+        host: document.getElementById('dnp3-client-ip').value,
+        port: parseInt(document.getElementById('dnp3-client-port').value) || 20000,
+        local_addr: parseInt(document.getElementById('dnp3-master-addr').value) || 1,
+        remote_addr: parseInt(document.getElementById('dnp3-outstation-addr').value) || 10
     };
 
-    const result = await apiRequest('/api/industrial/dnp3_client/connect/', 'POST', data);
-    if (result.success) {
-        document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
-        showToast('DNP3 连接成功', 'success');
-    } else {
-        showToast('连接失败: ' + (result.message || result.error), 'error');
+    try {
+        const response = await fetch(`http://${selectedClientAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_client/connect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--success);">已连接</span>';
+            showToast('DNP3 连接成功', 'success');
+        } else {
+            showToast('连接失败: ' + (result.message || result.error), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
 async function dnp3ClientDisconnect() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
-    if (result.success) {
-        document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
-        showToast('已断开', 'success');
-    } else {
-        showToast('断开失败: ' + (result.message || result.error), 'error');
+    try {
+        const response = await fetch(`http://${selectedClientAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_client/disconnect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: selectedClientAgentId })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('dnp3-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+            showToast('已断开', 'success');
+        } else {
+            showToast('断开失败: ' + (result.message || result.error), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
 async function dnp3ClientStatus() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_client/status/', 'POST', { agent_id: selectedClientAgentId });
-    document.getElementById('dnp3-client-status').textContent = JSON.stringify(result);
+    try {
+        const response = await fetch(`http://${selectedClientAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_client/status?client_id=${selectedClientAgentId}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const statusHtml = result.connected
+                ? `<span style="color: var(--success);">已连接 (${result.host}:${result.port})</span>`
+                : `<span style="color: var(--text-muted);">未连接</span>`;
+            document.getElementById('dnp3-client-status').innerHTML = statusHtml;
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
 }
 
 async function dnp3ClientRead() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedClientAgentId,
-        object_type: parseInt(document.getElementById('dnp3-object-type').value),
-        start_address: parseInt(document.getElementById('dnp3-read-address').value),
-        count: parseInt(document.getElementById('dnp3-read-count').value)
+        client_id: selectedClientAgentId,
+        class_field: 0  // 所有类别
     };
 
-    const result = await apiRequest('/api/industrial/dnp3_client/read/', 'POST', data);
-    if (result.success) {
-        document.getElementById('dnp3-read-result').innerHTML = `<div class="hex-display">${JSON.stringify(result.data || result.values)}</div>`;
-        showToast('读取成功', 'success');
-    } else {
-        showToast('读取失败: ' + (result.message || result.error), 'error');
+    try {
+        const response = await fetch(`http://${selectedClientAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_client/read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            // 显示读取结果
+            let html = '<div class="config-section"><h5>读取结果</h5>';
+            if (result.data && result.data.length > 0) {
+                html += '<table class="data-table"><thead><tr><th>类型</th><th>索引</th><th>值</th><th>质量</th></tr></thead><tbody>';
+                result.data.forEach(item => {
+                    html += `<tr><td>${item.type}</td><td>${item.index}</td><td>${item.value}</td><td>${item.quality}</td></tr>`;
+                });
+                html += '</tbody></table>';
+            } else {
+                html += '<p style="color: var(--text-muted);">无数据</p>';
+            }
+            html += '</div>';
+            document.getElementById('dnp3-read-result').innerHTML = html;
+            showToast('读取成功', 'success');
+        } else {
+            showToast('读取失败: ' + (result.message || result.error), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
-// ========== DNP3 Server ==========
+async function dnp3ClientWrite() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const data = {
+        client_id: selectedClientAgentId,
+        index: parseInt(document.getElementById('dnp3-write-index').value) || 0,
+        value: parseFloat(document.getElementById('dnp3-write-value').value) || 0
+    };
+
+    try {
+        const response = await fetch(`http://${selectedClientAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_client/write`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+
+        showToast(result.success ? '写入成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function dnp3ClientDirectOperate() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const data = {
+        client_id: selectedClientAgentId,
+        index: parseInt(document.getElementById('dnp3-write-index').value) || 0,
+        value: parseFloat(document.getElementById('dnp3-write-value').value) || 0
+    };
+
+    try {
+        const response = await fetch(`http://${selectedClientAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_client/direct_operate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+
+        showToast(result.success ? 'DirectOperate 成功' : '失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+// ========== DNP3 Server (pydnp3 跨平台) ==========
 async function dnp3ServerStart() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     const data = {
-        agent_id: selectedServerAgentId,
-        port: parseInt(document.getElementById('dnp3-server-port').value),
-        outstation_address: parseInt(document.getElementById('dnp3-server-addr').value)
+        server_id: selectedServerAgentId,
+        bind: '0.0.0.0',
+        port: parseInt(document.getElementById('dnp3-server-port').value) || 20000,
+        remote_addr: 1,  // 主站地址
+        local_addr: parseInt(document.getElementById('dnp3-server-addr').value) || 10,  // 子站地址
+        point_count: 10
     };
 
-    const result = await apiRequest('/api/industrial/dnp3_server/start/', 'POST', data);
-    if (result.success) {
-        document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
-        showToast('DNP3 Server 启动成功', 'success');
-    } else {
-        showToast('启动失败: ' + (result.message || result.error), 'error');
+    try {
+        const response = await fetch(`http://${selectedServerAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_server/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--success);">运行中</span>';
+            showToast('DNP3 Server 启动成功', 'success');
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
 async function dnp3ServerStop() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_server/stop/', 'POST', { agent_id: selectedServerAgentId });
-    if (result.success) {
-        document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
-        showToast('已停止', 'success');
-    } else {
-        showToast('停止失败: ' + (result.message || result.error), 'error');
+    try {
+        const response = await fetch(`http://${selectedServerAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_server/stop`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ server_id: selectedServerAgentId })
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            document.getElementById('dnp3-server-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+            showToast('已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
     }
 }
 
 async function dnp3ServerStatus() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
-    const result = await apiRequest('/api/industrial/dnp3_server/status/', 'POST', { agent_id: selectedServerAgentId });
-    document.getElementById('dnp3-server-status').textContent = JSON.stringify(result);
+    try {
+        const response = await fetch(`http://${selectedServerAgentIp}:${AGENT_PORT}/api/industrial_protocol/dnp3_server/status?server_id=${selectedServerAgentId}`);
+        const result = await response.json();
+
+        if (result.success) {
+            const statusHtml = result.running
+                ? `<span style="color: var(--success);">运行中 (${result.bind}:${result.port})</span>`
+                : `<span style="color: var(--text-muted);">未启动</span>`;
+            document.getElementById('dnp3-server-status').innerHTML = statusHtml;
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
 }
 
 // ========== BACnet Client ==========
