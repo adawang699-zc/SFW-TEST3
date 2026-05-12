@@ -1,0 +1,396 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - heading "Page not found (404)" [level=1] [ref=e3]
+    - table [ref=e4]:
+      - rowgroup [ref=e5]:
+        - 'row "Request Method: GET" [ref=e6]':
+          - rowheader "Request Method:" [ref=e7]
+          - cell "GET" [ref=e8]
+        - 'row "Request URL: http://192.168.81.140:8000/industrial_protocol" [ref=e9]':
+          - rowheader "Request URL:" [ref=e10]
+          - cell "http://192.168.81.140:8000/industrial_protocol" [ref=e11]
+  - main [ref=e12]:
+    - paragraph [ref=e13]:
+      - text: Using the URLconf defined in
+      - code [ref=e14]: djangoProject.urls
+      - text: ", Django tried these URL patterns, in this order:"
+    - list [ref=e15]:
+      - listitem [ref=e16]:
+        - code [ref=e17]: admin/
+      - listitem [ref=e18]:
+        - code
+        - code [ref=e19]: "[name='home']"
+      - listitem [ref=e20]:
+        - code
+        - code [ref=e21]: agent-manage/ [name='agent_manage']
+      - listitem [ref=e22]:
+        - code
+        - code [ref=e23]: device-monitor/ [name='device_monitor']
+      - listitem [ref=e24]:
+        - code
+        - code [ref=e25]: packet-send/ [name='packet_send']
+      - listitem [ref=e26]:
+        - code
+        - code [ref=e27]: service-deploy/ [name='service_deploy']
+      - listitem [ref=e28]:
+        - code
+        - code [ref=e29]: industrial-protocol/ [name='industrial_protocol']
+      - listitem [ref=e30]:
+        - code
+        - code [ref=e31]: port-scan/ [name='port_scan']
+      - listitem [ref=e32]:
+        - code
+        - code [ref=e33]: packet-replay/ [name='packet_replay']
+      - listitem [ref=e34]:
+        - code
+        - code [ref=e35]: api/interfaces/scan/ [name='api_scan_interfaces']
+      - listitem [ref=e36]:
+        - code
+        - code [ref=e37]: api/interfaces/list/ [name='api_interface_list']
+      - listitem [ref=e38]:
+        - code
+        - code [ref=e39]: api/interfaces/config-ip/ [name='api_interface_config_ip']
+      - listitem [ref=e40]:
+        - code
+        - code [ref=e41]: api/interfaces/startup/ [name='api_interface_startup']
+      - listitem [ref=e42]:
+        - code
+        - code [ref=e43]: api/agents/list/ [name='api_agent_list']
+      - listitem [ref=e44]:
+        - code
+        - code [ref=e45]: api/agents/create/ [name='api_agent_create']
+      - listitem [ref=e46]:
+        - code
+        - code [ref=e47]: api/agents/delete/ [name='api_agent_delete']
+      - listitem [ref=e48]:
+        - code
+        - code [ref=e49]: api/agents/start/ [name='api_agent_start']
+      - listitem [ref=e50]:
+        - code
+        - code [ref=e51]: api/agents/stop/ [name='api_agent_stop']
+      - listitem [ref=e52]:
+        - code
+        - code [ref=e53]: api/agents/status/ [name='api_agent_status']
+      - listitem [ref=e54]:
+        - code
+        - code [ref=e55]: api/agents/logs/ [name='api_agent_logs']
+      - listitem [ref=e56]:
+        - code
+        - code [ref=e57]: api/agents/config-ip/ [name='api_agent_config_ip']
+      - listitem [ref=e58]:
+        - code
+        - code [ref=e59]: api/agents/lock/ [name='api_agents_lock']
+      - listitem [ref=e60]:
+        - code
+        - code [ref=e61]: api/agents/unlock/ [name='api_agents_unlock']
+      - listitem [ref=e62]:
+        - code
+        - code [ref=e63]: api/agents/locks/ [name='api_agents_locks']
+      - listitem [ref=e64]:
+        - code
+        - code [ref=e65]: api/agents/my-lock/ [name='api_agents_my_lock']
+      - listitem [ref=e66]:
+        - code
+        - code [ref=e67]: api/agents/my-rented/ [name='api_agents_my_rented']
+      - listitem [ref=e68]:
+        - code
+        - code [ref=e69]: api/agents/keepalive/ [name='api_agents_keepalive']
+      - listitem [ref=e70]:
+        - code
+        - code [ref=e71]: api/namespace/list/ [name='api_namespace_list']
+      - listitem [ref=e72]:
+        - code
+        - code [ref=e73]: api/namespace/setup-interface/ [name='api_namespace_setup_interface']
+      - listitem [ref=e74]:
+        - code
+        - code [ref=e75]: api/namespace/restore-interface/ [name='api_namespace_restore_interface']
+      - listitem [ref=e76]:
+        - code
+        - code [ref=e77]: api/namespace/status/ [name='api_namespace_status']
+      - listitem [ref=e78]:
+        - code
+        - code [ref=e79]: api/send_packet/ [name='api_send_packet']
+      - listitem [ref=e80]:
+        - code
+        - code [ref=e81]: api/stop_send/ [name='api_stop_send']
+      - listitem [ref=e82]:
+        - code
+        - code [ref=e83]: api/send_protocol/ [name='api_send_protocol']
+      - listitem [ref=e84]:
+        - code
+        - code [ref=e85]: api/start_scan/ [name='api_start_scan']
+      - listitem [ref=e86]:
+        - code
+        - code [ref=e87]: api/stop_scan/ [name='api_stop_scan']
+      - listitem [ref=e88]:
+        - code
+        - code [ref=e89]: api/scan_progress/ [name='api_scan_progress']
+      - listitem [ref=e90]:
+        - code
+        - code [ref=e91]: api/scan_results/ [name='api_scan_results']
+      - listitem [ref=e92]:
+        - code
+        - code [ref=e93]: api/list_pcap_files/ [name='api_list_pcap_files']
+      - listitem [ref=e94]:
+        - code
+        - code [ref=e95]: api/pcap_files/ [name='api_pcap_files']
+      - listitem [ref=e96]:
+        - code
+        - code [ref=e97]: api/packet_replay/start [name='api_packet_replay_start']
+      - listitem [ref=e98]:
+        - code
+        - code [ref=e99]: api/packet_replay/stop [name='api_packet_replay_stop']
+      - listitem [ref=e100]:
+        - code
+        - code [ref=e101]: api/packet_replay/status [name='api_packet_replay_status']
+      - listitem [ref=e102]:
+        - code
+        - code [ref=e103]: api/start_replay/ [name='api_start_replay']
+      - listitem [ref=e104]:
+        - code
+        - code [ref=e105]: api/stop_replay/ [name='api_stop_replay']
+      - listitem [ref=e106]:
+        - code
+        - code [ref=e107]: api/replay_stats/ [name='api_replay_stats']
+      - listitem [ref=e108]:
+        - code
+        - code [ref=e109]: api/services/listener/ [name='api_services_listener']
+      - listitem [ref=e110]:
+        - code
+        - code [ref=e111]: api/services/client/ [name='api_services_client']
+      - listitem [ref=e112]:
+        - code
+        - code [ref=e113]: api/services/status/ [name='api_services_status']
+      - listitem [ref=e114]:
+        - code
+        - code [ref=e115]: api/services/logs/ [name='api_services_logs']
+      - listitem [ref=e116]:
+        - code
+        - code [ref=e117]: api/devices/list/ [name='api_device_list']
+      - listitem [ref=e118]:
+        - code
+        - code [ref=e119]: api/devices/add/ [name='api_device_add']
+      - listitem [ref=e120]:
+        - code
+        - code [ref=e121]: api/devices/update/ [name='api_device_update']
+      - listitem [ref=e122]:
+        - code
+        - code [ref=e123]: api/devices/delete/ [name='api_device_delete']
+      - listitem [ref=e124]:
+        - code
+        - code [ref=e125]: api/device/test_connection/ [name='api_device_test_connection']
+      - listitem [ref=e126]:
+        - code
+        - code [ref=e127]: api/device/monitor_data/ [name='api_device_monitor_data']
+      - listitem [ref=e128]:
+        - code
+        - code [ref=e129]: api/device/disk_data/ [name='api_device_disk_data']
+      - listitem [ref=e130]:
+        - code
+        - code [ref=e131]: api/device/execute/ [name='api_device_execute']
+      - listitem [ref=e132]:
+        - code
+        - code [ref=e133]: api/device/monitoring/toggle/ [name='api_device_monitoring_toggle']
+      - listitem [ref=e134]:
+        - code
+        - code [ref=e135]: api/device/monitoring/status/ [name='api_device_monitoring_status']
+      - listitem [ref=e136]:
+        - code
+        - code [ref=e137]: api/device/alert_config/ [name='api_device_alert_config']
+      - listitem [ref=e138]:
+        - code
+        - code [ref=e139]: api/device/alert_config/test/ [name='api_device_alert_config_test']
+      - listitem [ref=e140]:
+        - code
+        - code [ref=e141]: api/device/alert_status/ [name='api_device_alert_status']
+      - listitem [ref=e142]:
+        - code
+        - code [ref=e143]: api/device/alert_ignore/ [name='api_device_alert_ignore']
+      - listitem [ref=e144]:
+        - code
+        - code [ref=e145]: api/device/coredump_list/ [name='api_device_coredump_list']
+      - listitem [ref=e146]:
+        - code
+        - code [ref=e147]: api/system/info/ [name='api_system_info']
+      - listitem [ref=e148]:
+        - code
+        - code [ref=e149]: syslog-receiver/ [name='syslog_receiver']
+      - listitem [ref=e150]:
+        - code
+        - code [ref=e151]: api/syslog/status/ [name='api_syslog_status']
+      - listitem [ref=e152]:
+        - code
+        - code [ref=e153]: api/syslog/control/ [name='api_syslog_control']
+      - listitem [ref=e154]:
+        - code
+        - code [ref=e155]: api/syslog/logs/ [name='api_syslog_logs']
+      - listitem [ref=e156]:
+        - code
+        - code [ref=e157]: api/syslog/clear/ [name='api_syslog_clear']
+      - listitem [ref=e158]:
+        - code
+        - code [ref=e159]: api/syslog/filter/ [name='api_syslog_filter']
+      - listitem [ref=e160]:
+        - code
+        - code [ref=e161]: snmp/ [name='snmp']
+      - listitem [ref=e162]:
+        - code
+        - code [ref=e163]: api/snmp/get/ [name='api_snmp_get']
+      - listitem [ref=e164]:
+        - code
+        - code [ref=e165]: api/snmp/trap/control/ [name='api_snmp_trap_control']
+      - listitem [ref=e166]:
+        - code
+        - code [ref=e167]: api/snmp/trap/status/ [name='api_snmp_trap_status']
+      - listitem [ref=e168]:
+        - code
+        - code [ref=e169]: api/snmp/trap/traps/ [name='api_snmp_trap_traps']
+      - listitem [ref=e170]:
+        - code
+        - code [ref=e171]: api/snmp/trap/clear/ [name='api_snmp_trap_clear']
+      - listitem [ref=e172]:
+        - code
+        - code [ref=e173]: dhcp-client/ [name='dhcp_client']
+      - listitem [ref=e174]:
+        - code
+        - code [ref=e175]: api/dhcp_client/start/ [name='api_dhcp_client_start']
+      - listitem [ref=e176]:
+        - code
+        - code [ref=e177]: api/dhcp_client/status/ [name='api_dhcp_client_status']
+      - listitem [ref=e178]:
+        - code
+        - code [ref=e179]: knowledge-base/ [name='knowledge_base']
+      - listitem [ref=e180]:
+        - code
+        - code [ref=e181]: api/knowledge/templates/ [name='api_knowledge_templates']
+      - listitem [ref=e182]:
+        - code
+        - code [ref=e183]: api/knowledge/templates/<str:name>/ [name='api_knowledge_template_get']
+      - listitem [ref=e184]:
+        - code
+        - code [ref=e185]: api/knowledge/templates/save/ [name='api_knowledge_template_save']
+      - listitem [ref=e186]:
+        - code
+        - code [ref=e187]: api/knowledge/templates/delete/ [name='api_knowledge_template_delete']
+      - listitem [ref=e188]:
+        - code
+        - code [ref=e189]: api/knowledge/create/ [name='api_knowledge_create']
+      - listitem [ref=e190]:
+        - code
+        - code [ref=e191]: api/knowledge/upgrade/ [name='api_knowledge_upgrade']
+      - listitem [ref=e192]:
+        - code
+        - code [ref=e193]: api/knowledge/vul/templates/ [name='api_vul_templates']
+      - listitem [ref=e194]:
+        - code
+        - code [ref=e195]: api/knowledge/vul/templates/<str:name>/ [name='api_vul_template_get']
+      - listitem [ref=e196]:
+        - code
+        - code [ref=e197]: api/knowledge/vul/templates/save/ [name='api_vul_template_save']
+      - listitem [ref=e198]:
+        - code
+        - code [ref=e199]: api/knowledge/vul/templates/delete/ [name='api_vul_template_delete']
+      - listitem [ref=e200]:
+        - code
+        - code [ref=e201]: api/knowledge/vul/create/ [name='api_vul_create']
+      - listitem [ref=e202]:
+        - code
+        - code [ref=e203]: api/knowledge/vul/upgrade/ [name='api_vul_upgrade']
+      - listitem [ref=e204]:
+        - code
+        - code [ref=e205]: api/knowledge/virus/templates/ [name='api_virus_templates']
+      - listitem [ref=e206]:
+        - code
+        - code [ref=e207]: api/knowledge/virus/templates/<str:name>/ [name='api_virus_template_get']
+      - listitem [ref=e208]:
+        - code
+        - code [ref=e209]: api/knowledge/virus/templates/save/ [name='api_virus_template_save']
+      - listitem [ref=e210]:
+        - code
+        - code [ref=e211]: api/knowledge/virus/templates/delete/ [name='api_virus_template_delete']
+      - listitem [ref=e212]:
+        - code
+        - code [ref=e213]: api/knowledge/virus/create/ [name='api_virus_create']
+      - listitem [ref=e214]:
+        - code
+        - code [ref=e215]: api/knowledge/virus/upgrade/ [name='api_virus_upgrade']
+      - listitem [ref=e216]:
+        - code
+        - code [ref=e217]: license-management/ [name='license_management']
+      - listitem [ref=e218]:
+        - code
+        - code [ref=e219]: api/license/verify-password/ [name='api_license_verify_password']
+      - listitem [ref=e220]:
+        - code
+        - code [ref=e221]: api/license/knowledge/generate/ [name='api_license_knowledge_generate']
+      - listitem [ref=e222]:
+        - code
+        - code [ref=e223]: api/license/knowledge/decrypt/ [name='api_license_knowledge_decrypt']
+      - listitem [ref=e224]:
+        - code
+        - code [ref=e225]: api/license/device/test_connection/ [name='api_license_device_test_connection']
+      - listitem [ref=e226]:
+        - code
+        - code [ref=e227]: api/license/device/generate/ [name='api_license_device_generate']
+      - listitem [ref=e228]:
+        - code
+        - code [ref=e229]: api/industrial/modbus_client/<str:action>/ [name='api_industrial_modbus_client']
+      - listitem [ref=e230]:
+        - code
+        - code [ref=e231]: api/industrial/modbus_server/<str:action>/ [name='api_industrial_modbus_server']
+      - listitem [ref=e232]:
+        - code
+        - code [ref=e233]: api/industrial/s7_client/<str:action>/ [name='api_industrial_s7_client']
+      - listitem [ref=e234]:
+        - code
+        - code [ref=e235]: api/industrial/s7_server/<str:action>/ [name='api_industrial_s7_server']
+      - listitem [ref=e236]:
+        - code
+        - code [ref=e237]: api/industrial/goose_sv/<path:action>/ [name='api_industrial_goose_sv']
+      - listitem [ref=e238]:
+        - code
+        - code [ref=e239]: api/industrial/enip_client/<str:action>/ [name='api_industrial_enip_client']
+      - listitem [ref=e240]:
+        - code
+        - code [ref=e241]: api/industrial/enip_server/<str:action>/ [name='api_industrial_enip_server']
+      - listitem [ref=e242]:
+        - code
+        - code [ref=e243]: api/industrial/bacnet_client/<str:action>/ [name='api_industrial_bacnet_client']
+      - listitem [ref=e244]:
+        - code
+        - code [ref=e245]: api/industrial/bacnet_server/<str:action>/ [name='api_industrial_bacnet_server']
+      - listitem [ref=e246]:
+        - code
+        - code [ref=e247]: api/industrial/dnp3_client/<str:action>/ [name='api_industrial_dnp3_client']
+      - listitem [ref=e248]:
+        - code
+        - code [ref=e249]: api/industrial/dnp3_server/<str:action>/ [name='api_industrial_dnp3_server']
+      - listitem [ref=e250]:
+        - code
+        - code [ref=e251]: api/industrial/mms_client/<str:action>/ [name='api_industrial_mms_client']
+      - listitem [ref=e252]:
+        - code
+        - code [ref=e253]: api/industrial/mms_server/<str:action>/ [name='api_industrial_mms_server']
+      - listitem [ref=e254]:
+        - code
+        - code [ref=e255]: api/industrial/http_client/<str:action>/ [name='api_industrial_http_client']
+      - listitem [ref=e256]:
+        - code
+        - code [ref=e257]: api/industrial/http_server/<str:action>/ [name='api_industrial_http_server']
+      - listitem [ref=e258]:
+        - code
+        - code [ref=e259]: api/industrial/http_files/<str:action>/ [name='api_industrial_http_files']
+      - listitem [ref=e260]:
+        - code
+        - code [ref=e261]: api/industrial/http_files/<str:action>/<str:filename>/ [name='api_industrial_http_files_with_filename']
+    - paragraph [ref=e262]:
+      - text: The current path,
+      - code [ref=e263]: industrial_protocol
+      - text: ", didn’t match any of these."
+  - contentinfo [ref=e264]:
+    - paragraph [ref=e265]:
+      - text: You’re seeing this error because you have
+      - code [ref=e266]: DEBUG = True
+      - text: in your Django settings file. Change that to
+      - code [ref=e267]: "False"
+      - text: ", and Django will display a standard 404 page."
