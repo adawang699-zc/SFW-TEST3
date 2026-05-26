@@ -14,63 +14,43 @@ import paramiko
 
 logger = logging.getLogger(__name__)
 
-
 def find_knowledge_license_tool():
     """查找知识库授权工具"""
-    import platform
-    import sys
-
     # 获取项目根目录
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     license_dir = os.path.join(project_root, 'license')
 
-    # 根据操作系统选择优先查找的文件
-    is_windows = platform.system() == 'Windows'
-
-    # 获取当前 Python 解释器路径（兼容 Windows 和 Linux）
-    python_executable = sys.executable
-
-    if is_windows:
-        # Windows: 优先查找 .exe 文件
-        possible_paths = [
-            os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender'),
-            'hx_knowledge_license_gender.exe',
-            'hx_knowledge_license_gender'
-        ]
-    else:
-        # Linux/Unix: 优先查找 .py 文件
-        possible_paths = [
-            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender'),
-            'hx_knowledge_license_gender.py',
-            'hx_knowledge_license_gender'
-        ]
+    # 可能的工具路径
+    possible_paths = [
+        os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender'),
+        'hx_knowledge_license_gender.exe',
+        'hx_knowledge_license_gender'
+    ]
 
     for path in possible_paths:
         if os.path.exists(path):
             logger.info(f"找到授权工具: {path}")
-            # 如果是Python文件，使用当前 Python 解释器
+            # 如果是Python文件，需要添加python前缀
             if path.endswith('.py'):
-                return [python_executable, path]
+                return ['python', path]
             else:
                 return [path]
 
         # 如果是相对路径，也尝试在PATH中查找
         if not os.path.isabs(path):
             try:
-                test_cmd = [path, '--help'] if not path.endswith('.py') else [python_executable, path, '--help']
+                test_cmd = [path, '--help'] if not path.endswith('.py') else ['python', path, '--help']
                 subprocess.run(test_cmd, capture_output=True, timeout=5)
                 logger.info(f"在PATH中找到授权工具: {path}")
-                return [path] if not path.endswith('.py') else [python_executable, path]
+                return [path] if not path.endswith('.py') else ['python', path]
             except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
                 continue
 
     return None
-
 
 def generate_knowledge_license(machine_code, vul_expire, virus_expire, rules_expire, save_path=None):
     """生成知识库授权
@@ -199,7 +179,6 @@ def generate_knowledge_license(machine_code, vul_expire, virus_expire, rules_exp
         logger.exception(f"知识库授权生成异常: {e}")
         return False, str(e)
 
-
 def decrypt_knowledge_license(file_path):
     """解密知识库授权"""
     try:
@@ -241,7 +220,6 @@ def decrypt_knowledge_license(file_path):
         logger.exception(f"知识库授权解密异常: {e}")
         return False, str(e)
 
-
 # 设备授权服务器配置
 DEVICE_LICENSE_SERVER = {
     'host': '10.40.24.17',
@@ -250,7 +228,6 @@ DEVICE_LICENSE_SERVER = {
     'port': 22,
     'lic_gen_path': '/home/tdhx/license/x64/lic_gen'
 }
-
 
 def test_device_license_connection():
     """测试设备授权服务器连接"""
@@ -285,7 +262,6 @@ def test_device_license_connection():
     except Exception as e:
         logger.exception(f"测试设备授权服务器连接异常: {e}")
         return False, str(e)
-
 
 def generate_device_license(auth_name, machine_code):
     """生成设备授权"""
