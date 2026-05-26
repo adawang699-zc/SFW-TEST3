@@ -45,19 +45,20 @@ def find_knowledge_license_tool():
     for path in possible_paths:
         if os.path.exists(path):
             logger.info(f"找到授权工具: {path}")
-            # 如果是Python文件，需要添加python前缀
+            # 如果是Python文件，使用当前解释器路径（兼容 Ubuntu 上 python3 或 venv）
             if path.endswith('.py'):
-                return ['python', path]
+                return [sys.executable, path]
             else:
                 return [path]
 
         # 如果是相对路径，也尝试在PATH中查找
         if not os.path.isabs(path):
             try:
-                test_cmd = [path, '--help'] if not path.endswith('.py') else ['python', path, '--help']
+                python_cmd = sys.executable if path.endswith('.py') else path
+                test_cmd = [path, '--help'] if not path.endswith('.py') else [sys.executable, path, '--help']
                 subprocess.run(test_cmd, capture_output=True, timeout=5)
                 logger.info(f"在PATH中找到授权工具: {path}")
-                return [path] if not path.endswith('.py') else ['python', path]
+                return [python_cmd] if not path.endswith('.py') else [sys.executable, path]
             except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
                 continue
 
