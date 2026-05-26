@@ -14,55 +14,71 @@ import time
 
 logger = logging.getLogger(__name__)
 
+def _check_wine() -> bool:
+    """检查 wine 是否可用"""
+    try:
+        result = subprocess.run(['wine', '--version'], capture_output=True, text=True, timeout=10)
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
 def find_knowledge_license_tool():
     """查找知识库授权工具"""
-    # 获取项目根目录
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     license_dir = os.path.join(project_root, 'license')
 
-    # 检测是否在 Linux 上运行
     is_linux = sys.platform.startswith('linux')
 
     if is_linux:
-        # Linux 上优先使用 Python 版本，跳过 .exe 和 .bat
-        possible_paths = [
-            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender'),
-            'hx_knowledge_license_gender',
-        ]
-    else:
-        # Windows 上保持原有搜索顺序
-        possible_paths = [
-            os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
-            os.path.join(license_dir, 'hx_knowledge_license_gender'),
-            'hx_knowledge_license_gender.exe',
-            'hx_knowledge_license_gender',
-        ]
+        # Linux 上通过 wine 运行 .exe
+        exe_path = os.path.join(license_dir, 'hx_knowledge_license_gender.exe')
+        if os.path.exists(exe_path):
+            wine_ok = _check_wine()
+            if wine_ok:
+                logger.info(f"使用 wine 运行知识库授权工具: {exe_path}")
+                return ['wine', exe_path]
+            else:
+                logger.error("wine 未安装，无法运行知识库授权工具")
+                return None
+        # Linux 原生可执行文件
+        for name in ['hx_knowledge_license_gender', os.path.join(license_dir, 'hx_knowledge_license_gender')]:
+            if os.path.exists(name) and os.access(name, os.X_OK):
+                logger.info(f"找到授权工具: {name}")
+                return [name]
+        return None
+
+    # Windows 上保持原有搜索顺序
+    possible_paths = [
+        os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
+        os.path.join(license_dir, 'hx_knowledge_license_gender'),
+        'hx_knowledge_license_gender.exe',
+        'hx_knowledge_license_gender',
+    ]
 
     for path in possible_paths:
         if os.path.exists(path):
             logger.info(f"找到授权工具: {path}")
-            # 如果是Python文件，使用当前解释器路径（兼容 Ubuntu 上 python3 或 venv）
-            if path.endswith('.py'):
-                return [sys.executable, path]
-            else:
-                return [path]
+            return [path]
 
-        # 如果是相对路径，也尝试在PATH中查找
         if not os.path.isabs(path):
             try:
-                python_cmd = sys.executable if path.endswith('.py') else path
-                test_cmd = [path, '--help'] if not path.endswith('.py') else [sys.executable, path, '--help']
-                subprocess.run(test_cmd, capture_output=True, timeout=5)
+                subprocess.run([path, '--help'], capture_output=True, timeout=5)
                 logger.info(f"在PATH中找到授权工具: {path}")
-                return [python_cmd] if not path.endswith('.py') else [sys.executable, path]
+                return [path]
             except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError):
                 continue
 
     return None
+
+
+def _wine_install_hint() -> str:
+    """获取 wine 安装提示"""
+    if sys.platform.startswith('linux'):
+        return '请执行: apt install -y wine'
+    return ''
+
 
 def generate_knowledge_license(machine_code, vul_expire, virus_expire, rules_expire, save_path=None):
     """生成知识库授权
@@ -83,7 +99,11 @@ def generate_knowledge_license(machine_code, vul_expire, virus_expire, rules_exp
         # 查找工具
         tool_cmd = find_knowledge_license_tool()
         if not tool_cmd:
-            return False, '找不到 hx_knowledge_license_gender 程序。请将程序放置在 license 目录下或确保在系统PATH中可用。'
+            hint = _wine_install_hint()
+            msg = '找不到 hx_knowledge_license_gender 程序。请将程序放置在 license 目录下'
+            if hint:
+                msg += f'。{hint}'
+            return False, msg
 
         # 构建JSON参数（直接使用年数，工具自己处理）
         license_json = {
@@ -200,7 +220,11 @@ def decrypt_knowledge_license(file_path):
         # 查找工具
         tool_cmd = find_knowledge_license_tool()
         if not tool_cmd:
-            return False, '找不到 hx_knowledge_license_gender 程序。请将程序放置在 license 目录下或确保在系统PATH中可用。'
+            hint = _wine_install_hint()
+            msg = '找不到 hx_knowledge_license_gender 程序。请将程序放置在 license 目录下'
+            if hint:
+                msg += f'。{hint}'
+            return False, msg
 
         # 构建命令
         cmd = tool_cmd + [

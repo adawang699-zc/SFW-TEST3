@@ -2,18 +2,23 @@
 
 ## 知识库授权工具
 
-Linux 环境自动使用 Python 版本（`hx_knowledge_license_gender.py`），Windows 使用 `.exe` 版本。
+Linux 环境通过 **Wine** 运行 `hx_knowledge_license_gender.exe`，Windows 直接运行。
+
+### 依赖（Linux）
+```shell
+apt install -y wine
+```
 
 ### 使用方法
 
 - 生成 license
 ```shell
-hx_knowledge_license_gender gen --json "{\"machinecode\":\"1234567890abcdefghijklmnopqrstuvwxyz\",\"vul_expire\":30,\"virus_expire\":60,\"rules_expire\":50}" -o /path/to/output.lic
+wine hx_knowledge_license_gender.exe gen --json "{\"machinecode\":\"1234567890abcdefghijklmnopqrstuvwxyz\",\"vul_expire\":30,\"virus_expire\":60,\"rules_expire\":50}" -o /path/to/output.lic
 ```
 
 - 解密 license
 ```shell
-hx_knowledge_license_gender dec -i /path/to/license.lic
+wine hx_knowledge_license_gender.exe dec -i /path/to/license.lic
 ```
 
 ## 设备授权工具

@@ -20,7 +20,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # 安装系统依赖
 echo "[1] 安装系统依赖..."
 apt update
-apt install -y python3 python3-pip python3-venv git curl wget net-tools nmap tcpreplay tcpdump
+apt install -y python3 python3-pip python3-venv git curl wget net-tools nmap tcpreplay tcpdump wine
 
 # 创建或更新虚拟环境
 echo "[2] 创建 Python 虚拟环境..."
