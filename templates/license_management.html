@@ -1,993 +1,375 @@
-{% extends "base.html" %}
-
+{% extends 'base.html' %}
 {% block title %}授权管理{% endblock %}
 
 {% block content %}
 <!-- 密码验证模态框 -->
-<div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="passwordModalLabel">
-                    <i class="fas fa-lock me-2"></i>授权管理 - 安全验证
-                </h5>
-                <button type="button" class="btn-close" id="closePasswordModal" aria-label="关闭"></button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>安全提示：</strong>授权管理功能需要管理员权限，每次访问都需要重新验证身份。
-                </div>
-                <form id="passwordForm">
-                    <div class="mb-3">
-                        <label for="adminPassword" class="form-label">管理员密码</label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="fas fa-key"></i>
-                            </span>
-                            <input type="password" class="form-control" id="adminPassword" placeholder="请输入管理员密码" required>
-                            <button class="btn btn-outline-secondary" type="button" id="togglePassword">
-                                <i class="fas fa-eye" id="passwordIcon"></i>
-                            </button>
-                        </div>
-                        <div class="invalid-feedback" id="passwordError"></div>
-                    </div>
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-primary" id="verifyPassword">
-                            <i class="fas fa-unlock me-1"></i>验证密码
-                        </button>
-                        <button type="button" class="btn btn-outline-secondary" id="cancelAuth">
-                            <i class="fas fa-times me-1"></i>取消验证
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <small class="text-muted">
-                    <i class="fas fa-shield-alt me-1"></i>
-                    此功能受到安全保护，仅限授权人员使用。如不记得密码，请联系系统管理员。
-                </small>
-            </div>
+<div id="passwordModal" style="display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border-radius: 16px; padding: 24px; max-width: 400px; width: 100%; border: 1px solid var(--border);">
+        <div style="color: var(--warning); font-size: 1.1rem; font-weight: 600; margin-bottom: 16px;">
+            授权管理 - 安全验证
+        </div>
+        <div style="color: var(--text-secondary); margin-bottom: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+            <small>安全提示：授权管理功能需要管理员权限，每次访问都需要重新验证身份。</small>
+        </div>
+        <div class="form-group">
+            <label class="form-label">管理员密码</label>
+            <input type="password" class="form-input" id="adminPassword" placeholder="请输入管理员密码">
+        </div>
+        <div id="passwordError" style="color: var(--danger); margin-bottom: 12px; display: none;">密码错误</div>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn btn-primary" onclick="verifyPassword()">验证密码</button>
+            <button class="btn btn-secondary" onclick="cancelAuth()">取消</button>
         </div>
     </div>
 </div>
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h3 class="card-title">
-                        <i class="fas fa-key me-2"></i>授权管理
-                        <span class="badge bg-success ms-2" id="authStatus" style="display: none;">
-                            <i class="fas fa-check me-1"></i>已验证
-                        </span>
-                    </h3>
+<!-- 未认证提示 -->
+<div id="unauthenticatedHint" style="display: none;">
+    <div class="card">
+        <div class="card-header">授权管理</div>
+        <div style="color: var(--text-secondary); text-align: center; padding: 30px;">
+            <div style="font-size: 2rem; margin-bottom: 16px;">🔒</div>
+            <div style="font-size: 1.1rem; margin-bottom: 8px;">授权管理功能需要身份验证</div>
+            <div style="margin-bottom: 16px;">请输入管理员密码以访问授权管理功能</div>
+            <button class="btn btn-primary" onclick="showPasswordModal()">重新验证</button>
+        </div>
+    </div>
+</div>
+
+<!-- 已认证主内容 -->
+<div id="mainContent" style="display: none;">
+    <div class="card">
+        <div class="card-header">授权管理 <span class="status-badge status-running" id="authStatus" style="display: none;">已验证</span></div>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            知识库授权和设备授权管理
+        </p>
+    </div>
+
+    <div class="card">
+        <div class="card-header">功能模块</div>
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button class="btn btn-primary" onclick="switchLicenseTab('knowledge')" id="tab-knowledge">知识库授权</button>
+            <button class="btn btn-secondary" onclick="switchLicenseTab('device')" id="tab-device">设备授权</button>
+            <button class="btn btn-danger btn-sm" onclick="logout()" style="margin-left: auto;">退出验证</button>
+        </div>
+    </div>
+
+    <!-- 知识库授权 -->
+    <div class="card" id="knowledge-section">
+        <div class="card-header">知识库授权配置</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">产品序列号 (机器码)</label>
+                    <input type="text" class="form-input" id="machine_code" placeholder="例如: 1234567890abcdefghijklmnopqrstuvwxyz">
+                    <small style="color: var(--text-muted);">用于生成授权文件的唯一标识</small>
                 </div>
-                <div class="card-body" id="mainContent" style="display: none;">
-                    <!-- 导航标签 -->
-                    <ul class="nav nav-tabs" id="licenseTab" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="knowledge-tab" data-bs-toggle="tab" data-bs-target="#knowledge" type="button" role="tab">
-                                <i class="fas fa-database me-1"></i>知识库授权
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="device-tab" data-bs-toggle="tab" data-bs-target="#device" type="button" role="tab">
-                                <i class="fas fa-server me-1"></i>设备授权
-                            </button>
-                        </li>
-                    </ul>
 
-                    <div class="tab-content" id="licenseTabContent">
-                        <!-- 知识库授权 -->
-                        <div class="tab-pane fade show active" id="knowledge" role="tabpanel">
-                            <div class="row mt-3">
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h5 class="card-title mb-0">
-                                                <i class="fas fa-cogs me-2"></i>知识库授权配置
-                                            </h5>
-                                        </div>
-                                        <div class="card-body">
-                                            <form id="knowledgeLicenseForm">
-                                                <div class="mb-3">
-                                                    <label for="machine_code" class="form-label">产品序列号 (机器码)</label>
-                                                    <input type="text" class="form-control" id="machine_code" placeholder="例如: 1234567890abcdefghijklmnopqrstuvwxyz" required>
-                                                    <div class="form-text">用于生成授权文件的唯一标识</div>
-                                                </div>
-                                <div class="row">
-                                    <div class="col-md-4">
-                                        <label for="vul_expire" class="form-label">漏洞库期限 (年)</label>
-                                        <input type="number" class="form-control" id="vul_expire" value="1" min="1" max="100" required>
-                                        <div class="form-text">有效期年数，例如：1年</div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="virus_expire" class="form-label">病毒库期限 (年)</label>
-                                        <input type="number" class="form-control" id="virus_expire" value="1" min="1" max="100" required>
-                                        <div class="form-text">有效期年数，例如：1年</div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label for="rules_expire" class="form-label">规则库期限 (年)</label>
-                                        <input type="number" class="form-control" id="rules_expire" value="1" min="1" max="100" required>
-                                        <div class="form-text">有效期年数，例如：1年</div>
-                                    </div>
-                                </div>
-                                                <div class="d-grid mt-3">
-                                                    <button type="submit" class="btn btn-primary" id="generateKnowledgeLicense">
-                                                        <i class="fas fa-key me-1"></i>生成知识库授权
-                                                    </button>
-                                                </div>
-                                                <div id="downloadLicenseContainer" class="mt-3" style="display: none;">
-                                                    <button type="button" class="btn btn-success w-100" id="downloadLicenseBtn">
-                                                        <i class="fas fa-download me-1"></i>下载授权文件
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h5 class="card-title mb-0">
-                                                <i class="fas fa-unlock me-2"></i>授权解密验证
-                                            </h5>
-                                        </div>
-                                        <div class="card-body">
-                                            <form id="decryptLicenseForm">
-                                                <div class="mb-3">
-                                                    <label for="license_file_path" class="form-label">授权文件路径</label>
-                                                    <input type="text" class="form-control" id="license_file_path" placeholder="例如: C:\\Users\\Desktop\\序列号.lic" required>
-                                                    <div class="form-text">要解密验证的授权文件完整路径</div>
-                                                </div>
-                                                <div class="d-grid">
-                                                    <button type="submit" class="btn btn-info" id="decryptLicense">
-                                                        <i class="fas fa-search me-1"></i>解密验证授权
-                                                    </button>
-                                                </div>
-                                            </form>
-                                            <div id="decryptResult" class="mt-3" style="display: none;">
-                                                <h6>解密结果：</h6>
-                                                <pre id="decryptContent" class="bg-light p-2 rounded"></pre>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 设备授权 -->
-                        <div class="tab-pane fade" id="device" role="tabpanel">
-                            <div class="row mt-3">
-                                <div class="col-md-8">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h5 class="card-title mb-0">
-                                                <i class="fas fa-server me-2"></i>设备授权配置
-                                            </h5>
-                                        </div>
-                                        <div class="card-body">
-                                            <div class="alert alert-info">
-                                                <i class="fas fa-info-circle me-2"></i>
-                                                <strong>远程授权服务器：</strong> 10.40.24.17 (tdhx/tdhx@2017)
-                                            </div>
-                                            <form id="deviceLicenseForm">
-                                                <div class="mb-3">
-                                                    <label for="license_method" class="form-label">授权方式</label>
-                                                    <select class="form-select" id="license_method">
-                                                        <option value="DR" selected>DR</option>
-                                                        <option value="dev-Code">dev-Code</option>
-                                                    </select>
-                                                    <div class="form-text">选择设备授权的生成方式</div>
-                                                </div>
-                                                <div class="mb-3" id="auth_name_group">
-                                                    <label for="auth_name" class="form-label">授权机构名称</label>
-                                                    <input type="text" class="form-control" id="auth_name"
-                                                           value="北京天地和兴科技股份有限公司武汉研发中心测试专用授权" required>
-                                                    <div class="form-text">授权机构的完整名称（DR方式需要）</div>
-                                                </div>
-                                                <div class="mb-3">
-                                                    <label for="device_machine_code" class="form-label">设备机器码</label>
-                                                    <input type="text" class="form-control" id="device_machine_code"
-                                                           placeholder="例如: 5a2c544613553aa4bed38e6ecbe739c0" required>
-                                                    <div class="form-text">目标设备的唯一机器码标识</div>
-                                                </div>
-                                                <div class="row">
-                                                    <div class="col-md-6">
-                                                        <div class="d-grid">
-                                                            <button type="button" class="btn btn-secondary" id="testConnection">
-                                                                <i class="fas fa-plug me-1"></i>测试连接
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6">
-                                                        <div class="d-grid">
-                                                            <button type="submit" class="btn btn-success" id="generateDeviceLicense">
-                                                                <i class="fas fa-certificate me-1"></i>生成设备授权
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </form>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="card">
-                                        <div class="card-header">
-                                            <h5 class="card-title mb-0">
-                                                <i class="fas fa-download me-2"></i>授权文件下载
-                                            </h5>
-                                        </div>
-                                        <div class="card-body">
-                                            <div id="downloadSection" style="display: none;">
-                                                <div class="alert alert-success">
-                                                    <i class="fas fa-check-circle me-2"></i>
-                                                    授权文件生成成功！
-                                                </div>
-                                                <div class="d-grid">
-                                                    <button type="button" class="btn btn-primary" id="downloadLicense">
-                                                        <i class="fas fa-download me-1"></i>下载授权文件
-                                                    </button>
-                                                </div>
-                                                <div class="mt-2">
-                                                    <small class="text-muted" id="downloadFileName"></small>
-                                                </div>
-                                            </div>
-                                            <div id="noDownload" class="text-muted text-center">
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                请先生成设备授权
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label class="form-label">漏洞库期限 (年)</label>
+                        <input type="number" class="form-input" id="vul_expire" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">病毒库期限 (年)</label>
+                        <input type="number" class="form-input" id="virus_expire" value="1" min="1" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">规则库期限 (年)</label>
+                        <input type="number" class="form-input" id="rules_expire" value="1" min="1" max="100">
                     </div>
                 </div>
+
+                <button class="btn btn-primary" onclick="generateKnowledgeLicense()" id="generateKnowledgeBtn">生成知识库授权</button>
+                <button class="btn btn-success" onclick="downloadKnowledgeLicense()" id="downloadKnowledgeBtn" style="display: none; margin-left: 12px;">下载授权文件</button>
+            </div>
+
+            <div>
+                <div class="form-group">
+                    <label class="form-label">授权解密验证</label>
+                    <input type="text" class="form-input" id="license_file_path" placeholder="授权文件完整路径">
+                    <small style="color: var(--text-muted);">例如: C:\\Users\\Desktop\\序列号.lic</small>
+                </div>
+                <button class="btn btn-secondary" onclick="decryptLicense()">解密验证授权</button>
+
+                <div id="decryptResult" style="display: none; margin-top: 16px; padding: 12px; background: var(--bg-dark); border-radius: 8px;">
+                    <div style="color: var(--text-secondary); margin-bottom: 8px;">解密结果:</div>
+                    <pre id="decryptContent" style="color: var(--text-primary); white-space: pre-wrap; max-height: 200px; overflow-y: auto;"></pre>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- 未认证时的提示 -->
-    <div class="row" id="unauthenticatedHint">
-        <div class="col-12">
-            <div class="alert alert-warning text-center">
-                <i class="fas fa-lock fa-2x mb-3"></i>
-                <h5>授权管理功能需要身份验证</h5>
-                <p class="mb-3">请输入管理员密码以访问授权管理功能</p>
-                <button type="button" class="btn btn-outline-primary" onclick="showPasswordModal()">
-                    <i class="fas fa-key me-1"></i>重新验证
-                </button>
-            </div>
+    <!-- 设备授权 -->
+    <div class="card" id="device-section" style="display: none;">
+        <div class="card-header">设备授权配置</div>
+        <div style="padding: 12px; background: var(--bg-dark); border-radius: 8px; margin-bottom: 16px;">
+            <small style="color: var(--text-secondary);">远程授权服务器：10.40.24.17 (tdhx/tdhx@2017)</small>
         </div>
-    </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+                <div class="form-group">
+                    <label class="form-label">授权方式</label>
+                    <select class="form-input" id="license_method" onchange="toggleAuthName()">
+                        <option value="DR">DR</option>
+                        <option value="dev-Code">dev-Code</option>
+                    </select>
+                </div>
 
-    <!-- 取消验证后的提示 -->
-    <div class="row" id="cancelledHint" style="display: none;">
-        <div class="col-12">
-            <div class="alert alert-info text-center">
-                <i class="fas fa-info-circle fa-2x mb-3"></i>
-                <h5>已取消身份验证</h5>
-                <p class="mb-3">您已取消授权管理功能的身份验证。如需使用授权功能，请重新进行身份验证。</p>
-                <div class="d-flex gap-2 justify-content-center">
-                    <button type="button" class="btn btn-primary" onclick="showPasswordModal()">
-                        <i class="fas fa-key me-1"></i>重新验证
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" onclick="goBack()">
-                        <i class="fas fa-arrow-left me-1"></i>返回上一页
-                    </button>
+                <div class="form-group" id="auth_name_group">
+                    <label class="form-label">授权机构名称</label>
+                    <input type="text" class="form-input" id="auth_name" value="北京天地和兴科技股份有限公司武汉研发中心测试专用授权">
+                    <small style="color: var(--text-muted);">DR 方式需要授权机构名称</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">设备机器码</label>
+                    <input type="text" class="form-input" id="device_machine_code" placeholder="例如: 5a2c544613553aa4bed38e6ecbe739c0">
+                    <small style="color: var(--text-muted);">目标设备的唯一机器码标识</small>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-secondary" onclick="testConnection()">测试连接</button>
+                    <button class="btn btn-success" onclick="generateDeviceLicense()">生成设备授权</button>
+                </div>
+            </div>
+
+            <div>
+                <div id="deviceDownloadSection" style="display: none; padding: 16px; background: rgba(56, 176, 0, 0.1); border-radius: 8px;">
+                    <div style="color: var(--success); margin-bottom: 12px;">设备授权文件生成成功！</div>
+                    <button class="btn btn-primary" onclick="downloadDeviceLicense()">下载授权文件</button>
+                    <small id="deviceDownloadFilename" style="color: var(--text-muted); margin-top: 8px; display: block;"></small>
+                </div>
+                <div id="noDeviceDownload" style="color: var(--text-muted); text-align: center; padding: 30px;">
+                    请先生成设备授权
                 </div>
             </div>
         </div>
     </div>
 
     <!-- 操作日志 -->
-    <div class="row mt-4" id="logSection" style="display: none;">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0">
-                        <i class="fas fa-list me-2"></i>操作日志
-                    </h5>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="clearLogs">
-                        <i class="fas fa-trash me-1"></i>清空日志
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div id="operationLogs" class="log-container" style="height: 300px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 5px;">
-                        <div class="text-muted text-center">暂无操作记录</div>
-                    </div>
-                </div>
-            </div>
+    <div class="card" id="logSection" style="display: none;">
+        <div class="card-header">操作日志</div>
+        <div id="operationLogs" style="height: 200px; overflow-y: auto; background: var(--bg-dark); padding: 12px; border-radius: 8px;">
+            <div style="color: var(--text-muted); text-align: center;">暂无操作记录</div>
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    let currentDownloadFile = null;
-    let isAuthenticated = false;
-    const ADMIN_PASSWORD = 'secAdmin#123456';
+const ADMIN_PASSWORD = 'secAdmin#123456';
+let isAuthenticated = false;
+let currentLicenseContent = null;
+let currentLicenseFilename = null;
+let currentDeviceLicenseContent = null;
+let currentDeviceLicenseFilename = null;
 
-    // 每次进入页面都需要重新认证
-    // 不检查之前的认证状态，直接显示密码验证
-    showPasswordModal();
+function showPasswordModal() {
+    document.getElementById('passwordModal').style.display = 'flex';
+    document.getElementById('adminPassword').value = '';
+    document.getElementById('passwordError').style.display = 'none';
+    document.getElementById('adminPassword').focus();
+}
 
-    // 初始状态显示未认证提示
-    document.getElementById('unauthenticatedHint').style.display = 'block';
-
-    // 显示密码验证模态框
-    function showPasswordModal() {
-        // 重置表单状态
-        resetPasswordForm();
-
-        const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
-        modal.show();
-
-        // 聚焦到密码输入框
-        setTimeout(() => {
-            document.getElementById('adminPassword').focus();
-        }, 500);
-
-        // 添加键盘事件监听
-        document.addEventListener('keydown', function(e) {
-            // 如果模态框显示且按下Enter键，触发验证
-            if (e.key === 'Enter' && document.getElementById('passwordModal').classList.contains('show')) {
-                e.preventDefault();
-                document.getElementById('passwordForm').dispatchEvent(new Event('submit'));
-            }
-            // 如果按下ESC键，触发取消验证
-            if (e.key === 'Escape' && document.getElementById('passwordModal').classList.contains('show')) {
-                e.preventDefault();
-                cancelAuthentication();
-            }
-        });
-    }
-
-    // 显示主要内容
-    function showMainContent() {
+function verifyPassword() {
+    const password = document.getElementById('adminPassword').value;
+    if (password === ADMIN_PASSWORD) {
+        isAuthenticated = true;
+        document.getElementById('passwordModal').style.display = 'none';
         document.getElementById('mainContent').style.display = 'block';
         document.getElementById('authStatus').style.display = 'inline-block';
-
-        // 隐藏模态框
-        const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
-        if (modal) {
-            modal.hide();
-        }
-    }
-
-    // 密码显示/隐藏切换
-    document.getElementById('togglePassword').addEventListener('click', function() {
-        const passwordInput = document.getElementById('adminPassword');
-        const passwordIcon = document.getElementById('passwordIcon');
-
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            passwordIcon.className = 'fas fa-eye-slash';
-        } else {
-            passwordInput.type = 'password';
-            passwordIcon.className = 'fas fa-eye';
-        }
-    });
-
-    // 密码验证表单提交
-    document.getElementById('passwordForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const passwordInput = document.getElementById('adminPassword');
-        const passwordError = document.getElementById('passwordError');
-        const verifyBtn = document.getElementById('verifyPassword');
-        const enteredPassword = passwordInput.value;
-
-        // 重置错误状态
-        passwordInput.classList.remove('is-invalid');
-        passwordError.textContent = '';
-
-        // 禁用按钮，显示加载状态
-        const originalText = verifyBtn.innerHTML;
-        verifyBtn.disabled = true;
-        verifyBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>验证中...';
-
-        // 模拟验证延迟（增加安全感）
-        setTimeout(() => {
-            if (enteredPassword === ADMIN_PASSWORD) {
-                // 密码正确
-                isAuthenticated = true;
-                // 不再使用 sessionStorage 存储认证状态
-
-                // 显示成功状态
-                verifyBtn.innerHTML = '<i class="fas fa-check me-1"></i>验证成功';
-                verifyBtn.className = 'btn btn-success';
-
-                // 延迟显示主内容
-                setTimeout(() => {
-                    showMainContent();
-                    addLog('管理员身份验证成功', 'success');
-                }, 800);
-            } else {
-                // 密码错误
-                passwordInput.classList.add('is-invalid');
-                passwordError.textContent = '密码错误，请重新输入管理员密码';
-                passwordInput.value = '';
-                passwordInput.focus();
-
-                // 添加错误动画效果
-                passwordInput.style.animation = 'shake 0.5s';
-                setTimeout(() => {
-                    passwordInput.style.animation = '';
-                }, 500);
-
-                // 恢复按钮状态
-                verifyBtn.disabled = false;
-                verifyBtn.innerHTML = originalText;
-                verifyBtn.className = 'btn btn-primary';
-
-                addLog('管理员身份验证失败 - 密码错误', 'error');
-            }
-        }, 1000);
-    });
-
-    // 关闭按钮和取消按钮事件
-    document.getElementById('closePasswordModal').addEventListener('click', cancelAuthentication);
-    document.getElementById('cancelAuth').addEventListener('click', cancelAuthentication);
-
-    // 页面刷新或关闭时的处理
-    window.addEventListener('beforeunload', function() {
-        // 页面刷新时会重新要求认证，无需特殊处理
-    });
-
-    // 添加退出认证功能
-    function logout() {
-        isAuthenticated = false;
-        // 不需要清除 sessionStorage，因为我们不再使用它
-        document.getElementById('mainContent').style.display = 'none';
-        document.getElementById('authStatus').style.display = 'none';
-        document.getElementById('logoutBtn').style.display = 'none';
-        document.getElementById('logSection').style.display = 'none';
-        document.getElementById('unauthenticatedHint').style.display = 'block';
-
-        // 重置表单状态
-        resetPasswordForm();
-
-        // 重置表单状态
-        resetPasswordForm();
-
-        showPasswordModal();
-        addLog('已退出管理员模式', 'warning');
-    }
-
-    // 取消身份验证
-    function cancelAuthentication() {
-        isAuthenticated = false;
-
-        // 隐藏模态框
-        const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
-        if (modal) {
-            modal.hide();
-        }
-
-        // 显示取消验证的提示
-        document.getElementById('unauthenticatedHint').style.display = 'none';
-        document.getElementById('cancelledHint').style.display = 'block';
-        document.getElementById('mainContent').style.display = 'none';
-        document.getElementById('authStatus').style.display = 'none';
-        document.getElementById('logoutBtn').style.display = 'none';
-        document.getElementById('logSection').style.display = 'none';
-
-        // 重置表单状态
-        resetPasswordForm();
-
-        addLog('用户取消了身份验证', 'warning');
-    }
-
-    // 重置密码表单状态
-    function resetPasswordForm() {
-        const passwordInput = document.getElementById('adminPassword');
-        const passwordError = document.getElementById('passwordError');
-        const verifyBtn = document.getElementById('verifyPassword');
-
-        // 清空输入框
-        passwordInput.value = '';
-
-        // 移除错误状态
-        passwordInput.classList.remove('is-invalid');
-        passwordError.textContent = '';
-
-        // 重置按钮状态
-        verifyBtn.disabled = false;
-        verifyBtn.innerHTML = '<i class="fas fa-unlock me-1"></i>验证密码';
-        verifyBtn.className = 'btn btn-primary';
-
-        // 清除动画效果
-        passwordInput.style.animation = '';
-    }
-
-    // 返回上一页
-    function goBack() {
-        if (window.history.length > 1) {
-            window.history.back();
-        } else {
-            // 如果没有上一页，跳转到首页
-            window.location.href = '/';
-        }
-    }
-
-    // 全局函数，供HTML onclick调用
-    window.showPasswordModal = showPasswordModal;
-    window.goBack = goBack;
-
-    // 在页面标题旁添加退出按钮
-    const cardHeader = document.querySelector('.card-header h3');
-    const logoutBtn = document.createElement('button');
-    logoutBtn.className = 'btn btn-sm btn-outline-danger ms-3';
-    logoutBtn.innerHTML = '<i class="fas fa-sign-out-alt me-1"></i>退出';
-    logoutBtn.onclick = logout;
-    logoutBtn.style.display = 'none';
-    logoutBtn.id = 'logoutBtn';
-    cardHeader.appendChild(logoutBtn);
-
-    // 认证成功后显示退出按钮和日志区域
-    const originalShowMainContent = showMainContent;
-    showMainContent = function() {
-        originalShowMainContent();
-        document.getElementById('logoutBtn').style.display = 'inline-block';
         document.getElementById('logSection').style.display = 'block';
         document.getElementById('unauthenticatedHint').style.display = 'none';
-        document.getElementById('cancelledHint').style.display = 'none';
-    };
-
-    // 防止未认证时的操作
-    function checkAuthentication() {
-        if (!isAuthenticated) {
-            addLog('请先进行管理员身份验证', 'warning');
-            showPasswordModal();
-            return false;
-        }
-        return true;
+        addLog('管理员身份验证成功', 'success');
+    } else {
+        document.getElementById('passwordError').style.display = 'block';
+        document.getElementById('adminPassword').value = '';
+        addLog('管理员身份验证失败 - 密码错误', 'error');
     }
+}
 
-    // 添加日志函数
-    function addLog(message, type = 'info') {
-        const logsContainer = document.getElementById('operationLogs');
-        const timestamp = new Date().toLocaleString();
-        const logEntry = document.createElement('div');
-        logEntry.className = `log-entry mb-2`;
+function cancelAuth() {
+    document.getElementById('passwordModal').style.display = 'none';
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('unauthenticatedHint').style.display = 'block';
+    addLog('用户取消了身份验证', 'warning');
+}
 
-        let iconClass = 'fas fa-info-circle';
-        let textClass = 'text-info';
+function logout() {
+    isAuthenticated = false;
+    document.getElementById('mainContent').style.display = 'none';
+    document.getElementById('logSection').style.display = 'none';
+    document.getElementById('authStatus').style.display = 'none';
+    document.getElementById('unauthenticatedHint').style.display = 'block';
+    showPasswordModal();
+    addLog('已退出管理员模式', 'warning');
+}
 
-        switch(type) {
-            case 'success':
-                iconClass = 'fas fa-check-circle';
-                textClass = 'text-success';
-                break;
-            case 'error':
-                iconClass = 'fas fa-exclamation-circle';
-                textClass = 'text-danger';
-                break;
-            case 'warning':
-                iconClass = 'fas fa-exclamation-triangle';
-                textClass = 'text-warning';
-                break;
-        }
+function switchLicenseTab(tab) {
+    document.getElementById('knowledge-section').style.display = tab === 'knowledge' ? 'block' : 'none';
+    document.getElementById('device-section').style.display = tab === 'device' ? 'block' : 'none';
+    document.getElementById('tab-knowledge').className = tab === 'knowledge' ? 'btn btn-primary' : 'btn btn-secondary';
+    document.getElementById('tab-device').className = tab === 'device' ? 'btn btn-primary' : 'btn btn-secondary';
+}
 
-        logEntry.innerHTML = `
-            <div class="${textClass}">
-                <i class="${iconClass} me-2"></i>
-                <span class="text-muted">[${timestamp}]</span> ${message}
-            </div>
-        `;
+function addLog(message, type = 'info') {
+    const logs = document.getElementById('operationLogs');
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
 
-        // 如果是第一条日志，清除提示文字
-        if (logsContainer.querySelector('.text-muted.text-center')) {
-            logsContainer.innerHTML = '';
-        }
+    if (logs.querySelector('.text-muted')) logs.innerHTML = '';
+    logs.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;"><small style="color: var(--text-muted);">[${time}]</small> ${message}</div>`;
+    logs.scrollTop = logs.scrollHeight;
+}
 
-        logsContainer.appendChild(logEntry);
-        logsContainer.scrollTop = logsContainer.scrollHeight;
-    }
+function generateKnowledgeLicense() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
 
-    // 清空日志
-    document.getElementById('clearLogs').addEventListener('click', function() {
-        const logsContainer = document.getElementById('operationLogs');
-        logsContainer.innerHTML = '<div class="text-muted text-center">暂无操作记录</div>';
-    });
+    const machineCode = document.getElementById('machine_code').value.trim();
+    const vulExpire = parseInt(document.getElementById('vul_expire').value);
+    const virusExpire = parseInt(document.getElementById('virus_expire').value);
+    const rulesExpire = parseInt(document.getElementById('rules_expire').value);
 
-    // 知识库授权生成
-    let currentLicenseContent = null;
-    let currentLicenseFilename = null;
+    if (!machineCode) { addLog('请填写产品序列号', 'error'); return; }
 
-    document.getElementById('knowledgeLicenseForm').addEventListener('submit', function(e) {
-        e.preventDefault();
+    addLog(`开始生成知识库授权 - 序列号: ${machineCode}`);
 
-        if (!checkAuthentication()) return;
-
-        const machineCode = document.getElementById('machine_code').value.trim();
-        const vulExpire = parseInt(document.getElementById('vul_expire').value);
-        const virusExpire = parseInt(document.getElementById('virus_expire').value);
-        const rulesExpire = parseInt(document.getElementById('rules_expire').value);
-
-        if (!machineCode) {
-            addLog('请填写产品序列号', 'error');
-            return;
-        }
-
-        const btn = document.getElementById('generateKnowledgeLicense');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
-
-        // 隐藏下载按钮
-        document.getElementById('downloadLicenseContainer').style.display = 'none';
-        currentLicenseContent = null;
-        currentLicenseFilename = null;
-
-        addLog(`开始生成知识库授权 - 序列号: ${machineCode}`);
-
-        // 直接发送年数给后端，后端会转换为天数
-        const payload = {
-            machine_code: machineCode,
-            vul_expire: vulExpire,
-            virus_expire: virusExpire,
-            rules_expire: rulesExpire
-        };
-
-        fetch('/api/license/knowledge/generate/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-
-            if (data.success) {
-                addLog(`知识库授权生成成功 - 文件: ${data.filename}`, 'success');
-                if (data.message) {
-                    addLog(data.message, 'info');
-                }
-                if (data.output) {
-                    addLog(`生成详情: ${data.output}`, 'info');
-                }
-
-                // 如果返回了文件内容（base64编码），显示下载按钮
-                if (data.content) {
-                    currentLicenseContent = data.content;
-                    currentLicenseFilename = data.filename;
-                    document.getElementById('downloadLicenseContainer').style.display = 'block';
-                    addLog('请点击"下载授权文件"按钮保存到本地', 'info');
-                } else if (data.output_path) {
-                    addLog(`文件已保存到: ${data.output_path}`, 'info');
-                }
-            } else {
-                addLog(`知识库授权生成失败: ${data.error}`, 'error');
-            }
-        })
-        .catch(error => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            addLog(`请求失败: ${error.message}`, 'error');
-        });
-    });
-
-    // 下载授权文件
-    document.getElementById('downloadLicenseBtn').addEventListener('click', function() {
-        if (!currentLicenseContent || !currentLicenseFilename) {
-            addLog('没有可下载的文件', 'error');
-            return;
-        }
-
-        try {
-            // 将base64内容解码为二进制
-            const binaryString = atob(currentLicenseContent);
-            const bytes = new Uint8Array(binaryString.length);
-            for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-            }
-
-            // 创建Blob对象
-            const blob = new Blob([bytes], { type: 'application/octet-stream' });
-
-            // 创建下载链接
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = currentLicenseFilename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            addLog(`授权文件已下载: ${currentLicenseFilename}`, 'success');
-        } catch (error) {
-            addLog(`下载文件失败: ${error.message}`, 'error');
-        }
-    });
-
-    // 授权解密验证
-    document.getElementById('decryptLicenseForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        if (!checkAuthentication()) return;
-
-        const filePath = document.getElementById('license_file_path').value.trim();
-
-        if (!filePath) {
-            addLog('请输入授权文件路径', 'error');
-            return;
-        }
-
-        const btn = document.getElementById('decryptLicense');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>解密中...';
-
-        addLog(`开始解密授权文件: ${filePath}`);
-
-        fetch('/api/license/knowledge/decrypt/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify({file_path: filePath})
-        })
-        .then(response => response.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-
-            if (data.success) {
-                addLog('授权文件解密成功', 'success');
-                document.getElementById('decryptResult').style.display = 'block';
-                document.getElementById('decryptContent').textContent = data.content;
-            } else {
-                addLog(`授权文件解密失败: ${data.error}`, 'error');
-                document.getElementById('decryptResult').style.display = 'none';
-            }
-        })
-        .catch(error => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            addLog(`请求失败: ${error.message}`, 'error');
-        });
-    });
-
-    // 测试设备授权服务器连接
-    document.getElementById('testConnection').addEventListener('click', function() {
-        if (!checkAuthentication()) return;
-        const btn = this;
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>连接中...';
-
-        addLog('测试授权服务器连接...');
-
-        fetch('/api/license/device/test_connection/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-
-            if (data.success) {
-                addLog('授权服务器连接成功', 'success');
-            } else {
-                addLog(`授权服务器连接失败: ${data.error}`, 'error');
-            }
-        })
-        .catch(error => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            addLog(`连接测试失败: ${error.message}`, 'error');
-        });
-    });
-
-    // 授权方式切换
-    document.getElementById('license_method').addEventListener('change', function() {
-        const method = this.value;
-        const authNameGroup = document.getElementById('auth_name_group');
-        const authNameInput = document.getElementById('auth_name');
-
-        if (method === 'dev-Code') {
-            // 新授权方式不需要授权机构名称
-            authNameGroup.style.display = 'none';
-            authNameInput.removeAttribute('required');
+    apiRequest('/api/license/knowledge/generate/', 'POST', {
+        machine_code: machineCode,
+        vul_expire: vulExpire,
+        virus_expire: virusExpire,
+        rules_expire: rulesExpire
+    }).then(data => {
+        if (data.success) {
+            currentLicenseContent = data.content;
+            currentLicenseFilename = data.filename;
+            document.getElementById('downloadKnowledgeBtn').style.display = 'inline-block';
+            addLog(`知识库授权生成成功 - 文件: ${data.filename}`, 'success');
+            if (data.message) addLog(data.message, 'info');
         } else {
-            // DR 方式需要授权机构名称
-            authNameGroup.style.display = 'block';
-            authNameInput.setAttribute('required', 'required');
+            addLog(`知识库授权生成失败: ${data.error}`, 'error');
         }
-        addLog(`切换授权方式: ${method}`, 'info');
     });
+}
 
-    // 设备授权生成
-    document.getElementById('deviceLicenseForm').addEventListener('submit', function(e) {
-        e.preventDefault();
+function downloadKnowledgeLicense() {
+    if (!currentLicenseContent || !currentLicenseFilename) { addLog('没有可下载的文件', 'error'); return; }
 
-        if (!checkAuthentication()) return;
+    try {
+        const binary = atob(currentLicenseContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = currentLicenseFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`授权文件已下载: ${currentLicenseFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
 
-        const method = document.getElementById('license_method').value;
-        const authName = document.getElementById('auth_name').value.trim();
-        const machineCode = document.getElementById('device_machine_code').value.trim();
+function decryptLicense() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
 
-        // DR 方式需要授权机构名称
-        if (method === 'DR' && !authName) {
-            addLog('DR方式需要填写授权机构名称', 'error');
-            return;
+    const filePath = document.getElementById('license_file_path').value.trim();
+    if (!filePath) { addLog('请输入授权文件路径', 'error'); return; }
+
+    addLog(`开始解密授权文件: ${filePath}`);
+
+    apiRequest('/api/license/knowledge/decrypt/', 'POST', { file_path: filePath }).then(data => {
+        if (data.success) {
+            document.getElementById('decryptResult').style.display = 'block';
+            document.getElementById('decryptContent').textContent = data.content;
+            addLog('授权文件解密成功', 'success');
+        } else {
+            document.getElementById('decryptResult').style.display = 'none';
+            addLog(`解密失败: ${data.error}`, 'error');
         }
-
-        if (!machineCode) {
-            addLog('请填写设备机器码', 'error');
-            return;
-        }
-
-        const btn = document.getElementById('generateDeviceLicense');
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>生成中...';
-
-        addLog(`开始生成设备授权 - 方式: ${method}, 机器码: ${machineCode}`);
-
-        const payload = {
-            name: authName,
-            machine_code: machineCode,
-            method: method
-        };
-
-        fetch('/api/license/device/generate/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => response.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-
-            if (data.success) {
-                addLog(`设备授权生成成功 - 文件: ${data.filename}`, 'success');
-                if (data.output) {
-                    addLog(`输出: ${data.output}`, 'info');
-                }
-                currentDownloadFile = data.filename;
-                document.getElementById('downloadSection').style.display = 'block';
-                document.getElementById('noDownload').style.display = 'none';
-                document.getElementById('downloadFileName').textContent = `文件名: ${data.filename}`;
-            } else {
-                addLog(`设备授权生成失败: ${data.error}`, 'error');
-            }
-        })
-        .catch(error => {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-            addLog(`请求失败: ${error.message}`, 'error');
-        });
     });
+}
 
-    // 下载授权文件
-    document.getElementById('downloadLicense').addEventListener('click', function() {
-        if (!checkAuthentication()) return;
-        if (!currentDownloadFile) {
-            addLog('没有可下载的授权文件', 'error');
-            return;
-        }
+function toggleAuthName() {
+    const method = document.getElementById('license_method').value;
+    const group = document.getElementById('auth_name_group');
+    const input = document.getElementById('auth_name');
 
-        addLog(`开始下载授权文件: ${currentDownloadFile}`);
-
-        // 创建下载链接
-        const downloadUrl = `/api/license/device/download/?filename=${encodeURIComponent(currentDownloadFile)}`;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = currentDownloadFile;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        addLog(`授权文件下载完成: ${currentDownloadFile}`, 'success');
-    });
-
-    // 获取CSRF Token
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
+    if (method === 'dev-Code') {
+        group.style.display = 'none';
+        input.removeAttribute('required');
+    } else {
+        group.style.display = 'block';
+        input.setAttribute('required', 'required');
     }
-});
+    addLog(`切换授权方式: ${method}`, 'info');
+}
+
+function testConnection() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
+
+    addLog('测试授权服务器连接...');
+
+    apiRequest('/api/license/device/test_connection/', 'POST').then(data => {
+        if (data.success) {
+            addLog('授权服务器连接成功', 'success');
+        } else {
+            addLog(`授权服务器连接失败: ${data.error}`, 'error');
+        }
+    });
+}
+
+function generateDeviceLicense() {
+    if (!isAuthenticated) { showPasswordModal(); return; }
+
+    const method = document.getElementById('license_method').value;
+    const authName = document.getElementById('auth_name').value.trim();
+    const machineCode = document.getElementById('device_machine_code').value.trim();
+
+    if (method === 'DR' && !authName) { addLog('DR 方式需要填写授权机构名称', 'error'); return; }
+    if (!machineCode) { addLog('请填写设备机器码', 'error'); return; }
+
+    addLog(`开始生成设备授权 - 方式: ${method}, 机器码: ${machineCode}`);
+
+    apiRequest('/api/license/device/generate/', 'POST', {
+        name: authName,
+        machine_code: machineCode,
+        method: method
+    }).then(data => {
+        if (data.success) {
+            // 设备授权返回 base64 编码内容，直接使用
+            currentDeviceLicenseContent = data.content;  // 已经是 base64
+            currentDeviceLicenseFilename = data.filename;
+
+            document.getElementById('deviceDownloadSection').style.display = 'block';
+            document.getElementById('noDeviceDownload').style.display = 'none';
+            document.getElementById('deviceDownloadFilename').textContent = `文件名: ${data.filename}`;
+            addLog(`设备授权生成成功 - 方式: ${method}, 文件: ${data.filename}`, 'success');
+        } else {
+            addLog(`设备授权生成失败: ${data.error}`, 'error');
+        }
+    }).catch(e => addLog(`请求失败: ${e.message}`, 'error'));
+}
+
+function downloadDeviceLicense() {
+    if (!currentDeviceLicenseContent || !currentDeviceLicenseFilename) { addLog('没有可下载的授权文件', 'error'); return; }
+
+    try {
+        const binary = atob(currentDeviceLicenseContent);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = currentDeviceLicenseFilename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        addLog(`授权文件已下载: ${currentDeviceLicenseFilename}`, 'success');
+    } catch (e) { addLog(`下载失败: ${e.message}`, 'error'); }
+}
+
+// 页面加载时显示密码验证
+window.onload = showPasswordModal;
 </script>
-
-<style>
-.log-entry {
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    line-height: 1.4;
-}
-
-.card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-}
-
-.nav-tabs .nav-link {
-    border: 1px solid transparent;
-    border-top-left-radius: 0.375rem;
-    border-top-right-radius: 0.375rem;
-}
-
-.nav-tabs .nav-link.active {
-    color: #495057;
-    background-color: #fff;
-    border-color: #dee2e6 #dee2e6 #fff;
-}
-
-.alert {
-    border: 0;
-    border-radius: 0.375rem;
-}
-
-.form-text {
-    font-size: 0.875em;
-    color: #6c757d;
-}
-
-#decryptContent {
-    max-height: 200px;
-    overflow-y: auto;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    white-space: pre-wrap;
-}
-
-/* 密码错误时的抖动动画 */
-@keyframes shake {
-    0%, 20%, 40%, 60%, 80% {
-        transform: translateX(-5px);
-    }
-    10%, 30%, 50%, 70%, 90% {
-        transform: translateX(5px);
-    }
-    100% {
-        transform: translateX(0);
-    }
-}
-
-/* 模态框样式优化 */
-.modal-backdrop {
-    background-color: rgba(0, 0, 0, 0.8);
-}
-
-/* 安全徽章样式 */
-#authStatus {
-    animation: fadeIn 0.5s ease-in;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.8); }
-    to { opacity: 1; transform: scale(1); }
-}
-</style>
 {% endblock %}
