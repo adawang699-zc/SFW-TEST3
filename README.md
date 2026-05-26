@@ -41,6 +41,25 @@
 
 ## 快速开始
 
+### 首次部署（新环境）
+
+在 Ubuntu 服务器上以 root 身份执行:
+
+```bash
+sudo python3 setup.py
+```
+
+此脚本会自动完成:
+1. 安装系统依赖（Python、pip、git、nmap 等）
+2. 创建 Python 虚拟环境 `/opt/venv`
+3. 安装 Python 包依赖
+4. 创建必要的工作目录
+5. 交互式部署授权工具（从 10.40.24.17 SCP 拷贝）
+6. 配置 sudo 权限
+7. 安装 Django systemd 服务
+8. 执行数据库迁移
+9. 验证环境
+
 ### 同步代码到 Ubuntu
 
 ```bash

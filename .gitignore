@@ -53,6 +53,9 @@ logs/
 cookie_cache/
 knowledge_templates/
 license/
+!license/*.md
+!license/*.py
+!license/*.bat
 *.lic
 *.bin
 *.lib

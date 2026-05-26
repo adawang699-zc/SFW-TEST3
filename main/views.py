@@ -16,6 +16,7 @@ import socket
 import os
 import requests
 import time
+import tempfile
 from datetime import datetime
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -3033,7 +3034,7 @@ def api_license_device_generate(request):
 
 def _generate_device_license_dev_code(machine_code: str) -> tuple:
     """
-    dev-Code 方式：SSH 到授权服务器执行 licgen 命令
+    dev-Code 方式：本地执行 licgen 命令
 
     Args:
         machine_code: 设备机器码
@@ -3041,70 +3042,66 @@ def _generate_device_license_dev_code(machine_code: str) -> tuple:
     Returns:
         (success, result): 成功返回(True, {'filename': ..., 'content': ...})，失败返回(False, error)
     """
-    import paramiko
-
-    # dev-Code 授权服务器配置（与 DR 服务器相同，但工具路径不同）
-    LICENSE_SERVER = '10.40.24.17'
-    LICENSE_USER = 'tdhx'
-    LICENSE_PASSWORD = 'tdhx@2017'
-    LICENSE_PORT = 22
-    LICGEN_PATH = '/home/tdhx/license/x64/licgen'  # 注意：dev-Code 使用 licgen，DR 使用 lic_gen
-
-    filename = f'{machine_code}.lic'
-
     try:
-        logger.info(f"[dev-Code] 连接授权服务器: {LICENSE_SERVER}")
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh.connect(LICENSE_SERVER, port=LICENSE_PORT, username=LICENSE_USER, password=LICENSE_PASSWORD, timeout=30)
+        # 获取项目根目录
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        licgen_path = os.path.join(project_root, 'license', 'licgen')
+
+        if not os.path.exists(licgen_path):
+            return False, f'授权工具 licgen 不存在，请先将其拷贝到 {os.path.join(project_root, "license")} 目录'
+
+        if not os.access(licgen_path, os.X_OK):
+            return False, f'授权工具 licgen 无执行权限，请执行: chmod +x {licgen_path}'
+
+        filename = f'{machine_code}.lic'
 
         # 执行 licgen 命令（dev-Code 方式）
-        command = f'{LICGEN_PATH} -m {machine_code} -p {filename}'
-        logger.info(f"[dev-Code] 执行命令: {command}")
+        cmd = [licgen_path, '-m', machine_code, '-p', filename]
+        logger.info(f"[dev-Code] 执行命令: {' '.join(cmd)}")
 
-        stdin, stdout, stderr = ssh.exec_command(command, timeout=30)
-        exit_code = stdout.channel.recv_exit_status()
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=tempfile.gettempdir(),  # 在工作目录生成文件
+            timeout=30
+        )
 
-        output = stdout.read().decode('utf-8', errors='ignore')
-        error = stderr.read().decode('utf-8', errors='ignore')
+        output = result.stdout.strip()
+        error = result.stderr.strip()
 
         logger.info(f"[dev-Code] 命令输出: {output}")
         if error:
             logger.warning(f"[dev-Code] 命令错误输出: {error}")
 
-        if exit_code != 0 and 'successful' not in output.lower():
-            ssh.close()
+        if result.returncode != 0 and 'successful' not in output.lower():
             return False, f"授权生成失败: {output or error}"
 
-        # 下载生成的 .lic 文件
-        sftp = ssh.open_sftp()
-        remote_path = f'/home/tdhx/{filename}'
+        # 读取生成的 .lic 文件
+        output_path = os.path.join(tempfile.gettempdir(), filename)
+        if os.path.exists(output_path):
+            with open(output_path, 'rb') as f:
+                file_content = f.read()
 
-        try:
-            with sftp.file(remote_path, 'rb') as remote_file:
-                file_content = remote_file.read()
-        except FileNotFoundError:
-            ssh.close()
-            return False, f"授权文件未生成: {remote_path}"
+            # 清理临时文件
+            try:
+                os.unlink(output_path)
+            except Exception as e:
+                logger.warning(f"[dev-Code] 清理临时文件失败: {e}")
 
-        sftp.close()
-        ssh.close()
+            logger.info(f"[dev-Code] 设备授权生成成功: {filename}, 文件大小: {len(file_content)} 字节")
 
-        logger.info(f"[dev-Code] 设备授权生成成功: {filename}, 文件大小: {len(file_content)} 字节")
+            return True, {
+                'filename': filename,
+                'content': file_content,
+                'message': f'{filename} generate successful.',
+                'output': output
+            }
+        else:
+            return False, f"授权文件未生成: {output_path}"
 
-        return True, {
-            'filename': filename,
-            'content': file_content,
-            'message': f'{filename} generate successful.',
-            'output': output.strip()
-        }
-
-    except paramiko.AuthenticationException:
-        logger.error("[dev-Code] 授权服务器认证失败")
-        return False, "授权服务器认证失败"
-    except paramiko.SSHException as e:
-        logger.error(f"[dev-Code] SSH连接错误: {e}")
-        return False, f"SSH连接错误: {str(e)}"
+    except subprocess.TimeoutExpired:
+        return False, '命令执行超时'
     except Exception as e:
         logger.exception(f"[dev-Code] 生成设备授权失败: {e}")
         return False, str(e)

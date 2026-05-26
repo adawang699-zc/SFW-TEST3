@@ -5,12 +5,12 @@
 """
 
 import os
+import sys
 import json
 import subprocess
 import logging
 import tempfile
 import time
-import paramiko
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +20,27 @@ def find_knowledge_license_tool():
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     license_dir = os.path.join(project_root, 'license')
 
-    # 可能的工具路径
-    possible_paths = [
-        os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
-        os.path.join(license_dir, 'hx_knowledge_license_gender'),
-        'hx_knowledge_license_gender.exe',
-        'hx_knowledge_license_gender'
-    ]
+    # 检测是否在 Linux 上运行
+    is_linux = sys.platform.startswith('linux')
+
+    if is_linux:
+        # Linux 上优先使用 Python 版本，跳过 .exe 和 .bat
+        possible_paths = [
+            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender'),
+            'hx_knowledge_license_gender',
+        ]
+    else:
+        # Windows 上保持原有搜索顺序
+        possible_paths = [
+            os.path.join(license_dir, 'hx_knowledge_license_gender.exe'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender.exe.bat'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender.bat'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender.py'),
+            os.path.join(license_dir, 'hx_knowledge_license_gender'),
+            'hx_knowledge_license_gender.exe',
+            'hx_knowledge_license_gender',
+        ]
 
     for path in possible_paths:
         if os.path.exists(path):
@@ -220,63 +231,56 @@ def decrypt_knowledge_license(file_path):
         logger.exception(f"知识库授权解密异常: {e}")
         return False, str(e)
 
-# 设备授权服务器配置
-DEVICE_LICENSE_SERVER = {
-    'host': '10.40.24.17',
-    'username': 'tdhx',
-    'password': 'tdhx@2017',
-    'port': 22,
-    'lic_gen_path': '/home/tdhx/license/x64/lic_gen'
+# 设备授权工具本地路径配置（从 10.40.24.17 拷贝到本地 license 目录）
+DEVICE_LICENSE_CONFIG = {
+    'lic_gen_path': 'license/lic_gen',     # DR 方式工具（相对于项目根目录）
+    'licgen_path': 'license/licgen',       # dev-Code 方式工具（相对于项目根目录）
 }
 
+def _get_license_dir():
+    """获取项目 license 目录"""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(project_root, 'license')
+
 def test_device_license_connection():
-    """测试设备授权服务器连接"""
+    """测试设备授权工具（本地检查）"""
     try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        license_dir = _get_license_dir()
+        lic_gen_local = os.path.join(license_dir, 'lic_gen')
+        licgen_local = os.path.join(license_dir, 'licgen')
 
-        # 连接SSH
-        ssh.connect(
-            hostname=DEVICE_LICENSE_SERVER['host'],
-            port=DEVICE_LICENSE_SERVER['port'],
-            username=DEVICE_LICENSE_SERVER['username'],
-            password=DEVICE_LICENSE_SERVER['password'],
-            timeout=10
-        )
+        # 检查 DR 工具
+        dr_exists = os.path.exists(lic_gen_local) and os.access(lic_gen_local, os.X_OK)
+        # 检查 dev-Code 工具
+        devcode_exists = os.path.exists(licgen_local) and os.access(licgen_local, os.X_OK)
 
-        # 测试lic_gen程序是否存在
-        stdin, stdout, stderr = ssh.exec_command(f"ls -la {DEVICE_LICENSE_SERVER['lic_gen_path']}")
-        exit_code = stdout.channel.recv_exit_status()
+        if not dr_exists and not devcode_exists:
+            return False, f'未找到授权工具，请将 lic_gen/licgen 拷贝到 {license_dir} 目录并设置执行权限'
 
-        ssh.close()
+        tools = []
+        if dr_exists:
+            tools.append('lic_gen (DR)')
+        if devcode_exists:
+            tools.append(f'licgen (dev-Code)')
 
-        if exit_code == 0:
-            return True, '授权服务器连接成功'
-        else:
-            return False, '授权程序不存在'
+        logger.info(f"设备授权工具检查通过: {', '.join(tools)}")
+        return True, f'设备授权工具就绪: {", ".join(tools)}'
 
-    except paramiko.AuthenticationException:
-        return False, '认证失败，用户名或密码错误'
-    except paramiko.SSHException as e:
-        return False, f'SSH连接失败: {str(e)}'
     except Exception as e:
-        logger.exception(f"测试设备授权服务器连接异常: {e}")
+        logger.exception(f"测试设备授权工具异常: {e}")
         return False, str(e)
 
 def generate_device_license(auth_name, machine_code):
-    """生成设备授权"""
+    """生成设备授权（本地执行）"""
     try:
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        license_dir = _get_license_dir()
+        lic_gen_path = os.path.join(license_dir, 'lic_gen')
 
-        # 连接SSH
-        ssh.connect(
-            hostname=DEVICE_LICENSE_SERVER['host'],
-            port=DEVICE_LICENSE_SERVER['port'],
-            username=DEVICE_LICENSE_SERVER['username'],
-            password=DEVICE_LICENSE_SERVER['password'],
-            timeout=10
-        )
+        if not os.path.exists(lic_gen_path):
+            return False, f'授权工具 lic_gen 不存在，请先将其拷贝到 {license_dir} 目录'
+
+        if not os.access(lic_gen_path, os.X_OK):
+            return False, f'授权工具 lic_gen 无执行权限，请执行: chmod +x {lic_gen_path}'
 
         # 构建JSON参数
         license_json = {
@@ -285,78 +289,51 @@ def generate_device_license(auth_name, machine_code):
         }
         json_str = json.dumps(license_json, ensure_ascii=False)
 
-        # 远程文件路径
-        remote_filename = f"{machine_code}.lic"
-        remote_file_path = f"/tmp/{remote_filename}"
+        filename = f"{machine_code}.lic"
+        output_path = os.path.join(tempfile.gettempdir(), filename)
 
         # 构建命令
-        cmd = f"{DEVICE_LICENSE_SERVER['lic_gen_path']} -j '{json_str}' -p {remote_file_path}"
+        cmd = [lic_gen_path, '-j', json_str, '-p', output_path]
 
-        logger.info(f"执行设备授权生成命令: {cmd}")
+        logger.info(f"执行设备授权生成命令: {' '.join(cmd)}")
 
         # 执行命令
-        stdin, stdout, stderr = ssh.exec_command(cmd, timeout=30)
-        exit_code = stdout.channel.recv_exit_status()
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
 
-        stdout_content = stdout.read().decode('utf-8', errors='ignore').strip()
-        stderr_content = stderr.read().decode('utf-8', errors='ignore').strip()
-
-        if exit_code == 0:
+        if result.returncode == 0:
             # 检查文件是否生成
-            stdin, stdout, stderr = ssh.exec_command(f"ls -la {remote_file_path}")
-            file_check_exit = stdout.channel.recv_exit_status()
+            if os.path.exists(output_path):
+                # 读取文件内容
+                with open(output_path, 'rb') as f:
+                    file_content = f.read()
 
-            if file_check_exit == 0:
-                # 下载文件内容
-                sftp = ssh.open_sftp()
-                temp_file_path = None
+                # 清理临时文件
                 try:
-                    # 创建临时文件
-                    temp_fd, temp_file_path = tempfile.mkstemp(suffix='.lic')
-                    os.close(temp_fd)  # 关闭文件描述符，避免文件锁定
-
-                    # 下载文件
-                    sftp.get(remote_file_path, temp_file_path)
-
-                    # 读取文件内容
-                    with open(temp_file_path, 'rb') as f:
-                        file_content = f.read()
-
-                    # 清理远程文件
-                    ssh.exec_command(f"rm -f {remote_file_path}")
-
-                    logger.info(f"设备授权生成成功: {remote_filename}, 文件大小: {len(file_content)} 字节")
-
-                    return True, {
-                        'filename': remote_filename,
-                        'content': file_content,
-                        'message': '设备授权生成成功'
-                    }
+                    os.unlink(output_path)
                 except Exception as e:
-                    logger.exception(f"下载授权文件异常: {e}")
-                    return False, f'下载授权文件失败: {str(e)}'
-                finally:
-                    sftp.close()
-                    # 清理本地临时文件
-                    if temp_file_path and os.path.exists(temp_file_path):
-                        try:
-                            os.unlink(temp_file_path)
-                        except Exception as e:
-                            logger.warning(f"清理临时文件失败: {e}")
+                    logger.warning(f"清理临时文件失败: {e}")
+
+                logger.info(f"设备授权生成成功: {filename}, 文件大小: {len(file_content)} 字节")
+
+                return True, {
+                    'filename': filename,
+                    'content': file_content,
+                    'message': '设备授权生成成功'
+                }
             else:
-                return False, '授权文件生成失败'
+                return False, '授权文件生成失败（输出文件不存在）'
         else:
-            error_msg = stderr_content if stderr_content else f'命令执行失败，返回码: {exit_code}'
+            error_msg = result.stderr.strip() if result.stderr else f'命令执行失败，返回码: {result.returncode}'
             logger.error(f"设备授权生成失败: {error_msg}")
             return False, error_msg
 
-    except paramiko.AuthenticationException:
-        return False, '认证失败，用户名或密码错误'
-    except paramiko.SSHException as e:
-        return False, f'SSH连接失败: {str(e)}'
+    except subprocess.TimeoutExpired:
+        return False, '命令执行超时'
     except Exception as e:
         logger.exception(f"设备授权生成异常: {e}")
         return False, str(e)
-    finally:
-        if 'ssh' in locals():
-            ssh.close()
