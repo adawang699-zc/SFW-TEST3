@@ -5239,7 +5239,7 @@ def api_auth_detect(request):
         result['radius']['version'] = ver.stdout.splitlines()[0] if ver.stdout else ''
         # 运行状态
         st = _run_sudo(['systemctl', 'is-active', 'freeradius'])
-        result['radius']['running'] = 'active' in st.stdout.strip()
+        result['radius']['running'] = st.stdout.strip() == 'active'
         # 读取配置
         clients_content = _read_file_sudo(RADIUS_CLIENTS_CONF)
         secret = _parse_radius_secret(clients_content)
@@ -5271,7 +5271,7 @@ def api_auth_detect(request):
         ver = _run_sudo(['slapd', '-V'])
         result['ldap']['version'] = ver.stdout.splitlines()[0] if ver.stdout else ''
         st = _run_sudo(['systemctl', 'is-active', 'slapd'])
-        result['ldap']['running'] = 'active' in st.stdout.strip()
+        result['ldap']['running'] = st.stdout.strip() == 'active'
         # 读取配置
         ldif_content = _read_file_sudo(LDAP_SLAPD_CONF)
         base_dn = ''
@@ -5292,6 +5292,9 @@ def api_auth_detect(request):
                 if not base_dn:
                     base_dn = line.split(None, 1)[-1].strip() if len(line.split(None, 1)) > 1 else ''
 
+        # 读取保存的明文密码
+        stored_pw = _read_file_sudo('/etc/ldap/ldap_admin_password').strip()
+
         # 修正 uri: 0.0.0.0 替换为 127.0.0.1
         if uri in ('ldap://0.0.0.0', 'ldap://0.0.0.0:'):
             uri = 'ldap://127.0.0.1'
@@ -5300,11 +5303,12 @@ def api_auth_detect(request):
             'port': '389',
             'base_dn': base_dn or 'dc=tdhx,dc=local',
             'admin_dn': olc_root_dn or 'cn=admin,dc=tdhx,dc=local',
+            'admin_password': stored_pw,
             'user_filter': 'cn',
             'group_filter': 'cn',
         }
 
-    _log_auth_operation('detect', f"Radius已安装={result['radius']['installed']}, LDAP已安装={result['ldap']['installed']}")
+    _log_auth_operation('detect', f"{{Radius已安装: {result['radius']['installed']}, LDAP已安装: {result['ldap']['installed']}}}")
     return JsonResponse({'success': True, 'data': result})
 
 
@@ -5317,7 +5321,7 @@ def api_auth_radius_status(request):
     accounts = _parse_radius_accounts(users_content)
 
     st = _run_sudo(['systemctl', 'is-active', 'freeradius'])
-    running = 'active' in st.stdout.strip()
+    running = st.stdout.strip() == 'active'
     ps_out = _run_sudo(['ps', 'aux'])
     proxy_running = 'radius_proxy.py' in ps_out.stdout
 
@@ -5371,7 +5375,7 @@ def api_auth_radius_secret(request):
         time.sleep(0.5)
         _run_sudo(['python3', RADIUS_PROXY_PATH, '--secret', new_secret], timeout=5)
 
-        _log_auth_operation('update_radius_secret', f'secret=******')
+        _log_auth_operation('update_radius_secret', '{secret: *****}')
         return JsonResponse({'success': True, 'message': '密钥已更新，服务已重启'})
 
     except json.JSONDecodeError:
@@ -5399,7 +5403,7 @@ def api_auth_radius_account_add(request):
         if not _write_file_sudo(RADIUS_USERS_CONF, new_content):
             return JsonResponse({'success': False, 'error': '写入配置文件失败'})
 
-        _log_auth_operation('add_radius_account', f'username={username}')
+        _log_auth_operation('add_radius_account', f'{{username: {username}}}')
         return JsonResponse({'success': True, 'message': f'账号 {username} 已添加'})
 
     except json.JSONDecodeError:
@@ -5441,7 +5445,7 @@ def api_auth_radius_account_update(request):
         if not _write_file_sudo(RADIUS_USERS_CONF, new_content):
             return JsonResponse({'success': False, 'error': '写入配置文件失败'})
 
-        _log_auth_operation('update_radius_account', f'old={old_username}, new={new_username}')
+        _log_auth_operation('update_radius_account', f'{{old: {old_username}, new: {new_username}}}')
         return JsonResponse({'success': True, 'message': f'账号 {old_username} 已更新为 {new_username}'})
 
     except json.JSONDecodeError:
@@ -5480,7 +5484,7 @@ def api_auth_radius_account_delete(request):
         if not _write_file_sudo(RADIUS_USERS_CONF, new_content):
             return JsonResponse({'success': False, 'error': '写入配置文件失败'})
 
-        _log_auth_operation('delete_radius_account', f'username={username}')
+        _log_auth_operation('delete_radius_account', f'{{username: {username}}}')
         return JsonResponse({'success': True, 'message': f'账号 {username} 已删除'})
 
     except json.JSONDecodeError:
@@ -5511,7 +5515,7 @@ def api_auth_radius_restart(request):
     time.sleep(0.5)
     proxy_result = _run_sudo(['python3', RADIUS_PROXY_PATH, '--secret', secret], timeout=5)
 
-    _log_auth_operation('restart_radius', f'proxy_secret=******, proxy_rc={proxy_result.returncode}')
+    _log_auth_operation('restart_radius', f'{{proxy_secret: *****, proxy_rc: {proxy_result.returncode}}}')
     return JsonResponse({
         'success': True,
         'message': 'Radius 服务已重启',
@@ -5523,7 +5527,7 @@ def api_auth_radius_restart(request):
 def api_auth_ldap_status(request):
     """获取 LDAP 服务器状态和配置"""
     st = _run_sudo(['systemctl', 'is-active', 'slapd'])
-    running = 'active' in st.stdout.strip()
+    running = st.stdout.strip() == 'active'
 
     # 读取配置
     ldif_content = _read_file_sudo(LDAP_SLAPD_CONF)
@@ -5543,12 +5547,15 @@ def api_auth_ldap_status(request):
 
     if uri in ('ldap://0.0.0.0', 'ldap://0.0.0.0:'):
         uri = 'ldap://127.0.0.1'
+    # 读取保存的明文密码
+    stored_pw = _read_file_sudo('/etc/ldap/ldap_admin_password').strip()
     result = {
         'running': running,
         'uri': uri or 'ldap://127.0.0.1',
         'port': '389',
         'base_dn': base_dn or 'dc=tdhx,dc=local',
         'admin_dn': olc_root_dn or 'cn=admin,dc=tdhx,dc=local',
+        'admin_password': stored_pw,
         'user_filter': 'cn',
         'group_filter': 'cn',
     }
@@ -5572,15 +5579,13 @@ def api_auth_ldap_config(request):
         lines = ldap_conf_content.splitlines()
         new_lines = []
         base_updated = False
-        uri_updated = False
         for line in lines:
             stripped = line.strip()
             if stripped.upper().startswith('BASE') and base_dn:
                 new_lines.append(f'BASE {base_dn}')
                 base_updated = True
             elif stripped.upper().startswith('URI'):
-                new_lines.append(line)  # keep as-is
-                uri_updated = True
+                new_lines.append(line)
             else:
                 new_lines.append(line)
         if not base_updated and base_dn:
@@ -5588,10 +5593,52 @@ def api_auth_ldap_config(request):
         new_content = '\n'.join(new_lines)
         _write_file_sudo(LDAP_LDAP_CONF, new_content)
 
+        # 更新 LDAP 管理员密码
+        pw_updated = False
+        if admin_password:
+            try:
+                # 生成密码哈希
+                sp_result = _run_sudo(['slappasswd', '-s', admin_password])
+                if sp_result.returncode == 0:
+                    pw_hash = sp_result.stdout.strip()
+                    if pw_hash:
+                        # 查找 olcRootPW 所在文件
+                        grep_result = _run_sudo(['grep', '-rl', 'olcRootPW', '/etc/ldap/slapd.d/'])
+                        if grep_result.returncode == 0:
+                            target_file = grep_result.stdout.strip().split('\n')[0]
+                            if target_file:
+                                pw_content = _read_file_sudo(target_file)
+                                new_pw_lines = []
+                                for pline in pw_content.splitlines():
+                                    if pline.strip().startswith('olcRootPW'):
+                                        indent = pline[:len(pline) - len(pline.lstrip())]
+                                        new_pw_lines.append(f'{indent}olcRootPW {pw_hash}')
+                                    else:
+                                        new_pw_lines.append(pline)
+                                _write_file_sudo(target_file, '\n'.join(new_pw_lines))
+                                pw_updated = True
+            except Exception:
+                pass
+
+        # 保存明文密码用于前端显示
+        if admin_password:
+            try:
+                _run_sudo(['sh', '-c', f'echo "{admin_password}" > /etc/ldap/ldap_admin_password'])
+                _run_sudo(['chmod', '600', '/etc/ldap/ldap_admin_password'])
+            except Exception:
+                pass
+
         _log_auth_operation('update_ldap_config',
-                            f'base_dn={base_dn}, admin_dn={admin_dn}, '
-                            f'user_filter={user_filter}, group_filter={group_filter}')
-        return JsonResponse({'success': True, 'message': 'LDAP 配置已更新'})
+                            f'{{base_dn: {base_dn}, admin_dn: {admin_dn}, '
+                            f'user_filter: {user_filter}, group_filter: {group_filter}, '
+                            f'password_updated: {pw_updated}}}')
+
+        msg = 'LDAP 配置已更新'
+        if pw_updated:
+            msg += '，管理员密码已更改'
+        elif admin_password:
+            msg += '（密码更改失败，请检查 slappasswd 是否可用）'
+        return JsonResponse({'success': True, 'message': msg})
 
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': '请求参数格式错误'})

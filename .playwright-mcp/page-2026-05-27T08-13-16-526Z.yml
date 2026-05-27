@@ -1,0 +1,192 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - link "防火墙测试平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 16:13:16"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 Agent 管理" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: Agent 管理
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "🔧 服务下发" [ref=e19] [cursor=pointer]:
+      - /url: /service-deploy/
+      - generic [ref=e20]: 🔧
+      - text: 服务下发
+    - link "⚙️ 工控协议" [ref=e22] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e23]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e25] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e26]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e28] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e29]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e31] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e32]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e34] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e35]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e37] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e38]: 🖥️
+      - text: DHCP 客户端
+    - link "📚 知识库管理" [ref=e40] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e41]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e43] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e44]: 🔑
+      - text: 授权管理
+    - link "⚙️ 其他配置" [ref=e46] [cursor=pointer]:
+      - /url: /system-config/
+      - generic [ref=e47]: ⚙️
+      - text: 其他配置
+  - generic [ref=e48]:
+    - generic [ref=e49]:
+      - generic [ref=e50]: 其他配置
+      - paragraph [ref=e51]: 系统扩展功能配置管理
+    - generic [ref=e53]:
+      - button "日志管理" [ref=e54] [cursor=pointer]
+      - button "网口管理" [ref=e55] [cursor=pointer]
+      - button "认证服务器配置" [active] [ref=e56] [cursor=pointer]
+      - button "HA监测" [ref=e57] [cursor=pointer]
+      - button "IPSec" [ref=e58] [cursor=pointer]
+      - button "带宽测试" [ref=e59] [cursor=pointer]
+      - button "协议分析" [ref=e60] [cursor=pointer]
+      - button "自定义协议生成" [ref=e61] [cursor=pointer]
+      - button "安全测试" [ref=e62] [cursor=pointer]
+      - button "系统管理" [ref=e63] [cursor=pointer]
+    - text:      
+    - generic [ref=e180]:
+      - generic [ref=e181]: 认证服务器配置
+      - generic [ref=e182]:
+        - button " 检测状态" [ref=e183] [cursor=pointer]:
+          - generic [ref=e184]: 
+          - text: 检测状态
+        - generic [ref=e185]: "Radius: 运行中"
+        - generic [ref=e186]: "LDAP: 运行中"
+        - generic [ref=e187]: "代理: 运行中"
+      - generic [ref=e188]:
+        - generic [ref=e189]:
+          - generic [ref=e190]:
+            - generic [ref=e191]: 
+            - text: "Radius 服务器 运行中 | radiusd: FreeRADIUS Version 3.0.26, for host x86_64-pc-linux-gnu, built on Dec 17 2024 at 15:46:27"
+          - generic [ref=e192]:
+            - button " 修改密钥" [ref=e193] [cursor=pointer]:
+              - generic [ref=e194]: 
+              - text: 修改密钥
+            - button " 重启服务" [ref=e195] [cursor=pointer]:
+              - generic [ref=e196]: 
+              - text: 重启服务
+        - generic [ref=e197]:
+          - table [ref=e200]:
+            - rowgroup [ref=e201]:
+              - row "共享密钥 testing123" [ref=e202]:
+                - cell "共享密钥" [ref=e203]
+                - cell "testing123" [ref=e204]:
+                  - code [ref=e205]: testing123
+              - row "认证端口 1812" [ref=e206]:
+                - cell "认证端口" [ref=e207]
+                - cell "1812" [ref=e208]:
+                  - code [ref=e209]: "1812"
+              - row "计费端口 1813" [ref=e210]:
+                - cell "计费端口" [ref=e211]
+                - cell "1813" [ref=e212]:
+                  - code [ref=e213]: "1813"
+              - row "代理端口 11812" [ref=e214]:
+                - cell "代理端口" [ref=e215]
+                - cell "11812" [ref=e216]:
+                  - code [ref=e217]: "11812"
+          - generic [ref=e218]:
+            - generic [ref=e219]:
+              - generic [ref=e220]: 账号列表 (2)
+              - button "+ 添加账号" [ref=e221] [cursor=pointer]:
+                - generic [ref=e222]: +
+                - text: 添加账号
+            - table [ref=e224]:
+              - rowgroup [ref=e225]:
+                - row "用户名 密码 操作" [ref=e226]:
+                  - columnheader "用户名" [ref=e227]
+                  - columnheader "密码" [ref=e228]
+                  - columnheader "操作" [ref=e229]
+              - rowgroup [ref=e230]:
+                - row "radius tdhx@2017 编辑 删除" [ref=e231]:
+                  - cell "radius" [ref=e232]
+                  - cell "tdhx@2017" [ref=e233]
+                  - cell "编辑 删除" [ref=e234]:
+                    - button "编辑" [ref=e235] [cursor=pointer]
+                    - button "删除" [ref=e236] [cursor=pointer]
+                - row "testuser testpass 编辑 删除" [ref=e237]:
+                  - cell "testuser" [ref=e238]
+                  - cell "testpass" [ref=e239]
+                  - cell "编辑 删除" [ref=e240]:
+                    - button "编辑" [ref=e241] [cursor=pointer]
+                    - button "删除" [ref=e242] [cursor=pointer]
+      - generic [ref=e243]:
+        - generic [ref=e244]:
+          - generic [ref=e245]:
+            - generic [ref=e246]: 
+            - text: LDAP 服务器 运行中
+          - generic [ref=e247]:
+            - button " 保存配置" [ref=e248] [cursor=pointer]:
+              - generic [ref=e249]: 
+              - text: 保存配置
+            - button " 重启服务" [ref=e250] [cursor=pointer]:
+              - generic [ref=e251]: 
+              - text: 重启服务
+        - generic [ref=e252]:
+          - generic [ref=e253]:
+            - generic [ref=e254]: 基本连接
+            - generic [ref=e255]:
+              - generic [ref=e256]: 服务器地址
+              - textbox "ldap://127.0.0.1" [ref=e257]
+            - generic [ref=e258]:
+              - generic [ref=e259]: 端口
+              - textbox [ref=e260]: "389"
+            - generic [ref=e261]:
+              - generic [ref=e262]: Base DN
+              - textbox "dc=tdhx,dc=local" [ref=e263]
+          - generic [ref=e264]:
+            - generic [ref=e265]: 查询过滤
+            - generic [ref=e266]:
+              - generic [ref=e267]: 用户过滤字段
+              - textbox [ref=e268]: cn
+              - text: 默认 cn
+            - generic [ref=e269]:
+              - generic [ref=e270]: 组过滤字段
+              - textbox [ref=e271]: cn
+              - text: 默认 cn
+        - generic [ref=e273]:
+          - generic [ref=e274]: 管理员账户
+          - generic [ref=e275]:
+            - generic [ref=e276]: 管理员 DN
+            - textbox "cn=admin,dc=tdhx,dc=local" [ref=e277]
+          - generic [ref=e278]:
+            - generic [ref=e279]: 管理员密码
+            - textbox "输入密码（留空不修改）" [ref=e280]
+            - text: 密码无法读取，如需修改请重新输入
+      - generic [ref=e281]:
+        - generic [ref=e282]: 操作结果
+        - generic [ref=e283]:
+          - generic [ref=e284]: 点击"检测状态"查看认证服务器配置...
+          - generic [ref=e285]: "[2026/5/27 16:13:14] 正在检测认证服务器状态..."
+          - generic [ref=e286]: "[2026/5/27 16:13:14] 检测完成: Radius 运行中, LDAP 运行中"
