@@ -24,6 +24,7 @@ import os
 import sys
 import logging
 import argparse
+import subprocess
 import threading
 import time
 from datetime import datetime
@@ -2426,6 +2427,68 @@ except ImportError as e:
     logger.warning(f"工业协议路由导入失败: {e}")
 except Exception as e:
     logger.error(f"工业协议路由合并错误: {e}")
+
+
+# ========== 带宽测试 iperf 接口 ==========
+
+# iperf 进程跟踪
+iperf_processes = {}
+
+@app.route('/api/iperf/server/start', methods=['POST'])
+def iperf_server_start():
+    """启动 iperf server"""
+    try:
+        data = request.get_json()
+        port = data.get('port', 5201)
+
+        # 检查是否已存在
+        if 'iperf_server' in iperf_processes:
+            proc = iperf_processes['iperf_server']
+            if proc.poll() is None:
+                return jsonify({
+                    'success': False,
+                    'error': 'iperf server已在运行'
+                })
+
+        # 启动 iperf3 server
+        proc = subprocess.Popen(
+            ['iperf3', '-s', '-p', str(port)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        iperf_processes['iperf_server'] = proc
+        logger.info(f"iperf server启动成功: port={port}, pid={proc.pid}")
+
+        return jsonify({
+            'success': True,
+            'pid': proc.pid,
+            'port': port
+        })
+
+    except Exception as e:
+        logger.exception(f"iperf server启动失败: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/iperf/server/stop', methods=['POST'])
+def iperf_server_stop():
+    """停止 iperf server"""
+    try:
+        if 'iperf_server' in iperf_processes:
+            proc = iperf_processes['iperf_server']
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=5)
+            del iperf_processes['iperf_server']
+            logger.info("iperf server已停止")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        logger.exception(f"iperf server停止失败: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 
 # ========== 主入口 ==========
