@@ -100,10 +100,8 @@
                     <ol style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 20px; line-height: 1.8;">
                         <li>从测试设备中选择要生成日志的防火墙设备</li>
                         <li>选择日志表名称和插入数据条数（最大 100W 条/次）</li>
-                        <li>系统自动将脚本拷贝到防火墙设备的 <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">/app/local/share/new_self_manage/</code> 目录</li>
                         <li>生成日志期间，<strong style="color: var(--warning);">尽量不要在界面查询日志</strong>，会阻塞日志生成</li>
                         <li>100W 条约 <strong style="color: var(--primary);">10 分钟</strong>，生成越多越慢（200W 约 25 分钟）</li>
-                        <li>可切换到其他菜单栏，切换回来后自动显示当前执行状态</li>
                     </ol>
                 </div>
             </div>
@@ -298,8 +296,10 @@ function estimateTime(count) {
     if (count <= 0) return 0;
     const base = 10;
     const ratio = count / 1000000;
-    if (ratio <= 1) return Math.round(base * ratio);
-    return Math.round(base * ratio * (1 + 0.25 * (ratio - 1)));
+    let est;
+    if (ratio <= 1) est = Math.round(base * ratio);
+    else est = Math.round(base * ratio * (1 + 0.25 * (ratio - 1)));
+    return Math.max(1, est);
 }
 
 // ========== 确认并生成日志 ==========

@@ -4585,8 +4585,10 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
 
     except Exception as e:
         logger.exception(f"日志生成任务异常: {e}")
+        import traceback
         task['status'] = 'failed'
-        task['error'] = str(e)
+        task['error'] = f'{type(e).__name__}: {e}'
+        task['output'] = task.get('output', '') + f'\n\n[错误] {type(e).__name__}: {e}\n{traceback.format_exc()}'
         try:
             _save_log_tasks({**_load_log_tasks(), task_id: task})
         except Exception:
