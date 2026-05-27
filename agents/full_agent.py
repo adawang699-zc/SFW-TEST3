@@ -2433,6 +2433,7 @@ except Exception as e:
 
 # iperf 进程跟踪
 iperf_processes = {}
+iperf_processes_lock = threading.Lock()
 
 @app.route('/api/iperf/server/start', methods=['POST'])
 def iperf_server_start():
@@ -2440,15 +2441,22 @@ def iperf_server_start():
     try:
         data = request.get_json()
         port = data.get('port', 5201)
+        try:
+            port = int(port)
+            if not (1 <= port <= 65535):
+                return jsonify({'success': False, 'error': '端口范围无效(1-65535)'})
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'error': '端口参数格式无效'})
 
         # 检查是否已存在
-        if 'iperf_server' in iperf_processes:
-            proc = iperf_processes['iperf_server']
-            if proc.poll() is None:
-                return jsonify({
-                    'success': False,
-                    'error': 'iperf server已在运行'
-                })
+        with iperf_processes_lock:
+            if 'iperf_server' in iperf_processes:
+                proc = iperf_processes['iperf_server']
+                if proc.poll() is None:
+                    return jsonify({
+                        'success': False,
+                        'error': 'iperf server已在运行'
+                    })
 
         # 启动 iperf3 server
         proc = subprocess.Popen(
@@ -2458,7 +2466,8 @@ def iperf_server_start():
             text=True
         )
 
-        iperf_processes['iperf_server'] = proc
+        with iperf_processes_lock:
+            iperf_processes['iperf_server'] = proc
         logger.info(f"iperf server启动成功: port={port}, pid={proc.pid}")
 
         return jsonify({
@@ -2476,13 +2485,18 @@ def iperf_server_start():
 def iperf_server_stop():
     """停止 iperf server"""
     try:
-        if 'iperf_server' in iperf_processes:
-            proc = iperf_processes['iperf_server']
-            if proc.poll() is None:
-                proc.terminate()
-                proc.wait(timeout=5)
-            del iperf_processes['iperf_server']
-            logger.info("iperf server已停止")
+        with iperf_processes_lock:
+            if 'iperf_server' in iperf_processes:
+                proc = iperf_processes['iperf_server']
+                if proc.poll() is None:
+                    try:
+                        proc.terminate()
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                del iperf_processes['iperf_server']
+                logger.info("iperf server已停止")
 
         return jsonify({'success': True})
 
