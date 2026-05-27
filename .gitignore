@@ -56,6 +56,8 @@ license/
 !license/*.md
 !license/*.py
 !license/*.bat
+!license/log_insert_py/
+!license/log_insert_py/*.py
 *.lic
 *.bin
 *.lib

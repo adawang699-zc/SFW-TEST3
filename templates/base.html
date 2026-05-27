@@ -583,6 +583,11 @@
                 <i>🔑</i>授权管理
             </a>
         </div>
+        <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'system_config' %}active{% endif %}" href="{% url 'main:system_config' %}">
+                <i>⚙️</i>其他配置
+            </a>
+        </div>
     </div>
 
     <!-- 内容区 -->

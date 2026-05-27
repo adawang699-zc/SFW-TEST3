@@ -1,0 +1,361 @@
+{% extends 'base.html' %}
+{% block title %}其他配置{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">其他配置</div>
+    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+        系统扩展功能配置管理
+    </p>
+</div>
+
+<!-- Tab 导航 -->
+<div class="card" style="padding: 0;">
+    <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 8px;">
+        <button class="btn btn-primary tab-btn" data-tab="log_manage" onclick="switchTab('log_manage')">日志管理</button>
+        <button class="btn btn-secondary tab-btn" data-tab="port_manage" onclick="switchTab('port_manage')">网口管理</button>
+        <button class="btn btn-secondary tab-btn" data-tab="auth_server" onclick="switchTab('auth_server')">认证服务器配置</button>
+        <button class="btn btn-secondary tab-btn" data-tab="ha_monitor" onclick="switchTab('ha_monitor')">HA监测</button>
+        <button class="btn btn-secondary tab-btn" data-tab="ipsec" onclick="switchTab('ipsec')">IPSec</button>
+        <button class="btn btn-secondary tab-btn" data-tab="bandwidth" onclick="switchTab('bandwidth')">带宽测试</button>
+        <button class="btn btn-secondary tab-btn" data-tab="protocol_analyze" onclick="switchTab('protocol_analyze')">协议分析</button>
+        <button class="btn btn-secondary tab-btn" data-tab="custom_protocol" onclick="switchTab('custom_protocol')">自定义协议生成</button>
+        <button class="btn btn-secondary tab-btn" data-tab="security_test" onclick="switchTab('security_test')">安全测试</button>
+        <button class="btn btn-secondary tab-btn" data-tab="system_manage" onclick="switchTab('system_manage')">系统管理</button>
+    </div>
+</div>
+
+<!-- ==================== 日志管理 ==================== -->
+<div class="tab-content" id="tab-log_manage">
+    <div class="card">
+        <div class="card-header">日志管理 - 生成日志文件</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <!-- 左侧：参数配置 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">防火墙 SSH 连接</div>
+                    <div class="form-group">
+                        <label class="form-label">设备 IP</label>
+                        <input type="text" class="form-input" id="fw_ip" placeholder="防火墙设备管理 IP">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">SSH 用户名</label>
+                            <input type="text" class="form-input" id="fw_user" value="admin">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SSH 密码</label>
+                            <input type="password" class="form-input" id="fw_password" placeholder="SSH 密码">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">日志参数</div>
+                    <div class="form-group">
+                        <label class="form-label">日志表名称</label>
+                        <input type="text" class="form-input" id="log_table_name" placeholder="例如: sys_log, audit_log">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">插入数据条数</label>
+                        <input type="number" class="form-input" id="log_row_count" value="1000" min="1" max="1000000">
+                        <small style="color: var(--text-muted);">最大 1,000,000 条，超过将自动分批插入</small>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">时间范围起始</label>
+                            <input type="datetime-local" class="form-input" id="log_start_time">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">时间范围结束</label>
+                            <input type="datetime-local" class="form-input" id="log_end_time">
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="generateLogs()" id="generateLogBtn">
+                    <i class="fas fa-play"></i> 生成日志
+                </button>
+                <button class="btn btn-secondary" onclick="downloadScript()" style="margin-left: 12px;">
+                    <i class="fas fa-download"></i> 下载脚本
+                </button>
+            </div>
+
+            <!-- 右侧：结果和说明 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">执行结果</div>
+                    <div id="logResult" style="min-height: 200px; max-height: 400px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap;">
+                        <div style="color: var(--text-muted);">等待执行...</div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0, 168, 150, 0.05); border-radius: 8px; padding: 16px; border: 1px solid rgba(0, 168, 150, 0.2);">
+                    <div style="color: var(--secondary); font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">使用说明</div>
+                    <ol style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 20px; line-height: 1.8;">
+                        <li>本功能用于向防火墙设备的日志表中插入测试数据</li>
+                        <li>需要防火墙设备 SSH 连接信息（IP、用户名、密码）</li>
+                        <li>系统会自动将日志生成脚本拷贝到防火墙设备的 <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">/app/local/share/new_self_manage/</code> 目录</li>
+                        <li>脚本拷贝完成后自动在防火墙上执行</li>
+                        <li>单次最多插入 1,000,000 条数据，超过将自动分批处理</li>
+                        <li>如未找到脚本文件，请先下载脚本并放置在 <code style="background: var(--bg-card); padding: 2px 6px; border-radius: 4px;">license/log_insert_py/</code> 目录下</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 网口管理 ==================== -->
+<div class="tab-content" id="tab-port_manage" style="display: none;">
+    <div class="card">
+        <div class="card-header">网口管理</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">网口管理</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 认证服务器配置 ==================== -->
+<div class="tab-content" id="tab-auth_server" style="display: none;">
+    <div class="card">
+        <div class="card-header">认证服务器配置</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">认证服务器配置</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== HA监测 ==================== -->
+<div class="tab-content" id="tab-ha_monitor" style="display: none;">
+    <div class="card">
+        <div class="card-header">HA监测</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">HA监测</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== IPSec ==================== -->
+<div class="tab-content" id="tab-ipsec" style="display: none;">
+    <div class="card">
+        <div class="card-header">IPSec</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">IPSec</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 带宽测试 ==================== -->
+<div class="tab-content" id="tab-bandwidth" style="display: none;">
+    <div class="card">
+        <div class="card-header">带宽测试</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">带宽测试</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 协议分析 ==================== -->
+<div class="tab-content" id="tab-protocol_analyze" style="display: none;">
+    <div class="card">
+        <div class="card-header">协议分析</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">协议分析</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 自定义协议生成 ==================== -->
+<div class="tab-content" id="tab-custom_protocol" style="display: none;">
+    <div class="card">
+        <div class="card-header">自定义协议生成</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">自定义协议生成</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 安全测试 ==================== -->
+<div class="tab-content" id="tab-security_test" style="display: none;">
+    <div class="card">
+        <div class="card-header">安全测试</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">安全测试</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 系统管理 ==================== -->
+<div class="tab-content" id="tab-system_manage" style="display: none;">
+    <div class="card">
+        <div class="card-header">系统管理</div>
+        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
+            <div style="font-size: 1.2rem; margin-bottom: 8px;">系统管理</div>
+            <div>功能开发中，敬请期待...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 当前激活的 tab
+let currentTab = 'log_manage';
+
+function switchTab(tabId) {
+    currentTab = tabId;
+
+    // 更新按钮样式
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.className = btn.dataset.tab === tabId ? 'btn btn-primary tab-btn' : 'btn btn-secondary tab-btn';
+    });
+
+    // 切换内容
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.style.display = el.id === 'tab-' + tabId ? 'block' : 'none';
+    });
+}
+
+// 下载脚本
+function downloadScript() {
+    apiRequest('/api/system-config/log-generate/', 'POST', {action: 'download_script'}).then(data => {
+        if (data.success) {
+            try {
+                const binary = atob(data.content);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = data.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addLog('脚本已下载: ' + data.filename, 'success');
+            } catch (e) {
+                addLog('下载失败: ' + e.message, 'error');
+            }
+        } else {
+            addLog('脚本下载失败: ' + (data.error || '未找到脚本文件'), 'error');
+        }
+    });
+}
+
+// 生成日志
+async function generateLogs() {
+    const btn = document.getElementById('generateLogBtn');
+    const resultDiv = document.getElementById('logResult');
+
+    // 获取参数
+    const deviceIp = document.getElementById('fw_ip').value.trim();
+    const deviceUser = document.getElementById('fw_user').value.trim();
+    const devicePassword = document.getElementById('fw_password').value;
+    const tableName = document.getElementById('log_table_name').value.trim();
+    const rowCount = parseInt(document.getElementById('log_row_count').value);
+    const startTime = document.getElementById('log_start_time').value;
+    const endTime = document.getElementById('log_end_time').value;
+
+    // 验证
+    if (!deviceIp) { addLog('请输入防火墙设备 IP', 'error'); return; }
+    if (!tableName) { addLog('请输入日志表名称', 'error'); return; }
+    if (isNaN(rowCount) || rowCount < 1 || rowCount > 1000000) {
+        addLog('插入条数范围为 1~1,000,000', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 执行中...';
+    addLog('开始生成日志: 表=' + tableName + ', 条数=' + rowCount);
+
+    // 格式化时间（datetime-local 格式转为字符串）
+    let formattedStart = startTime ? startTime.replace('T', ' ') : '';
+    let formattedEnd = endTime ? endTime.replace('T', ' ') : '';
+
+    try {
+        const response = await fetch('/api/system-config/log-generate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({
+                device_ip: deviceIp,
+                device_user: deviceUser,
+                device_password: devicePassword,
+                table_name: tableName,
+                row_count: rowCount,
+                start_time: formattedStart,
+                end_time: formattedEnd
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            addLog('日志生成成功！', 'success');
+            resultDiv.innerHTML = '<div style="color: var(--success);">' +
+                '执行成功：' + (data.message || '') + '</div>' +
+                '<hr style="border-color: var(--border); margin: 8px 0;">' +
+                '<div style="color: var(--text-primary);">' + (data.output || '') + '</div>';
+        } else {
+            addLog('日志生成失败: ' + (data.error || '未知错误'), 'error');
+            resultDiv.innerHTML = '<div style="color: var(--danger);">执行失败</div>' +
+                '<hr style="border-color: var(--border); margin: 8px 0;">' +
+                '<div style="color: var(--text-secondary);">' + (data.error || '') + '</div>' +
+                (data.output ? '<hr style="border-color: var(--border); margin: 8px 0;"><pre style="color: var(--text-primary);">' + data.output + '</pre>' : '') +
+                (data.stderr ? '<hr style="border-color: var(--border); margin: 8px 0;"><pre style="color: var(--danger);">' + data.stderr + '</pre>' : '');
+        }
+    } catch (e) {
+        addLog('请求异常: ' + e.message, 'error');
+        resultDiv.innerHTML = '<div style="color: var(--danger);">请求异常: ' + e.message + '</div>';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> 生成日志';
+    }
+}
+
+function addLog(message, type) {
+    const logs = document.getElementById('logResult');
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+
+    if (logs.querySelector('.text-muted')) logs.innerHTML = '';
+    logs.innerHTML += `<div style="color: ${color}; margin-bottom: 4px;"><small style="color: var(--text-muted);">[${time}]</small> ${message}</div>`;
+    logs.scrollTop = logs.scrollHeight;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}
