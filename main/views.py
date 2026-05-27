@@ -4408,16 +4408,35 @@ def _estimate_time(row_count):
         return int(base * ratio * (1 + 0.25 * (ratio - 1)))
 
 
-def _check_ssh_port(ip, port=22, timeout=5):
-    """检测 SSH 端口是否开放"""
+def _check_ssh_connectivity(ip, port=22, user='admin', password='', timeout=10):
+    """检测 SSH 服务是否可用（实际 SSH 握手）"""
+    import paramiko
     try:
+        # 先做 TCP 检测
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(timeout)
         result = sock.connect_ex((ip, port))
         sock.close()
-        return result == 0
-    except Exception:
-        return False
+        if result != 0:
+            return False, f'SSH 端口({port})未开放，请在防火墙上开启 SSH 服务后重试'
+
+        # 再做 SSH 协议握手
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(ip, port=port, username=user, password=password,
+                   timeout=timeout, look_for_keys=False, allow_agent=False,
+                   banner_timeout=timeout)
+        ssh.close()
+        return True, 'SSH 连接正常'
+    except paramiko.SSHException as e:
+        err_msg = str(e)
+        if 'Error reading SSH protocol banner' in err_msg or 'Garbage packet' in err_msg:
+            return False, f'SSH 协议握手失败：设备 {ip}:{port} 未运行 SSH 服务，请检查是否已开启 SSH'
+        return False, f'SSH 连接失败：{err_msg}'
+    except socket.error as e:
+        return False, f'网络连接失败：{str(e)}'
+    except Exception as e:
+        return False, f'SSH 检测异常：{str(e)}'
 
 
 def _execute_log_task(task_id, device, table_name, row_count, start_time, end_time):
@@ -4681,11 +4700,12 @@ def api_system_config_log_generate(request):
         except TestDevice.DoesNotExist:
             return JsonResponse({'success': False, 'error': '设备不存在'})
 
-        # 检测 SSH 是否开放
-        if not _check_ssh_port(device.ip, device.port):
+        # 检测 SSH 服务
+        ssh_ok, ssh_msg = _check_ssh_connectivity(device.ip, device.port, device.user, device.password)
+        if not ssh_ok:
             return JsonResponse({
                 'success': False,
-                'error': f'设备 {device.name}({device.ip}) SSH 端口未开放，请在防火墙上开启 SSH 后重试',
+                'error': f'设备 {device.name}({device.ip}): {ssh_msg}',
                 'need_enable_ssh': True,
             })
 
