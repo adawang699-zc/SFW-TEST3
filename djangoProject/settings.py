@@ -259,3 +259,11 @@ LOGGING = {
         },
     },
 }
+
+# ========== Django Channels 配置 ==========
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
