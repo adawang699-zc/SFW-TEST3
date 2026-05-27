@@ -1,0 +1,1173 @@
+{% extends 'base.html' %}
+{% block title %}带宽测试{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Agent卡片选中效果 */
+.bandwidth-agent-card {
+    transition: all 0.3s ease;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    cursor: pointer;
+    background: var(--bg-card);
+}
+
+.bandwidth-agent-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.bandwidth-agent-card.selected-server {
+    border-color: var(--success);
+    background: linear-gradient(135deg, rgba(56, 176, 0, 0.15) 0%, rgba(56, 176, 0, 0.05) 100%);
+}
+
+.bandwidth-agent-card.selected-client {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(255, 107, 53, 0.05) 100%);
+}
+
+/* Canvas容器 */
+.canvas-container {
+    background: var(--bg-dark);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 20px 0;
+}
+
+/* 参数配置区 */
+.config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* 实时数据区 */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.stat-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--secondary);
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+/* 脉冲动画 */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* 结果摘要 */
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+/* 选择提示 */
+.selection-hint {
+    display: flex;
+    gap: 20px;
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+.server-tag {
+    color: var(--success);
+    font-weight: bold;
+}
+
+.client-tag {
+    color: var(--primary);
+    font-weight: bold;
+}
+
+/* Canvas响应式 */
+#bw-flow-canvas {
+    width: 100%;
+    max-width: 800px;
+    height: 200px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+#bw-gauge-canvas {
+    display: block;
+    margin: 20px auto;
+    max-width: 400px;
+    height: 250px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+/* 测试状态指示 */
+.test-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(0, 168, 150, 0.2);
+    color: var(--secondary);
+    font-size: 0.9rem;
+}
+
+.test-status-indicator.running {
+    background: rgba(56, 176, 0, 0.2);
+    color: var(--success);
+}
+
+.test-status-indicator.stopped {
+    background: rgba(208, 0, 0, 0.2);
+    color: var(--danger);
+}
+
+/* 脉冲灯 */
+.pulse-light {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 1s infinite;
+}
+
+/* 协议图标 */
+.protocol-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.protocol-icon.tcp {
+    background: rgba(0, 168, 150, 0.2);
+    color: var(--secondary);
+}
+
+.protocol-icon.udp {
+    background: rgba(255, 107, 53, 0.2);
+    color: var(--primary);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 用户标识符输入 -->
+<div class="card">
+    <div class="card-header">用户标识符</div>
+    <div class="form-group">
+        <label class="form-label" for="bw-user-identifier">用户标识符</label>
+        <input type="text" id="bw-user-identifier" class="form-input" placeholder="输入租用Agent时的标识符">
+        <small style="color: var(--text-muted);">必须使用租用Agent时的标识符</small>
+    </div>
+</div>
+
+<!-- Agent选择区 -->
+<div class="card">
+    <div class="card-header">Agent选择</div>
+    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px;">
+        选择两个租用的Agent进行带宽测试。一个作为Server端（iperf服务器），一个作为Client端（iperf客户端）。
+        <br>点击第一次选择Server端，点击第二次选择Client端，再次点击已选Agent可取消选择。
+    </p>
+    <div id="bw-agent-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <p style="color: var(--text-secondary);">输入用户标识符后加载...</p>
+    </div>
+    <div class="selection-hint">
+        <span id="bw-server-info" style="display: none;">Server端: <span class="server-tag"></span></span>
+        <span id="bw-client-info" style="display: none;">Client端: <span class="client-tag"></span></span>
+        <span id="bw-selection-empty" style="color: var(--text-muted);">请选择两个Agent</span>
+    </div>
+</div>
+
+<!-- 参数配置区 -->
+<div class="card">
+    <div class="card-header">参数配置</div>
+    <div class="config-grid">
+        <div class="form-group">
+            <label class="form-label" for="bw-protocol">协议类型</label>
+            <select id="bw-protocol" class="form-input">
+                <option value="tcp">TCP</option>
+                <option value="udp">UDP</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="bw-duration">测试时间（秒）</label>
+            <input type="number" id="bw-duration" class="form-input" value="10" min="1" max="3600">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="bw-mtu">MTU大小</label>
+            <input type="number" id="bw-mtu" class="form-input" value="1400" min="64" max="9000">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="bw-port">端口</label>
+            <input type="number" id="bw-port" class="form-input" value="5201" min="1" max="65535">
+        </div>
+        <div class="form-group" id="bw-bandwidth-group" style="display: none;">
+            <label class="form-label" for="bw-bandwidth">带宽目标（Mbps）</label>
+            <input type="number" id="bw-bandwidth" class="form-input" value="100" min="1" max="10000">
+            <small style="color: var(--text-muted);">仅UDP模式有效</small>
+        </div>
+    </div>
+    <div style="display: flex; gap: 12px; margin-top: 16px; align-items: center;">
+        <button class="btn btn-primary" id="bw-start-btn" disabled>开始测试</button>
+        <button class="btn btn-danger" id="bw-stop-btn" style="display: none;">停止测试</button>
+        <div id="bw-test-status" class="test-status-indicator" style="display: none;">
+            <span class="pulse-light"></span>
+            <span>测试进行中</span>
+        </div>
+    </div>
+</div>
+
+<!-- 实时带宽监控 -->
+<div class="card">
+    <div class="card-header">实时带宽监控</div>
+    <div class="canvas-container">
+        <!-- 数据流动动画Canvas -->
+        <canvas id="bw-flow-canvas" width="800" height="200"></canvas>
+        <!-- 仪表盘动画Canvas -->
+        <canvas id="bw-gauge-canvas" width="400" height="250"></canvas>
+    </div>
+    <!-- 实时数据统计 -->
+    <div class="stats-grid">
+        <div class="stat-box">
+            <div class="stat-value" id="bw-instant">0.0</div>
+            <div class="stat-label">瞬时速度 (Mbps)</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="bw-avg">0.0</div>
+            <div class="stat-label">平均速度 (Mbps)</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="bw-peak">0.0</div>
+            <div class="stat-label">峰值速度 (Mbps)</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value" id="bw-total">0.0</div>
+            <div class="stat-label">传输总量 (MB)</div>
+        </div>
+    </div>
+</div>
+
+<!-- 测试结果摘要 -->
+<div class="card">
+    <div class="card-header">测试结果摘要</div>
+    <div id="bw-summary" style="color: var(--text-secondary);">
+        测试完成后显示结果摘要...
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ========== 全局状态 ==========
+let selectedServerAgent = null;
+let selectedClientAgent = null;
+let currentTestId = null;
+let websocket = null;
+let bandwidthData = {
+    instant_speed: 0,
+    avg_speed: 0,
+    peak_speed: 0,
+    total_bytes: 0,
+    transfer: 0
+};
+let agentDataList = []; // 存储Agent数据用于显示
+
+// ========== Canvas动画状态 ==========
+let flowCanvas, flowCtx;
+let gaugeCanvas, gaugeCtx;
+let animationRunning = false;
+let animationId = null;
+let gaugeAnimationId = null;
+let particles = [];
+let currentProtocol = 'tcp';
+let gaugeAngle = -135;
+let gaugeTargetAngle = -135;
+
+// ========== Agent加载和选择 ==========
+async function loadMyAgents() {
+    const userIdentifier = document.getElementById('bw-user-identifier').value.trim();
+
+    if (!userIdentifier) {
+        document.getElementById('bw-agent-list').innerHTML =
+            '<p style="color: var(--text-secondary);">请输入用户标识符</p>';
+        return;
+    }
+
+    try {
+        const result = await apiRequest(`/api/bandwidth/my-agents/?user_identifier=${encodeURIComponent(userIdentifier)}`);
+
+        if (result.success) {
+            agentDataList = result.agents;
+            renderAgentCards(result.agents);
+            updateStartButton();
+        } else {
+            showToast(result.error, 'error');
+        }
+    } catch (e) {
+        showToast('加载Agent失败: ' + e.message, 'error');
+    }
+}
+
+function renderAgentCards(agents) {
+    const container = document.getElementById('bw-agent-list');
+
+    if (agents.length < 2) {
+        container.innerHTML =
+            `<p style="color: var(--warning);">您租用的Agent数量不足，需要至少租用2个Agent才能进行带宽测试。当前租用: ${agents.length}个</p>`;
+        return;
+    }
+
+    let html = '';
+    agents.forEach(agent => {
+        const isServerSelected = selectedServerAgent === agent.agent_id;
+        const isClientSelected = selectedClientAgent === agent.agent_id;
+        let cardClass = 'bandwidth-agent-card';
+
+        if (isServerSelected) cardClass += ' selected-server';
+        if (isClientSelected) cardClass += ' selected-client';
+
+        const statusClass = agent.status === 'running' ? 'status-running' : 'status-stopped';
+        const statusText = agent.status === 'running' ? '运行中' : '已停止';
+
+        html += `
+            <div class="${cardClass}" onclick="selectAgent('${agent.agent_id}', '${agent.ip_address || '未配置'}', '${agent.interface_name}')">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong>${agent.agent_id}</strong>
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                </div>
+                <div style="margin-top: 8px; color: var(--text-secondary); font-size: 0.85rem;">
+                    IP: ${agent.ip_address || '未配置'}<br>
+                    网卡: ${agent.interface_name}
+                </div>
+                ${isServerSelected ? '<div style="margin-top: 8px; color: var(--success); font-weight: bold;">Server端</div>' : ''}
+                ${isClientSelected ? '<div style="margin-top: 8px; color: var(--primary); font-weight: bold;">Client端</div>' : ''}
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function selectAgent(agentId, ip, interfaceName) {
+    // 如果点击的是已选的Server，取消Server选择
+    if (agentId === selectedServerAgent) {
+        // 如果有Client选择，Client变成Server
+        if (selectedClientAgent) {
+            selectedServerAgent = selectedClientAgent;
+            selectedClientAgent = null;
+        } else {
+            selectedServerAgent = null;
+        }
+    }
+    // 如果点击的是已选的Client，取消Client选择
+    else if (agentId === selectedClientAgent) {
+        selectedClientAgent = null;
+    }
+    // 如果Server未选择，设为Server
+    else if (!selectedServerAgent) {
+        selectedServerAgent = agentId;
+    }
+    // 如果Server已选择但Client未选择，设为Client（不能与Server相同）
+    else if (!selectedClientAgent) {
+        selectedClientAgent = agentId;
+    }
+    // 如果都已选择，替换Client
+    else {
+        selectedClientAgent = agentId;
+    }
+
+    // 更新显示
+    updateSelectionDisplay();
+    renderAgentCards(agentDataList);
+    updateStartButton();
+}
+
+function updateSelectionDisplay() {
+    const serverInfo = document.getElementById('bw-server-info');
+    const clientInfo = document.getElementById('bw-client-info');
+    const emptyHint = document.getElementById('bw-selection-empty');
+
+    if (selectedServerAgent) {
+        const serverAgent = agentDataList.find(a => a.agent_id === selectedServerAgent);
+        serverInfo.style.display = 'inline';
+        serverInfo.querySelector('.server-tag').textContent =
+            `${selectedServerAgent} (${serverAgent?.interface_name || ''}, IP: ${serverAgent?.ip_address || '未配置'})`;
+    } else {
+        serverInfo.style.display = 'none';
+    }
+
+    if (selectedClientAgent) {
+        const clientAgent = agentDataList.find(a => a.agent_id === selectedClientAgent);
+        clientInfo.style.display = 'inline';
+        clientInfo.querySelector('.client-tag').textContent =
+            `${selectedClientAgent} (${clientAgent?.interface_name || ''}, IP: ${clientAgent?.ip_address || '未配置'})`;
+    } else {
+        clientInfo.style.display = 'none';
+    }
+
+    // 显示/隐藏空提示
+    if (selectedServerAgent || selectedClientAgent) {
+        emptyHint.style.display = 'none';
+    } else {
+        emptyHint.style.display = 'inline';
+    }
+}
+
+function updateStartButton() {
+    const btn = document.getElementById('bw-start-btn');
+    btn.disabled = !(selectedServerAgent && selectedClientAgent);
+}
+
+// ========== 协议切换 ==========
+document.getElementById('bw-protocol').addEventListener('change', function() {
+    const bandwidthGroup = document.getElementById('bw-bandwidth-group');
+    bandwidthGroup.style.display = this.value === 'udp' ? 'block' : 'none';
+    currentProtocol = this.value;
+});
+
+// ========== 带宽测试控制 ==========
+async function startBandwidthTest() {
+    const userIdentifier = document.getElementById('bw-user-identifier').value.trim();
+
+    if (!userIdentifier) {
+        showToast('请输入用户标识符', 'error');
+        return;
+    }
+
+    if (!selectedServerAgent || !selectedClientAgent) {
+        showToast('请选择Server端和Client端Agent', 'error');
+        return;
+    }
+
+    // 检查Agent状态
+    const serverAgent = agentDataList.find(a => a.agent_id === selectedServerAgent);
+    const clientAgent = agentDataList.find(a => a.agent_id === selectedClientAgent);
+
+    if (serverAgent?.status !== 'running' || clientAgent?.status !== 'running') {
+        showToast('所选Agent必须处于运行状态', 'error');
+        return;
+    }
+
+    if (!serverAgent?.ip_address || !clientAgent?.ip_address) {
+        showToast('所选Agent必须配置IP地址', 'error');
+        return;
+    }
+
+    const params = {
+        user_identifier: userIdentifier,
+        server_agent_id: selectedServerAgent,
+        client_agent_id: selectedClientAgent,
+        protocol: document.getElementById('bw-protocol').value,
+        duration: parseInt(document.getElementById('bw-duration').value),
+        mtu: parseInt(document.getElementById('bw-mtu').value),
+        port: parseInt(document.getElementById('bw-port').value),
+    };
+
+    if (params.protocol === 'udp') {
+        params.bandwidth = parseInt(document.getElementById('bw-bandwidth').value);
+    }
+
+    try {
+        const result = await apiRequest('/api/bandwidth/start/', 'POST', params);
+
+        if (result.success) {
+            currentTestId = result.test_id;
+            showToast('带宽测试启动成功');
+
+            // 显示停止按钮和状态指示
+            document.getElementById('bw-start-btn').style.display = 'none';
+            document.getElementById('bw-stop-btn').style.display = 'inline-block';
+            document.getElementById('bw-test-status').style.display = 'flex';
+
+            // 连接WebSocket
+            connectWebSocket(result.websocket_url);
+
+            // 初始化Canvas动画
+            initCanvasAnimation();
+
+            // 重置统计数据
+            bandwidthData = {
+                instant_speed: 0,
+                avg_speed: 0,
+                peak_speed: 0,
+                total_bytes: 0,
+                transfer: 0
+            };
+            updateStatsDisplay();
+
+            // 清空结果摘要
+            document.getElementById('bw-summary').innerHTML =
+                '<span style="color: var(--text-muted);">测试进行中，请等待...</span>';
+        } else {
+            showToast(result.error, 'error');
+        }
+    } catch (e) {
+        showToast('启动测试失败: ' + e.message, 'error');
+    }
+}
+
+async function stopBandwidthTest() {
+    if (!currentTestId) {
+        showToast('没有正在进行的测试', 'error');
+        return;
+    }
+
+    try {
+        const result = await apiRequest('/api/bandwidth/stop/', 'POST', { test_id: currentTestId });
+
+        if (result.success) {
+            showToast('测试已停止');
+            cleanupTest();
+        } else {
+            showToast(result.error, 'error');
+        }
+    } catch (e) {
+        showToast('停止测试失败: ' + e.message, 'error');
+    }
+}
+
+function cleanupTest() {
+    currentTestId = null;
+
+    if (websocket) {
+        websocket.close();
+        websocket = null;
+    }
+
+    document.getElementById('bw-start-btn').style.display = 'inline-block';
+    document.getElementById('bw-start-btn').disabled = !(selectedServerAgent && selectedClientAgent);
+    document.getElementById('bw-stop-btn').style.display = 'none';
+    document.getElementById('bw-test-status').style.display = 'none';
+
+    // 停止Canvas动画
+    stopCanvasAnimation();
+}
+
+// ========== WebSocket连接 ==========
+function connectWebSocket(wsUrl) {
+    // 替换URL中的host（开发环境可能需要调整）
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.host;
+    const finalUrl = wsUrl.replace(/^ws:\/\/[^\/]+/, `${wsProtocol}//${wsHost}`);
+
+    console.log('WebSocket连接URL:', finalUrl);
+
+    websocket = new WebSocket(finalUrl);
+
+    websocket.onopen = function() {
+        console.log('WebSocket连接建立');
+        showToast('实时数据连接已建立');
+    };
+
+    websocket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handleWebSocketMessage(data);
+    };
+
+    websocket.onerror = function(error) {
+        console.error('WebSocket错误:', error);
+        showToast('实时数据连接错误', 'error');
+    };
+
+    websocket.onclose = function(event) {
+        console.log('WebSocket关闭:', event.code, event.reason);
+        if (currentTestId) {
+            // 测试未手动停止，可能异常断开
+            showToast('实时数据连接断开', 'warning');
+        }
+    };
+}
+
+function handleWebSocketMessage(data) {
+    if (data.type === 'iperf_data') {
+        // 更新实时数据
+        bandwidthData = data.data;
+        updateStatsDisplay();
+
+        // 触发Canvas动画更新
+        updateCanvasAnimationData(bandwidthData);
+
+    } else if (data.type === 'test_complete') {
+        // 测试完成
+        showToast('带宽测试完成');
+        displayTestSummary(data.summary);
+        cleanupTest();
+
+    } else if (data.type === 'error') {
+        // 错误消息
+        showToast(data.message, 'error');
+        cleanupTest();
+    }
+}
+
+function updateStatsDisplay() {
+    document.getElementById('bw-instant').textContent = bandwidthData.instant_speed.toFixed(1);
+    document.getElementById('bw-avg').textContent = bandwidthData.avg_speed.toFixed(1);
+    document.getElementById('bw-peak').textContent = bandwidthData.peak_speed.toFixed(1);
+    document.getElementById('bw-total').textContent = bandwidthData.transfer.toFixed(1);
+}
+
+function displayTestSummary(summary) {
+    const container = document.getElementById('bw-summary');
+
+    container.innerHTML = `
+        <div class="summary-grid">
+            <div class="stat-box">
+                <div class="stat-value" style="animation: pulse 2s infinite;">${summary.avg_bandwidth.toFixed(1)}</div>
+                <div class="stat-label">平均带宽 (Mbps)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" style="animation: pulse 2s infinite;">${summary.peak_bandwidth.toFixed(1)}</div>
+                <div class="stat-label">峰值带宽 (Mbps)</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" style="animation: pulse 2s infinite;">${summary.total_transfer.toFixed(1)}</div>
+                <div class="stat-label">总传输量 (MB)</div>
+            </div>
+        </div>
+        <div style="margin-top: 12px; color: var(--text-secondary);">
+            测试时长: ${summary.duration} 秒 | 协议: ${currentProtocol.toUpperCase()}
+        </div>
+    `;
+}
+
+// ========== Canvas数据流动动画 ==========
+class DataParticle {
+    constructor(canvasWidth, canvasHeight) {
+        this.canvasWidth = canvasWidth;
+        this.canvasHeight = canvasHeight;
+        this.reset();
+    }
+
+    reset() {
+        // 从Client端（右侧）开始
+        this.x = this.canvasWidth - 120;
+        this.y = this.canvasHeight / 2 + (Math.random() - 0.5) * 20;
+        this.speed = 5;
+        this.size = 6 + Math.random() * 3;
+        this.color = currentProtocol === 'tcp' ? '#00a896' : '#ff6b35';
+        this.alpha = 1;
+        this.passedFirewall = false;
+    }
+
+    update(bandwidthMbps) {
+        // 根据带宽调整速度
+        const baseSpeed = 2;
+        this.speed = baseSpeed + Math.min(bandwidthMbps / 100, 5);
+
+        // 向左移动（流向Server）
+        this.x -= this.speed;
+
+        // 防火墙位置（中间）
+        const firewallX = this.canvasWidth / 2;
+
+        // 经过防火墙时减速和变色
+        if (this.x < firewallX + 50 && this.x > firewallX - 50 && !this.passedFirewall) {
+            this.speed *= 0.6;
+            this.color = this.darkenColor(this.color, 0.2);
+            this.passedFirewall = true;
+        }
+
+        // 到达Server端后重置
+        if (this.x < 120) {
+            this.reset();
+        }
+
+        // 拖尾效果（alpha渐变）
+        this.alpha = 0.4 + 0.6 * (this.x / this.canvasWidth);
+    }
+
+    darkenColor(color, factor) {
+        const r = parseInt(color.slice(1, 3), 16);
+        const g = parseInt(color.slice(3, 5), 16);
+        const b = parseInt(color.slice(5, 7), 16);
+
+        const newR = Math.floor(r * (1 - factor));
+        const newG = Math.floor(g * (1 - factor));
+        const newB = Math.floor(b * (1 - factor));
+
+        return `#${newR.toString(16).padStart(2, '0')}${newG.toString(16).padStart(2, '0')}${newB.toString(16).padStart(2, '0')}`;
+    }
+
+    draw(ctx) {
+        ctx.beginPath();
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.alpha;
+
+        // 绘制粒子（圆形）
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 拖尾效果
+        ctx.globalAlpha = this.alpha * 0.3;
+        ctx.beginPath();
+        ctx.arc(this.x + this.speed * 2, this.y, this.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 1;
+    }
+}
+
+function initCanvasAnimation() {
+    flowCanvas = document.getElementById('bw-flow-canvas');
+    gaugeCanvas = document.getElementById('bw-gauge-canvas');
+
+    // 设置Canvas尺寸（响应式）
+    const flowContainer = flowCanvas.parentElement;
+    flowCanvas.width = Math.min(flowContainer.clientWidth - 32, 800);
+    flowCanvas.height = 200;
+
+    gaugeCanvas.width = 400;
+    gaugeCanvas.height = 250;
+
+    flowCtx = flowCanvas.getContext('2d');
+    gaugeCtx = gaugeCanvas.getContext('2d');
+
+    currentProtocol = document.getElementById('bw-protocol').value;
+
+    // 初始化粒子
+    particles = [];
+    for (let i = 0; i < 15; i++) {
+        particles.push(new DataParticle(flowCanvas.width, flowCanvas.height));
+    }
+
+    animationRunning = true;
+    animateFlow();
+    animateGauge();
+}
+
+function animateFlow() {
+    if (!animationRunning) return;
+
+    const ctx = flowCtx;
+    const width = flowCanvas.width;
+    const height = flowCanvas.height;
+
+    // 清空画布
+    ctx.clearRect(0, 0, width, height);
+
+    // 绘制背景
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, width, height);
+
+    // 绘制Agent A（Server端）
+    drawAgentRect(ctx, 50, height/2 - 35, 70, 70,
+        selectedServerAgent ? selectedServerAgent.substring(0, 8) : 'Server',
+        '#00a896', 'Server');
+
+    // 绘制防火墙
+    drawFirewallRect(ctx, width/2 - 40, height/2 - 45, 80, 90, '防火墙');
+
+    // 绘制Agent B（Client端）
+    drawAgentRect(ctx, width - 120, height/2 - 35, 70, 70,
+        selectedClientAgent ? selectedClientAgent.substring(0, 8) : 'Client',
+        '#ff6b35', 'Client');
+
+    // 绘制连接线
+    ctx.strokeStyle = '#f9c74f';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(120, height/2);
+    ctx.lineTo(width/2 - 40, height/2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(width/2 + 40, height/2);
+    ctx.lineTo(width - 120, height/2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 绘制数据流动方向箭头
+    drawFlowArrow(ctx, width/2 - 60, height/2 - 15);
+    drawFlowArrow(ctx, width/2 + 60, height/2 - 15);
+
+    // 绘制粒子
+    particles.forEach(p => {
+        p.update(bandwidthData.instant_speed);
+        p.draw(ctx);
+    });
+
+    // 绘制带宽标签
+    ctx.fillStyle = '#00c9b1';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${bandwidthData.instant_speed.toFixed(1)} Mbps`, width/2, height - 15);
+
+    animationId = requestAnimationFrame(animateFlow);
+}
+
+function drawAgentRect(ctx, x, y, w, h, label, color, type) {
+    // 边框
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+
+    // 填充背景
+    ctx.fillStyle = '#16213e';
+    ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+
+    // 标题
+    ctx.fillStyle = color;
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(type, x + w/2, y + 18);
+
+    // Agent ID（截断显示）
+    ctx.fillStyle = '#a0a0a0';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(label, x + w/2, y + 35);
+
+    // 状态指示灯
+    ctx.beginPath();
+    ctx.fillStyle = '#38b000';
+    ctx.arc(x + w/2, y + h - 12, 5, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawFirewallRect(ctx, x, y, w, h, label) {
+    // 边框（金色）
+    ctx.strokeStyle = '#f9c74f';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, w, h);
+
+    // 填充背景
+    ctx.fillStyle = '#16213e';
+    ctx.fillRect(x + 3, y + 3, w - 6, h - 6);
+
+    // 防火墙图标
+    ctx.fillStyle = '#f9c74f';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('FW', x + w/2, y + 30);
+
+    // 标签
+    ctx.fillStyle = '#f9c74f';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(label, x + w/2, y + 55);
+}
+
+function drawFlowArrow(ctx, x, y) {
+    ctx.fillStyle = '#f9c74f';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 10, y + 5);
+    ctx.lineTo(x, y + 10);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function stopCanvasAnimation() {
+    animationRunning = false;
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    if (gaugeAnimationId) {
+        cancelAnimationFrame(gaugeAnimationId);
+        gaugeAnimationId = null;
+    }
+}
+
+function updateCanvasAnimationData(data) {
+    bandwidthData = data;
+    currentProtocol = document.getElementById('bw-protocol').value;
+
+    // 更新粒子颜色
+    particles.forEach(p => {
+        p.color = currentProtocol === 'tcp' ? '#00a896' : '#ff6b35';
+    });
+}
+
+// ========== Canvas仪表盘动画 ==========
+function animateGauge() {
+    if (!animationRunning) return;
+
+    const ctx = gaugeCtx;
+    const width = gaugeCanvas.width;
+    const height = gaugeCanvas.height;
+    const centerX = width / 2;
+    const centerY = height - 50;
+    const radius = Math.min(width, height) / 2 - 30;
+
+    // 清空画布
+    ctx.clearRect(0, 0, width, height);
+
+    // 绘制背景
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, width, height);
+
+    // 绘制仪表盘底座
+    drawGaugeBase(ctx, centerX, centerY, radius);
+
+    // 计算目标角度（带宽映射到角度）
+    gaugeTargetAngle = mapBandwidthToAngle(bandwidthData.instant_speed, 200);
+
+    // 平滑过渡
+    gaugeAngle += (gaugeTargetAngle - gaugeAngle) * 0.08;
+
+    // 绘制指针
+    drawGaugePointer(ctx, centerX, centerY, radius, gaugeAngle);
+
+    // 绘制数值
+    drawGaugeValues(ctx, centerX, centerY, radius);
+
+    gaugeAnimationId = requestAnimationFrame(animateGauge);
+}
+
+function drawGaugeBase(ctx, centerX, centerY, radius) {
+    // 外圈弧
+    ctx.beginPath();
+    ctx.strokeStyle = '#f9c74f';
+    ctx.lineWidth = 3;
+    ctx.arc(centerX, centerY, radius, Math.PI * 0.75, Math.PI * 2.25, false);
+    ctx.stroke();
+
+    // 内圈背景
+    ctx.beginPath();
+    ctx.fillStyle = '#16213e';
+    ctx.arc(centerX, centerY, radius - 15, Math.PI * 0.75, Math.PI * 2.25, false);
+    ctx.lineTo(centerX, centerY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 刻度线
+    for (let i = 0; i <= 10; i++) {
+        const angle = Math.PI * 0.75 + (Math.PI * 1.5) * (i / 10);
+        const innerR = radius - 25;
+        const outerR = radius - 5;
+
+        ctx.beginPath();
+        ctx.strokeStyle = i % 2 === 0 ? '#ffffff' : '#6c6c6c';
+        ctx.lineWidth = i % 2 === 0 ? 2 : 1;
+
+        const x1 = centerX + Math.cos(angle) * innerR;
+        const y1 = centerY + Math.sin(angle) * innerR;
+        const x2 = centerX + Math.cos(angle) * outerR;
+        const y2 = centerY + Math.sin(angle) * outerR;
+
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        // 刻度数字
+        if (i % 2 === 0) {
+            const textR = radius - 40;
+            const textX = centerX + Math.cos(angle) * textR;
+            const textY = centerY + Math.sin(angle) * textR;
+
+            ctx.fillStyle = '#a0a0a0';
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText((i * 20).toString(), textX, textY);
+        }
+    }
+
+    // 绘制颜色带（低-中-高）
+    // 低速区域（绿色）
+    ctx.beginPath();
+    ctx.strokeStyle = '#38b000';
+    ctx.lineWidth = 8;
+    ctx.arc(centerX, centerY, radius - 8, Math.PI * 0.75, Math.PI * 1.05, false);
+    ctx.stroke();
+
+    // 中速区域（黄色）
+    ctx.beginPath();
+    ctx.strokeStyle = '#f9c74f';
+    ctx.lineWidth = 8;
+    ctx.arc(centerX, centerY, radius - 8, Math.PI * 1.05, Math.PI * 1.65, false);
+    ctx.stroke();
+
+    // 高速区域（红色）
+    ctx.beginPath();
+    ctx.strokeStyle = '#d00000';
+    ctx.lineWidth = 8;
+    ctx.arc(centerX, centerY, radius - 8, Math.PI * 1.65, Math.PI * 2.25, false);
+    ctx.stroke();
+}
+
+function drawGaugePointer(ctx, centerX, centerY, radius, angle) {
+    const rad = angle * Math.PI / 180;
+
+    // 指针阴影
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0, 201, 177, 0.3)';
+    ctx.lineWidth = 5;
+
+    const pointerLength = radius - 30;
+    const x = centerX + Math.cos(rad) * pointerLength;
+    const y = centerY + Math.sin(rad) * pointerLength;
+
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    // 指针主体
+    ctx.beginPath();
+    ctx.strokeStyle = '#00c9b1';
+    ctx.lineWidth = 3;
+
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+
+    // 指针中心圆
+    ctx.beginPath();
+    ctx.fillStyle = '#00c9b1';
+    ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 中心圆边框
+    ctx.beginPath();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function drawGaugeValues(ctx, centerX, centerY, radius) {
+    // 当前速度
+    ctx.fillStyle = '#00c9b1';
+    ctx.font = 'bold 20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(bandwidthData.instant_speed.toFixed(1) + ' Mbps', centerX, centerY - 25);
+
+    // 单位标签
+    ctx.fillStyle = '#a0a0a0';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('当前带宽', centerX, centerY - 5);
+
+    // 目标速度（UDP时显示）
+    if (currentProtocol === 'udp') {
+        const targetBandwidth = parseInt(document.getElementById('bw-bandwidth').value) || 100;
+        ctx.fillStyle = '#ff6b35';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('目标: ' + targetBandwidth + ' Mbps', centerX, centerY + 15);
+    }
+}
+
+function mapBandwidthToAngle(bandwidthMbps, maxBandwidth) {
+    // -135度 (0 Mbps) 到 135度 (maxBandwidth)
+    const angleRange = 270;
+    const normalized = Math.min(bandwidthMbps / maxBandwidth, 1);
+    return -135 + normalized * angleRange;
+}
+
+// ========== 事件监听 ==========
+document.getElementById('bw-user-identifier').addEventListener('input', loadMyAgents);
+
+// 页面加载时初始化Canvas静态显示
+window.addEventListener('load', function() {
+    // 预初始化Canvas（静态显示）
+    flowCanvas = document.getElementById('bw-flow-canvas');
+    gaugeCanvas = document.getElementById('bw-gauge-canvas');
+
+    // 设置初始尺寸
+    const flowContainer = flowCanvas.parentElement;
+    flowCanvas.width = Math.min(flowContainer.clientWidth - 32, 800);
+    flowCanvas.height = 200;
+    gaugeCanvas.width = 400;
+    gaugeCanvas.height = 250;
+
+    flowCtx = flowCanvas.getContext('2d');
+    gaugeCtx = gaugeCanvas.getContext('2d');
+
+    // 绘制初始静态Canvas
+    drawStaticCanvas();
+});
+
+function drawStaticCanvas() {
+    // 绘制静态流动Canvas
+    const ctx = flowCtx;
+    const width = flowCanvas.width;
+    const height = flowCanvas.height;
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, width, height);
+
+    drawAgentRect(ctx, 50, height/2 - 35, 70, 70, 'Server', '#00a896', 'Server');
+    drawFirewallRect(ctx, width/2 - 40, height/2 - 45, 80, 90, '防火墙');
+    drawAgentRect(ctx, width - 120, height/2 - 35, 70, 70, 'Client', '#ff6b35', 'Client');
+
+    // 连接线
+    ctx.strokeStyle = '#f9c74f';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(120, height/2);
+    ctx.lineTo(width/2 - 40, height/2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(width/2 + 40, height/2);
+    ctx.lineTo(width - 120, height/2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#6c6c6c';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('等待测试启动...', width/2, height - 15);
+
+    // 绘制静态仪表盘
+    const gctx = gaugeCtx;
+    const gwidth = gaugeCanvas.width;
+    const gheight = gaugeCanvas.height;
+    const centerX = gwidth / 2;
+    const centerY = gheight - 50;
+    const radius = Math.min(gwidth, gheight) / 2 - 30;
+
+    gctx.fillStyle = '#1a1a2e';
+    gctx.fillRect(0, 0, gwidth, gheight);
+
+    drawGaugeBase(gctx, centerX, centerY, radius);
+    drawGaugePointer(gctx, centerX, centerY, radius, -135);
+
+    gctx.fillStyle = '#6c6c6c';
+    gctx.font = 'bold 16px sans-serif';
+    gctx.textAlign = 'center';
+    gctx.fillText('0.0 Mbps', centerX, centerY - 25);
+
+    gctx.fillStyle = '#a0a0a0';
+    gctx.font = '12px sans-serif';
+    gctx.fillText('等待数据', centerX, centerY - 5);
+}
+
+// 窗口大小变化时重绘Canvas
+window.addEventListener('resize', function() {
+    if (flowCanvas && flowCtx) {
+        const flowContainer = flowCanvas.parentElement;
+        flowCanvas.width = Math.min(flowContainer.clientWidth - 32, 800);
+
+        if (!animationRunning) {
+            drawStaticCanvas();
+        }
+    }
+});
+</script>
+{% endblock %}
