@@ -1,0 +1,67 @@
+Looking in indexes: https://mirrors.aliyun.com/pypi/simple/
+Collecting channels
+  Downloading https://mirrors.aliyun.com/pypi/packages/16/34/c32915288b7ef482377b6adc401192f98c6a99b3a145423d3b8aed807898/channels-4.3.2-py3-none-any.whl (31 kB)
+Collecting daphne
+  Downloading https://mirrors.aliyun.com/pypi/packages/01/34/6171ab34715ed210bcd6c2b38839cc792993cff4fe2493f50bc92b0086a0/daphne-4.2.1-py3-none-any.whl (29 kB)
+Requirement already satisfied: Django>=4.2 in D:\apps\python\Lib\site-packages (from channels) (5.1.2)
+Collecting asgiref<4,>=3.9.0 (from channels)
+  Downloading https://mirrors.aliyun.com/pypi/packages/5c/0a/a72d10ed65068e115044937873362e6e32fab1b7dce0046aeb224682c989/asgiref-3.11.1-py3-none-any.whl (24 kB)
+Collecting autobahn>=22.4.2 (from daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/e4/cb/47647ff140f2b8ef80aa689451f3f1076404c115d79310f49477143410dc/autobahn-25.12.2-cp312-cp312-win_amd64.whl (2.2 MB)
+     ---------------------------------------- 2.2/2.2 MB 518.3 kB/s  0:00:04
+Requirement already satisfied: twisted>=22.4 in D:\apps\python\Lib\site-packages (from twisted[tls]>=22.4->daphne) (24.7.0)
+Collecting cbor2>=5.2.0 (from autobahn>=22.4.2->daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/c4/e4/f1e480dbe8c11f5edf86c123adc25cfaf2eea1e80740da99e9cef735ae8f/cbor2-6.1.1-cp312-cp312-win_amd64.whl (300 kB)
+Requirement already satisfied: cffi>=2.0.0 in C:\Users\zhangc\AppData\Roaming\Python\Python312\site-packages (from autobahn>=22.4.2->daphne) (2.0.0)
+Requirement already satisfied: cryptography>=3.4.6 in C:\Users\zhangc\AppData\Roaming\Python\Python312\site-packages (from autobahn>=22.4.2->daphne) (46.0.3)
+Requirement already satisfied: hyperlink>=21.0.0 in D:\apps\python\Lib\site-packages (from autobahn>=22.4.2->daphne) (21.0.0)
+Collecting msgpack>=1.0.2 (from autobahn>=22.4.2->daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/8c/ec/d431eb7941fb55a31dd6ca3404d41fbb52d99172df2e7707754488390910/msgpack-1.1.2-cp312-cp312-win_amd64.whl (72 kB)
+Collecting py-ubjson>=0.16.1 (from autobahn>=22.4.2->daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/1d/c7/28220d37e041fe1df03e857fe48f768dcd30cd151480bf6f00da8713214a/py-ubjson-0.16.1.tar.gz (50 kB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+Collecting txaio>=25.12.2 (from autobahn>=22.4.2->daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/50/05/bdb6318120cac9bf97779674f49035e0595d894b42d4c43b60637bafdb1f/txaio-25.12.2-py3-none-any.whl (31 kB)
+Collecting ujson>=4.0.2 (from autobahn>=22.4.2->daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/35/2a/7ce3b6fda10d05b79a245db03405734b521ba3da6c377f173b018dce6d4e/ujson-5.12.1-cp312-cp312-win_amd64.whl (45 kB)
+Requirement already satisfied: pycparser in D:\apps\python\Lib\site-packages (from cffi>=2.0.0->autobahn>=22.4.2->daphne) (2.22)
+Requirement already satisfied: sqlparse>=0.3.1 in D:\apps\python\Lib\site-packages (from Django>=4.2->channels) (0.5.1)
+Requirement already satisfied: tzdata in D:\apps\python\Lib\site-packages (from Django>=4.2->channels) (2024.2)
+Requirement already satisfied: idna>=2.5 in D:\apps\python\Lib\site-packages (from hyperlink>=21.0.0->autobahn>=22.4.2->daphne) (3.7)
+Requirement already satisfied: attrs>=21.3.0 in D:\apps\python\Lib\site-packages (from twisted>=22.4->twisted[tls]>=22.4->daphne) (23.2.0)
+Requirement already satisfied: automat>=0.8.0 in D:\apps\python\Lib\site-packages (from twisted>=22.4->twisted[tls]>=22.4->daphne) (22.10.0)
+Requirement already satisfied: constantly>=15.1 in D:\apps\python\Lib\site-packages (from twisted>=22.4->twisted[tls]>=22.4->daphne) (23.10.4)
+Requirement already satisfied: incremental>=24.7.0 in D:\apps\python\Lib\site-packages (from twisted>=22.4->twisted[tls]>=22.4->daphne) (24.7.2)
+Requirement already satisfied: typing-extensions>=4.2.0 in D:\apps\python\Lib\site-packages (from twisted>=22.4->twisted[tls]>=22.4->daphne) (4.15.0)
+Requirement already satisfied: zope-interface>=5 in D:\apps\python\Lib\site-packages (from twisted>=22.4->twisted[tls]>=22.4->daphne) (7.0.1)
+Requirement already satisfied: six in D:\apps\python\Lib\site-packages (from automat>=0.8.0->twisted>=22.4->twisted[tls]>=22.4->daphne) (1.17.0)
+Requirement already satisfied: setuptools>=61.0 in D:\apps\python\Lib\site-packages (from incremental>=24.7.0->twisted>=22.4->twisted[tls]>=22.4->daphne) (78.1.0)
+Requirement already satisfied: pyopenssl>=21.0.0 in D:\apps\python\Lib\site-packages (from twisted[tls]>=22.4->daphne) (24.2.1)
+Requirement already satisfied: service-identity>=18.1.0 in D:\apps\python\Lib\site-packages (from twisted[tls]>=22.4->daphne) (24.1.0)
+Collecting cryptography>=3.4.6 (from autobahn>=22.4.2->daphne)
+  Downloading https://mirrors.aliyun.com/pypi/packages/87/5c/3dab83cc4aba1f4b0e733e3f0c3e7d4386440d660ba5b1e3ff995feb734d/cryptography-43.0.3-cp39-abi3-win_amd64.whl (3.1 MB)
+     ---------------------------------------- 3.1/3.1 MB 410.0 kB/s  0:00:07
+Requirement already satisfied: pyasn1 in D:\apps\python\Lib\site-packages (from service-identity>=18.1.0->twisted[tls]>=22.4->daphne) (0.6.1)
+Requirement already satisfied: pyasn1-modules in D:\apps\python\Lib\site-packages (from service-identity>=18.1.0->twisted[tls]>=22.4->daphne) (0.4.1)
+Building wheels for collected packages: py-ubjson
+  Building wheel for py-ubjson (pyproject.toml): started
+  Building wheel for py-ubjson (pyproject.toml): finished with status 'done'
+  Created wheel for py-ubjson: filename=py_ubjson-0.16.1-cp312-cp312-win_amd64.whl size=41525 sha256=5ae27191b962ae39dd2c12a6c5a5852ca60c0bf57595c4839bf43417479d2a97
+  Stored in directory: c:\users\zhangc\appdata\local\pip\cache\wheels\06\a1\59\1f05c93ea492dc199706c5de78b4eefadc48e8f50624794ff4
+Successfully built py-ubjson
+Installing collected packages: py-ubjson, ujson, txaio, msgpack, cbor2, asgiref, cryptography, channels, autobahn, daphne
+  Attempting uninstall: asgiref
+    Found existing installation: asgiref 3.8.1
+    Uninstalling asgiref-3.8.1:
+      Successfully uninstalled asgiref-3.8.1
+  Attempting uninstall: cryptography
+    Found existing installation: cryptography 46.0.3
+    Uninstalling cryptography-46.0.3:
+      Successfully uninstalled cryptography-46.0.3
+
+Successfully installed asgiref-3.11.1 autobahn-25.12.2 cbor2-6.1.1 channels-4.3.2 cryptography-42.0.7 daphne-4.2.1 msgpack-1.1.2 py-ubjson-0.16.1 txaio-25.12.2 ujson-5.12.1
