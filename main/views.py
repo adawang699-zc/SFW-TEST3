@@ -4554,15 +4554,15 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
             exec_cmd += f' --end-time "{end_time}"'
 
         output_file = f'/tmp/log_gen_{task_id}.out'
-        # nohup 后台执行 + echo PID
-        nohup_cmd = f'nohup {exec_cmd} > {output_file} 2>&1 &\necho PID=$!'
+        # 后台执行 + disown（替代 nohup）+ echo PID
+        bg_cmd = f'{exec_cmd} > {output_file} 2>&1 &\ndisown\necho PID=$!'
 
         _update_task_output(task_id, f'开始执行日志生成...\n')
         _update_task_output(task_id, f'表名: {table_name}, 条数: {row_count}\n')
         _update_task_output(task_id, f'预估时间: {_estimate_time(row_count)} 分钟\n')
         _update_task_output(task_id, f'命令: {exec_cmd}\n\n')
 
-        out = _exec_backend_cmd(chan, nohup_cmd, wait_time=2)
+        out = _exec_backend_cmd(chan, bg_cmd, wait_time=2)
         import re
         pid_match = re.search(r'PID=(\d+)', out)
         pid = pid_match.group(1) if pid_match else ''
