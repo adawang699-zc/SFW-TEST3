@@ -4401,11 +4401,12 @@ def _estimate_time(row_count):
     """预估执行时间（分钟），非线性增长"""
     base = 10  # 100W ~ 10min
     if row_count <= 1000000:
-        return int(base * (row_count / 1000000))
+        est = base * (row_count / 1000000)
     else:
         # 200W 约 25min，非线性
         ratio = row_count / 1000000
-        return int(base * ratio * (1 + 0.25 * (ratio - 1)))
+        est = base * ratio * (1 + 0.25 * (ratio - 1))
+    return max(1, int(est))
 
 
 def _check_ssh_connectivity(ip, port=22, user='admin', password='', timeout=10):
@@ -4507,7 +4508,11 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         port = int(device.get('port', 22))
         user = device.get('user', 'admin')
         password = device.get('password', '')
-        backend_password = device.get('backend_password', '') or DEFAULT_FIREWALL_BACKEND_PASSWORD
+        from .device_utils import get_backend_password
+        backend_password = get_backend_password(
+            device.get('device_type', 'ic_firewall'),
+            device.get('backend_password', '')
+        )
 
         import paramiko
 
