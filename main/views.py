@@ -5208,7 +5208,8 @@ def _parse_radius_accounts(users_content):
                         idx += 1
                     if idx < len(parts):
                         password = parts[idx].strip('"').strip("'")
-            accounts.append({'username': username, 'password': password})
+            if password:
+                accounts.append({'username': username, 'password': password})
     return accounts
 
 
@@ -5291,8 +5292,11 @@ def api_auth_detect(request):
                 if not base_dn:
                     base_dn = line.split(None, 1)[-1].strip() if len(line.split(None, 1)) > 1 else ''
 
+        # 修正 uri: 0.0.0.0 替换为 127.0.0.1
+        if uri in ('ldap://0.0.0.0', 'ldap://0.0.0.0:'):
+            uri = 'ldap://127.0.0.1'
         result['ldap']['config'] = {
-            'uri': uri or 'ldap://localhost',
+            'uri': uri or 'ldap://127.0.0.1',
             'port': '389',
             'base_dn': base_dn or 'dc=tdhx,dc=local',
             'admin_dn': olc_root_dn or 'cn=admin,dc=tdhx,dc=local',
@@ -5537,9 +5541,11 @@ def api_auth_ldap_status(request):
         if line.strip().startswith('URI') or line.strip().startswith('uri'):
             uri = line.split(None, 1)[-1] if len(line.split(None, 1)) > 1 else ''
 
+    if uri in ('ldap://0.0.0.0', 'ldap://0.0.0.0:'):
+        uri = 'ldap://127.0.0.1'
     result = {
         'running': running,
-        'uri': uri or 'ldap://localhost',
+        'uri': uri or 'ldap://127.0.0.1',
         'port': '389',
         'base_dn': base_dn or 'dc=tdhx,dc=local',
         'admin_dn': olc_root_dn or 'cn=admin,dc=tdhx,dc=local',
