@@ -3,6 +3,7 @@ WebSocket Consumers for bandwidth test
 """
 import json
 import logging
+from typing import Any, Dict
 from channels.generic.websocket import AsyncWebsocketConsumer
 
 logger = logging.getLogger('djangoProject')
@@ -11,7 +12,7 @@ logger = logging.getLogger('djangoProject')
 class BandwidthTestConsumer(AsyncWebsocketConsumer):
     """带宽测试WebSocket消费者"""
 
-    async def connect(self):
+    async def connect(self) -> None:
         """WebSocket连接"""
         test_id = self.scope['url_route']['kwargs']['test_id']
         self.test_id = test_id
@@ -26,16 +27,17 @@ class BandwidthTestConsumer(AsyncWebsocketConsumer):
         await self.accept()
         logger.info(f"WebSocket连接建立: test_id={test_id}")
 
-    async def disconnect(self, close_code):
+    async def disconnect(self, close_code: int) -> None:
         """WebSocket断开"""
-        # 离开频道组
-        await self.channel_layer.group_discard(
-            self.group_name,
-            self.channel_name
-        )
-        logger.info(f"WebSocket断开: test_id={self.test_id}, code={close_code}")
+        # 离开频道组（添加安全检查）
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+            logger.info(f"WebSocket断开: test_id={self.test_id}, code={close_code}")
 
-    async def receive(self, text_data):
+    async def receive(self, text_data: str) -> None:
         """接收客户端消息"""
         try:
             data = json.loads(text_data)
@@ -44,18 +46,34 @@ class BandwidthTestConsumer(AsyncWebsocketConsumer):
             if action == 'stop':
                 # 停止测试
                 logger.info(f"收到停止请求: test_id={self.test_id}")
+            else:
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'message': f'未知操作: {action}'
+                }))
+                logger.warning(f"未知操作: {action}")
 
         except json.JSONDecodeError:
             logger.error(f"无效的JSON数据: {text_data}")
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': '无效的JSON格式'
+            }))
+        except Exception as e:
+            logger.exception(f"处理消息异常: {e}")
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': '服务器内部错误'
+            }))
 
-    async def iperf_data_message(self, event):
+    async def iperf_data_message(self, event: Dict[str, Any]) -> None:
         """推送iperf数据"""
         await self.send(text_data=json.dumps(event['data']))
 
-    async def test_complete_message(self, event):
+    async def test_complete_message(self, event: Dict[str, Any]) -> None:
         """推送测试完成"""
         await self.send(text_data=json.dumps(event['data']))
 
-    async def error_message(self, event):
+    async def error_message(self, event: Dict[str, Any]) -> None:
         """推送错误消息"""
         await self.send(text_data=json.dumps(event['data']))
