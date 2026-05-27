@@ -5197,13 +5197,20 @@ def _parse_radius_accounts(users_content):
         parts = line.split()
         if len(parts) >= 1:
             username = parts[0]
+            # 跳过 NON-username 条目（如 DEFAULT 或属性名开头）
+            if username.upper() in ('DEFAULT',) or username.startswith('.'):
+                continue
             password = ''
             for i, p in enumerate(parts):
                 if p.lower() in ('cleartext-password', 'crypt-password', 'md5-password',
                                   'sha-password', 'ssha-password', 'nt-password',
                                   'lm-password', 'auth-type'):
-                    pw = parts[i + 1] if i + 1 < len(parts) else ''
-                    password = pw.strip('"').strip("'").strip(':=')
+                    # 处理 ":= value" 格式
+                    idx = i + 1
+                    if idx < len(parts) and parts[idx] in (':=', '=', ':=/'):
+                        idx += 1
+                    if idx < len(parts):
+                        password = parts[idx].strip('"').strip("'")
             accounts.append({'username': username, 'password': password})
     return accounts
 
@@ -5282,10 +5289,10 @@ def api_auth_detect(request):
         uri = ''
         for line in ldap_conf_content.splitlines():
             if line.strip().startswith('URI') or line.strip().startswith('uri'):
-                uri = line.split(None, 1)[-1] if len(line.split(None, 1)) > 1 else ''
+                uri = line.split(None, 1)[-1].strip() if len(line.split(None, 1)) > 1 else ''
             elif line.strip().startswith('BASE') or line.strip().startswith('base'):
                 if not base_dn:
-                    base_dn = line.split(None, 1)[-1] if len(line.split(None, 1)) > 1 else ''
+                    base_dn = line.split(None, 1)[-1].strip() if len(line.split(None, 1)) > 1 else ''
 
         result['ldap']['config'] = {
             'uri': uri or 'ldap://localhost',
