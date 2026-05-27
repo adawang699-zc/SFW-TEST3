@@ -71,18 +71,13 @@ def main():
     file_size = params['file_size_gb'] * 1024 * 1024 * 1024
     file_count = params['file_count']
 
-    print("Table:    %s" % table_name)
-    print("Date:     %s" % start_date)
-    print("Days:     %d" % days)
-    print("FileSize: %d GB" % params['file_size_gb'])
-    print("Count:    %d files/day" % file_count)
-    print()
+    # 精简输出：一行参数概要
+    print("%s, %s, %d天, %dGBx%d个/天" % (
+        table_name, start_date, days, params['file_size_gb'], file_count))
 
-    # Ensure archive root exists
     if not os.path.exists(ROOT):
         os.makedirs(ROOT)
 
-    # Connect to SQLite index
     db_path = os.path.join(ROOT, 'archive_index.db')
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
@@ -97,16 +92,13 @@ def main():
     """)
     conn.commit()
 
-    # Determine starting seq
     next_seq = get_next_seq(conn, table_name)
-    print("Seq start: %d" % next_seq)
-    print()
+    first_seq = next_seq
 
     total_created = 0
     total_skipped = 0
 
     for day_offset in range(days):
-        # Calculate date for this day
         dt = time.strptime(start_date, '%Y_%m_%d')
         day_ts = int(time.mktime(dt)) + day_offset * 86400
         day_dt = time.localtime(day_ts)
@@ -123,7 +115,6 @@ def main():
             file_path = os.path.join(dir_path, file_name)
 
             if os.path.exists(file_path):
-                print("skip: %s_%s/%s (exists)" % (table_name, date_dir, file_name))
                 total_skipped += 1
                 continue
 
@@ -147,16 +138,17 @@ def main():
             ))
 
             total_created += 1
-            print("created: %s/%s (seq=%d, %d GB)" % (date_dir, file_name, seq, params['file_size_gb']))
 
         conn.commit()
 
     conn.close()
 
     total_size_gb = total_created * params['file_size_gb']
-    print()
-    print("Done, created %d files (skipped %d), total logical size %d GB" % (
-        total_created, total_skipped, total_size_gb))
+    last_seq = first_seq + total_created - 1
+    if total_created > 0:
+        print("seq: %d-%d, created %d files, %d GB" % (first_seq, last_seq, total_created, total_size_gb))
+    if total_skipped > 0:
+        print("skipped: %d files (already exist)" % total_skipped)
 
 
 if __name__ == '__main__':

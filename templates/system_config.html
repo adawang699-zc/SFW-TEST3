@@ -28,7 +28,7 @@
 <!-- ==================== 日志管理 ==================== -->
 <div class="tab-content" id="tab-log_manage">
     <div class="card">
-        <div class="card-header">日志管理 - 生成日志文件</div>
+        <div class="card-header">批量生成日志</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
             <!-- 左侧：参数配置 -->
             <div>
@@ -107,11 +107,10 @@
             </div>
         </div>
     </div>
-</div>
 
-    <!-- ==================== 日志管理 - 生成历史日志 ==================== -->
+    <!-- ==================== 生成历史日志 ==================== -->
     <div class="card" style="margin-top: 16px;">
-        <div class="card-header">日志管理 - 生成历史日志</div>
+        <div class="card-header">生成历史日志</div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
             <!-- 左侧：归档参数 -->
             <div>
@@ -200,6 +199,7 @@
             </div>
         </div>
     </div>
+</div>
 
 <!-- ==================== 网口管理 ==================== -->
 <div class="tab-content" id="tab-port_manage" style="display: none;">
@@ -334,6 +334,24 @@ function switchTab(tabId) {
     }
 }
 
+// ========== 保存/恢复批量生成参数 ==========
+function saveLogFormState() {
+    ['log_device', 'log_table_name', 'log_row_count', 'log_start_time', 'log_end_time'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) sessionStorage.setItem(id, el.value);
+    });
+}
+
+function restoreLogFormState() {
+    ['log_device', 'log_table_name', 'log_row_count', 'log_start_time', 'log_end_time'].forEach(id => {
+        const val = sessionStorage.getItem(id);
+        if (val) {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+        }
+    });
+}
+
 // ========== 时间默认值 ==========
 function setDefaultTimeRange() {
     const now = new Date();
@@ -348,14 +366,21 @@ function setDefaultTimeRange() {
 document.addEventListener('DOMContentLoaded', function() {
     // 加载设备列表和表映射
     loadDevicesAndTables();
-    // 设置时间默认值
-    setDefaultTimeRange();
+    // 恢复或设置默认值
+    restoreLogFormState();
+    // 如果没有 sessionStorage 值（首次访问），设置时间默认
+    if (!sessionStorage.getItem('log_start_time')) setDefaultTimeRange();
     setDefaultArchiveDate();
     // 归档参数变化时更新统计
     ['archive_file_size', 'archive_file_count', 'archive_days'].forEach(id => {
         document.getElementById(id).addEventListener('input', updateArchiveStats);
     });
     document.getElementById('archive_date').addEventListener('input', updateArchiveDateDisplay);
+    // 表单输入变化时保存
+    ['log_device', 'log_table_name', 'log_row_count', 'log_start_time', 'log_end_time'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', saveLogFormState);
+    });
     // 检查是否有未完成的任务
     if (logTaskId) {
         startPolling();
@@ -589,7 +614,15 @@ function updateTaskUI(task) {
 
     // 输出内容
     if (task.output) {
-        resultDiv.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 8px;">' +
+        let info = '';
+        if (task.device_ip) {
+            info = '<span style="color: var(--primary);">' + task.device_ip + '</span>';
+            if (task.table_name) info += ' | ' + task.table_name;
+            if (task.row_count) info += ' | ' + Number(task.row_count).toLocaleString() + '条';
+            info = '<div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 6px;">' + info + '</div>';
+        }
+        resultDiv.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">' +
+            info +
             '输出 (' + new Date().toLocaleTimeString() + '):</div>' +
             '<pre style="margin: 0; white-space: pre-wrap;">' + escapeHtml(task.output) + '</pre>';
         resultDiv.scrollTop = resultDiv.scrollHeight;
@@ -816,7 +849,14 @@ function updateArchiveUI(task) {
     badge.textContent = statusText;
 
     if (task.output) {
-        resultDiv.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 8px;">' +
+        let info = '';
+        if (task.device_ip) {
+            info = '<span style="color: var(--primary);">' + task.device_ip + '</span>';
+            if (task.table_name) info += ' | ' + task.table_name;
+            info = '<div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 6px;">' + info + '</div>';
+        }
+        resultDiv.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 4px;">' +
+            info +
             '输出 (' + new Date().toLocaleTimeString() + '):</div>' +
             '<pre style="margin: 0; white-space: pre-wrap;">' + escapeHtml(task.output) + '</pre>';
         resultDiv.scrollTop = resultDiv.scrollHeight;

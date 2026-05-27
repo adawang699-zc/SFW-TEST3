@@ -4514,11 +4514,14 @@ def _clean_cat_output(raw_output):
         # 跳过 cat 命令回显
         if s.startswith('cat ') and ('/tmp/' in s or '.out' in s or '.txt' in s):
             continue
-        # 跳过 shell 提示符
-        if '[root' in s and (']$ ' in s or ']# ' in s):
+        # 跳过 shell 提示符（如 [root@panguOS ~]$）
+        if s.startswith('[root') and ('~]$' in s or '~]#' in s):
             continue
         # 跳过只有路径的行（如 /dev/null）
         if s == '/dev/null':
+            continue
+        # 跳过 Python 2 空 print() 输出的 () 行
+        if s == '()':
             continue
         cleaned.append(line)
     result = '\n'.join(cleaned).strip()
@@ -4737,6 +4740,9 @@ def api_system_config_log_status(request):
             'status': task.get('status', 'unknown'),
             'output': task.get('output', ''),
             'error': task.get('error', ''),
+            'device_ip': task.get('device_ip', ''),
+            'table_name': task.get('table_name', ''),
+            'row_count': task.get('row_count', ''),
             'started_at': task.get('started_at'),
             'completed_at': task.get('completed_at'),
         }
