@@ -263,6 +263,8 @@ LOGGING = {
 
 # ========== Django Channels 配置 ==========
 
+ASGI_APPLICATION = 'djangoProject.asgi.application'
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels.layers.InMemoryChannelLayer',
