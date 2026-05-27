@@ -90,7 +90,7 @@
                         执行结果
                         <span id="taskStatusBadge" style="display: none; margin-left: 12px; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem;"></span>
                     </div>
-                    <div id="logResult" style="min-height: 200px; max-height: 400px; overflow-y: auto; background: #0a0a1a; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 1rem; white-space: pre-wrap;">
+                    <div id="logResult" style="min-height: 200px; max-height: 400px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap;">
                         <div style="color: var(--text-muted);">等待执行...</div>
                     </div>
                 </div>
@@ -108,6 +108,98 @@
         </div>
     </div>
 </div>
+
+    <!-- ==================== 日志管理 - 生成历史日志 ==================== -->
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-header">日志管理 - 生成历史日志</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <!-- 左侧：归档参数 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">防火墙设备</div>
+                    <div class="form-group">
+                        <label class="form-label">选择测试设备</label>
+                        <select class="form-input" id="archive_device">
+                            <option value="">-- 请选择防火墙设备 --</option>
+                        </select>
+                        <small style="color: var(--text-muted);">设备上执行归档脚本，默认表名 whitelist_log</small>
+                    </div>
+                </div>
+
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">归档参数</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">起始日期</label>
+                            <input type="text" class="form-input" id="archive_date" placeholder="YYYY_MM_DD">
+                            <small style="color: var(--text-muted);">格式如 2026_01_01，默认当天</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">天数</label>
+                            <input type="number" class="form-input" id="archive_days" value="1" min="1" max="365">
+                            <small style="color: var(--text-muted);">生成范围 1~365 天</small>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">文件大小</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="number" class="form-input" id="archive_file_size" value="50" min="1" max="1024" style="flex: 1;">
+                                <span style="color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap;">GB</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">每天文件个数</label>
+                            <input type="number" class="form-input" id="archive_file_count" value="8" min="1" max="100">
+                            <small style="color: var(--text-muted);">1~100 个/天</small>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; padding: 12px; background: rgba(0, 168, 150, 0.05); border-radius: 6px; border: 1px solid rgba(0, 168, 150, 0.15);">
+                        <div style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.8;">
+                            总大小: <strong id="archive_total_size" style="color: var(--primary);">400</strong> GB
+                            <span style="color: var(--text-muted);"> (= <span id="archive_file_size_display">50</span> GB × <span id="archive_count_display">8</span> 个/天 × <span id="archive_days_display">1</span> 天)</span>
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">
+                            路径: /data/log_archive/whitelist_log/<span id="archive_path_date">2026_05_27</span>/
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-primary" onclick="confirmAndGenerateArchive()" id="archiveGenBtn">
+                        <i class="fas fa-archive"></i> 生成历史日志
+                    </button>
+                    <button class="btn btn-warning" onclick="stopArchivePolling()" id="archiveStopBtn" style="display: none;">
+                        <i class="fas fa-stop"></i> 停止刷新
+                    </button>
+                </div>
+            </div>
+
+            <!-- 右侧：结果和说明 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">
+                        执行结果
+                        <span id="archiveStatusBadge" style="display: none; margin-left: 12px; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem;"></span>
+                    </div>
+                    <div id="archiveResult" style="min-height: 150px; max-height: 350px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap;">
+                        <div style="color: var(--text-muted);">等待执行...</div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0, 168, 150, 0.05); border-radius: 8px; padding: 16px; border: 1px solid rgba(0, 168, 150, 0.2);">
+                    <div style="color: var(--secondary); font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">使用说明</div>
+                    <ol style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 20px; line-height: 1.8;">
+                        <li>在防火墙上创建稀疏归档文件（不占用实际磁盘，只占逻辑大小）</li>
+                        <li>默认日志表 <strong style="color: var(--primary);">whitelist_log</strong>，文件存放于 <code style="font-size: 0.8rem;">/data/log_archive/</code></li>
+                        <li>归档文件通过 SQLite 索引管理（<code style="font-size: 0.8rem;">archive_index.db</code>），<strong style="color: var(--warning);">seq 从 900001 起自动递增</strong></li>
+                        <li>如果文件已存在则跳过，不会重复创建</li>
+                        <li>文件生成速度极快（稀疏文件，秒级完成），但注意合理控制总大小</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <!-- ==================== 网口管理 ==================== -->
 <div class="tab-content" id="tab-port_manage" style="display: none;">
@@ -258,6 +350,12 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDevicesAndTables();
     // 设置时间默认值
     setDefaultTimeRange();
+    setDefaultArchiveDate();
+    // 归档参数变化时更新统计
+    ['archive_file_size', 'archive_file_count', 'archive_days'].forEach(id => {
+        document.getElementById(id).addEventListener('input', updateArchiveStats);
+    });
+    document.getElementById('archive_date').addEventListener('input', updateArchiveDateDisplay);
     // 检查是否有未完成的任务
     if (logTaskId) {
         startPolling();
@@ -270,13 +368,16 @@ function loadDevicesAndTables() {
         .then(data => {
             if (!data.success) return;
 
-            // 设备下拉框
-            const deviceSel = document.getElementById('log_device');
-            (data.devices || []).forEach(d => {
-                const opt = document.createElement('option');
-                opt.value = d.id;
-                opt.textContent = d.name + ' (' + d.ip + ')';
-                deviceSel.appendChild(opt);
+            // 设备下拉框（两个卡片共享同一个设备列表）
+            ['log_device', 'archive_device'].forEach(selId => {
+                const sel = document.getElementById(selId);
+                if (!sel) return;
+                (data.devices || []).forEach(d => {
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = d.name + ' (' + d.ip + ')';
+                    sel.appendChild(opt);
+                });
             });
 
             // 表名下啦框
@@ -520,6 +621,216 @@ function downloadScript() {
             showToast('脚本下载失败: ' + (data.error || '未找到脚本文件'), 'error');
         }
     });
+}
+
+// ========== 历史日志归档 ==========
+let archiveTaskId = null;
+let archivePollingInterval = null;
+let archivePollingStopped = false;
+
+function updateArchiveStats() {
+    const size = parseInt(document.getElementById('archive_file_size').value) || 0;
+    const count = parseInt(document.getElementById('archive_file_count').value) || 0;
+    const days = parseInt(document.getElementById('archive_days').value) || 0;
+    const total = size * count * days;
+    document.getElementById('archive_total_size').textContent = total.toLocaleString();
+    document.getElementById('archive_file_size_display').textContent = size;
+    document.getElementById('archive_count_display').textContent = count;
+    document.getElementById('archive_days_display').textContent = days;
+}
+
+function updateArchiveDateDisplay() {
+    const dt = document.getElementById('archive_date').value;
+    document.getElementById('archive_path_date').textContent = dt || 'YYYY_MM_DD';
+}
+
+function setDefaultArchiveDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const dateStr = y + '_' + m + '_' + d;
+    document.getElementById('archive_date').value = dateStr;
+    document.getElementById('archive_path_date').textContent = dateStr;
+}
+
+function confirmAndGenerateArchive() {
+    const deviceId = document.getElementById('archive_device').value;
+    const dateStr = document.getElementById('archive_date').value.trim();
+    const days = parseInt(document.getElementById('archive_days').value);
+    const fileSize = parseInt(document.getElementById('archive_file_size').value);
+    const fileCount = parseInt(document.getElementById('archive_file_count').value);
+
+    if (!deviceId) { showToast('请选择防火墙设备', 'warning'); return; }
+    if (!/^\d{4}_\d{2}_\d{2}$/.test(dateStr)) { showToast('日期格式不正确，请使用 YYYY_MM_DD 格式', 'warning'); return; }
+    if (isNaN(days) || days < 1 || days > 365) { showToast('天数范围为 1~365', 'warning'); return; }
+    if (isNaN(fileSize) || fileSize < 1 || fileSize > 1024) { showToast('文件大小范围为 1~1024 GB', 'warning'); return; }
+    if (isNaN(fileCount) || fileCount < 1 || fileCount > 100) { showToast('每天文件个数范围为 1~100', 'warning'); return; }
+
+    const totalGB = days * fileCount * fileSize;
+    let msg = `生成历史归档日志？\n\n`;
+    msg += `起始日期: ${dateStr}\n`;
+    msg += `天数: ${days} 天\n`;
+    msg += `文件大小: ${fileSize} GB × ${fileCount} 个/天\n`;
+    msg += `总大小: ${totalGB.toLocaleString()} GB\n\n`;
+    msg += `路径: /data/log_archive/whitelist_log/${dateStr}/\n\n`;
+    msg += `确认执行？`;
+
+    showConfirmModal('确认生成历史日志', msg, function() { startArchiveGenerate(); }, '📦');
+}
+
+async function startArchiveGenerate() {
+    const btn = document.getElementById('archiveGenBtn');
+    const deviceId = document.getElementById('archive_device').value;
+    const dateStr = document.getElementById('archive_date').value.trim();
+    const days = parseInt(document.getElementById('archive_days').value);
+    const fileSize = parseInt(document.getElementById('archive_file_size').value);
+    const fileCount = parseInt(document.getElementById('archive_file_count').value);
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 启动中...';
+
+    try {
+        const resp = await fetch('/api/system-config/archive-generate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({
+                device_id: parseInt(deviceId),
+                date: dateStr,
+                days: days,
+                file_size_gb: fileSize,
+                file_count: fileCount,
+                table_name: 'whitelist_log'
+            })
+        });
+
+        const data = await resp.json();
+
+        if (data.success) {
+            archiveTaskId = data.task_id;
+            archivePollingStopped = false;
+            document.getElementById('archiveResult').innerHTML = '';
+            showToast(data.message, 'success');
+            addArchiveLog('任务已启动, task_id: ' + archiveTaskId, 'info');
+            addArchiveLog('预计生成 ' + (data.total_gb || 0).toLocaleString() + ' GB 稀疏文件', 'info');
+            document.getElementById('archiveStopBtn').style.display = 'inline-block';
+            startArchivePolling();
+        } else {
+            showToast(data.error || '启动失败', 'error');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-archive"></i> 生成历史日志';
+        }
+    } catch (e) {
+        showToast('请求异常: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-archive"></i> 生成历史日志';
+    }
+}
+
+function startArchivePolling() {
+    if (archivePollingInterval) clearInterval(archivePollingInterval);
+    if (!archiveTaskId) return;
+
+    document.getElementById('archiveStopBtn').style.display = 'inline-block';
+    document.getElementById('archiveGenBtn').disabled = true;
+    document.getElementById('archiveGenBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> 执行中...';
+
+    archivePollingInterval = setInterval(pollArchiveStatus, 3000);
+    pollArchiveStatus();
+}
+
+function stopArchivePolling() {
+    if (archivePollingInterval) {
+        clearInterval(archivePollingInterval);
+        archivePollingInterval = null;
+    }
+    archivePollingStopped = true;
+    document.getElementById('archiveStopBtn').style.display = 'none';
+    document.getElementById('archiveGenBtn').disabled = false;
+    document.getElementById('archiveGenBtn').innerHTML = '<i class="fas fa-archive"></i> 生成历史日志';
+    addArchiveLog('已停止状态刷新', 'warning');
+}
+
+async function pollArchiveStatus() {
+    if (!archiveTaskId || archivePollingStopped) return;
+
+    try {
+        const resp = await fetch('/api/system-config/log-status/?task_id=' + archiveTaskId);
+        const data = await resp.json();
+
+        if (!data.success) {
+            archiveTaskId = null;
+            stopArchivePolling();
+            showToast('任务状态查询失败', 'error');
+            return;
+        }
+
+        const task = data.task;
+        updateArchiveUI(task);
+
+        if (task.status === 'completed') {
+            archiveTaskId = null;
+            showToast('历史日志归档完成！', 'success');
+            document.getElementById('archiveGenBtn').disabled = false;
+            document.getElementById('archiveGenBtn').innerHTML = '<i class="fas fa-archive"></i> 生成历史日志';
+            document.getElementById('archiveStopBtn').style.display = 'none';
+            if (archivePollingInterval) {
+                clearInterval(archivePollingInterval);
+                archivePollingInterval = null;
+            }
+        } else if (task.status === 'failed') {
+            archiveTaskId = null;
+            showToast('归档失败: ' + (task.error || ''), 'error');
+            stopArchivePolling();
+        }
+    } catch (e) {
+        console.error('归档轮询失败:', e);
+    }
+}
+
+function updateArchiveUI(task) {
+    const resultDiv = document.getElementById('archiveResult');
+    const badge = document.getElementById('archiveStatusBadge');
+
+    let statusColor, statusText;
+    if (task.status === 'running' || task.status === 'starting') {
+        statusColor = 'var(--warning)';
+        statusText = '⏳ 执行中';
+    } else if (task.status === 'completed') {
+        statusColor = 'var(--success)';
+        statusText = '✅ 已完成';
+    } else if (task.status === 'failed') {
+        statusColor = 'var(--danger)';
+        statusText = '❌ 失败';
+    } else {
+        statusColor = 'var(--text-muted)';
+        statusText = task.status;
+    }
+
+    badge.style.display = 'inline-block';
+    badge.style.background = statusColor + '22';
+    badge.style.color = statusColor;
+    badge.textContent = statusText;
+
+    if (task.output) {
+        resultDiv.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 8px;">' +
+            '输出 (' + new Date().toLocaleTimeString() + '):</div>' +
+            '<pre style="margin: 0; white-space: pre-wrap;">' + escapeHtml(task.output) + '</pre>';
+        resultDiv.scrollTop = resultDiv.scrollHeight;
+    }
+}
+
+function addArchiveLog(message, type) {
+    const logs = document.getElementById('archiveResult');
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+
+    if (logs.querySelector('.text-muted') || logs.children.length === 0 || (logs.children.length === 1 && logs.textContent.trim() === '等待执行...')) logs.innerHTML = '';
+    logs.innerHTML += '<div style="color: ' + color + '; margin-bottom: 4px;"><small style="color: var(--text-muted);">[' + time + ']</small> ' + message + '</div>';
+    logs.scrollTop = logs.scrollHeight;
 }
 
 // ========== 工具函数 ==========

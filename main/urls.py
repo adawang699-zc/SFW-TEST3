@@ -142,6 +142,7 @@ urlpatterns = [
     path('api/system-config/log-generate/', views.api_system_config_log_generate, name='api_system_config_log_generate'),
     path('api/system-config/log-status/', views.api_system_config_log_status, name='api_system_config_log_status'),
     path('api/system-config/log-devices/', views.api_system_config_log_devices, name='api_system_config_log_devices'),
+    path('api/system-config/archive-generate/', views.api_system_config_archive_generate, name='api_system_config_archive_generate'),
 
     # ========== 授权管理 ==========
     path('license-management/', views.license_management, name='license_management'),

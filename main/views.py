@@ -4830,3 +4830,248 @@ def api_system_config_log_generate(request):
     except Exception as e:
         logger.exception(f"启动日志生成任务异常: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 历史日志归档 ==========
+
+def _get_archive_script_file():
+    """获取历史日志归档脚本路径"""
+    script_dir = _get_log_script_dir()
+    script_path = os.path.join(script_dir, 'log_archive.py')
+    if os.path.isfile(script_path):
+        return script_path
+    for f in _get_script_files():
+        if 'log_archive' in os.path.basename(f):
+            return f
+    return None
+
+
+def _execute_archive_task(task_id, device, date_str, days, file_size_gb, file_count, table_name):
+    """后台执行历史日志归档任务"""
+    tasks = _load_log_tasks()
+    task = tasks.get(task_id, {})
+    task['status'] = 'running'
+    task['started_at'] = time.time()
+    _save_log_tasks(tasks)
+
+    try:
+        script_path = _get_archive_script_file()
+        if not script_path:
+            raise Exception('归档脚本文件不存在，请检查 license/log_insert_py/log_archive.py')
+
+        ip = device.get('ip', '')
+        port = int(device.get('port', 22))
+        user = device.get('user', 'admin')
+        password = device.get('password', '')
+        from .device_utils import get_backend_password
+        backend_password = get_backend_password(device.get('device_type', 'ic_firewall'))
+
+        import paramiko
+        remote_dir = '/app/local/share/new_self_manage/'
+
+        # SSH 连接 + 进入 root 后台
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(ip, port=port, username=user, password=password, timeout=15)
+        _update_task_output(task_id, f'SSH 连接 {ip} 成功\n')
+
+        chan = _enter_backend_shell(ssh, backend_password)
+        _update_task_output(task_id, f'归档: {table_name}, {date_str}, {days}天, {file_size_gb}GB×{file_count}个/天\n')
+
+        _exec_backend_cmd(chan, 'mkdir -p /app/local/share/new_self_manage/', wait_time=1)
+        _exec_backend_cmd(chan, 'mkdir -p /data/tmp/', wait_time=0.5)
+
+        # SCP 拉取脚本
+        _update_task_output(task_id, '同步脚本...\n')
+        fname = os.path.basename(script_path)
+        remote_path = f'{remote_dir}{fname}'
+        scp_cmd = (
+            f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
+            f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{script_path} {remote_path}'
+        )
+        out = _exec_backend_cmd(chan, scp_cmd, wait_time=3)
+        if 'lost connection' in out.lower() or 'not found' in out.lower():
+            raise Exception(f'SCP 传输失败: {fname}\n{out[:500]}')
+        _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.5)
+
+        # 构建执行命令
+        exec_cmd = (
+            f'cd {remote_dir} && '
+            f'python {remote_path} '
+            f'--date "{date_str}" '
+            f'--days {days} '
+            f'--file-size {file_size_gb} '
+            f'--file-count {file_count} '
+            f'--table "{table_name}"'
+        )
+
+        output_file = f'/tmp/archive_gen_{task_id}.out'
+        bg_cmd = f'{exec_cmd} > {output_file} 2>&1 &'
+
+        _update_task_output(task_id, '执行中 (预计 1-2 min)...\n')
+
+        chan.send(bg_cmd + '\n')
+        time.sleep(1.5)
+        out = ''
+        while chan.recv_ready():
+            out += chan.recv(8192).decode('utf-8', errors='ignore')
+
+        import re
+        pid_match = re.search(r'\[\d+\]\s+(\d+)', out)
+        pid = pid_match.group(1) if pid_match else ''
+        task['pid'] = pid
+
+        _exec_backend_cmd(chan, 'disown', wait_time=0.5)
+        chan.close()
+        ssh.close()
+
+        _save_log_tasks({**_load_log_tasks(), task_id: task})
+        _update_task_output(task_id, f'PID: {pid}\n')
+
+        # 监控进度
+        while True:
+            time.sleep(5)
+            try:
+                poll_ssh = paramiko.SSHClient()
+                poll_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                poll_ssh.connect(ip, port=port, username=user, password=password, timeout=10)
+                poll_chan = _enter_backend_shell(poll_ssh, backend_password)
+
+                poll_out = _exec_backend_cmd(poll_chan, f'kill -0 {pid} 2>/dev/null && echo ALIVE || echo DEAD', wait_time=1)
+                is_alive = 'ALIVE' in poll_out
+
+                poll_out2 = _exec_backend_cmd(poll_chan, f'cat {output_file} 2>/dev/null', wait_time=1)
+
+                poll_chan.close()
+                poll_ssh.close()
+
+                if poll_out2.strip():
+                    task['output'] = poll_out2
+                    _save_log_tasks({**_load_log_tasks(), task_id: task})
+                    if 'Done' in poll_out2:
+                        break
+
+                if not is_alive:
+                    break
+            except Exception as e:
+                _update_task_output(task_id, f'轮询异常: {e}\n')
+                continue
+
+        # 获取最终输出
+        final_ssh = paramiko.SSHClient()
+        final_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        final_ssh.connect(ip, port=port, username=user, password=password, timeout=15)
+        final_chan = _enter_backend_shell(final_ssh, backend_password)
+
+        final_out = _exec_backend_cmd(final_chan, f'cat {output_file} 2>/dev/null', wait_time=2)
+        _exec_backend_cmd(final_chan, f'rm -f {output_file}', wait_time=0.5)
+
+        final_chan.close()
+        final_ssh.close()
+
+        task['output'] = final_out
+
+        if 'Done' in final_out:
+            task['status'] = 'completed'
+            task['completed_at'] = time.time()
+        else:
+            task['status'] = 'failed'
+            task['error'] = '归档未正常完成，请查看输出日志'
+
+        _save_log_tasks({**_load_log_tasks(), task_id: task})
+
+    except Exception as e:
+        logger.exception(f"归档任务异常: {e}")
+        import traceback
+        task['status'] = 'failed'
+        task['error'] = f'{type(e).__name__}: {e}'
+        task['output'] = task.get('output', '') + f'\n\n[错误] {type(e).__name__}: {e}\n{traceback.format_exc()}'
+        try:
+            _save_log_tasks({**_load_log_tasks(), task_id: task})
+        except Exception:
+            pass
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_system_config_archive_generate(request):
+    """历史日志归档 API - 后台执行
+
+    请求参数:
+        device_id: 测试设备 ID
+        date: 起始日期 (YYYY_MM_DD, 默认当天)
+        days: 天数 (默认 1)
+        file_size_gb: 每个文件大小 GB (默认 50)
+        file_count: 每天文件个数 (默认 8)
+        table_name: 日志表名 (默认 whitelist_log)
+    """
+    try:
+        data = json.loads(request.body)
+
+        device_id = data.get('device_id', '')
+        date_str = data.get('date', time.strftime('%Y_%m_%d'))
+        days = int(data.get('days', 1))
+        file_size_gb = int(data.get('file_size_gb', 50))
+        file_count = int(data.get('file_count', 8))
+        table_name = data.get('table_name', 'whitelist_log').strip()
+
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '请选择防火墙设备'})
+        if days < 1 or days > 365:
+            return JsonResponse({'success': False, 'error': '天数范围为 1~365'})
+        if file_size_gb < 1 or file_size_gb > 1024:
+            return JsonResponse({'success': False, 'error': '文件大小范围为 1~1024 GB'})
+        if file_count < 1 or file_count > 100:
+            return JsonResponse({'success': False, 'error': '每天文件个数范围为 1~100'})
+
+        try:
+            device = TestDevice.objects.get(id=device_id)
+        except TestDevice.DoesNotExist:
+            return JsonResponse({'success': False, 'error': '设备不存在'})
+
+        ssh_ok, ssh_msg = _check_ssh_connectivity(device.ip, device.port, device.user, device.password)
+        if not ssh_ok:
+            return JsonResponse({'success': False, 'error': f'设备 {device.name}({device.ip}): {ssh_msg}'})
+
+        device_info = {
+            'ip': device.ip,
+            'port': device.port,
+            'user': device.user,
+            'password': device.password,
+            'backend_password': device.backend_password,
+            'device_type': device.type,
+        }
+
+        task_id = str(uuid_lib.uuid4())[:8]
+        tasks = _load_log_tasks()
+        tasks[task_id] = {
+            'task_id': task_id,
+            'status': 'starting',
+            'output': '',
+            'error': '',
+            'device_ip': device.ip,
+            'table_name': table_name,
+            'created_at': time.time(),
+        }
+        _save_log_tasks(tasks)
+
+        thread = threading.Thread(
+            target=_execute_archive_task,
+            args=(task_id, device_info, date_str, days, file_size_gb, file_count, table_name),
+            daemon=True
+        )
+        thread.start()
+
+        total_gb = days * file_count * file_size_gb
+        return JsonResponse({
+            'success': True,
+            'task_id': task_id,
+            'total_gb': total_gb,
+            'message': f'历史日志归档任务已启动，预计生成 {total_gb} GB 稀疏文件'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '请求参数格式错误'})
+    except Exception as e:
+        logger.exception(f"启动归档任务异常: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
