@@ -144,6 +144,19 @@ urlpatterns = [
     path('api/system-config/log-devices/', views.api_system_config_log_devices, name='api_system_config_log_devices'),
     path('api/system-config/archive-generate/', views.api_system_config_archive_generate, name='api_system_config_archive_generate'),
 
+    # ========== 认证服务器管理 ==========
+    path('api/auth/detect/', views.api_auth_detect, name='api_auth_detect'),
+    path('api/auth/radius/status/', views.api_auth_radius_status, name='api_auth_radius_status'),
+    path('api/auth/radius/secret/', views.api_auth_radius_secret, name='api_auth_radius_secret'),
+    path('api/auth/radius/account/add/', views.api_auth_radius_account_add, name='api_auth_radius_account_add'),
+    path('api/auth/radius/account/update/', views.api_auth_radius_account_update, name='api_auth_radius_account_update'),
+    path('api/auth/radius/account/delete/', views.api_auth_radius_account_delete, name='api_auth_radius_account_delete'),
+    path('api/auth/radius/restart/', views.api_auth_radius_restart, name='api_auth_radius_restart'),
+    path('api/auth/ldap/status/', views.api_auth_ldap_status, name='api_auth_ldap_status'),
+    path('api/auth/ldap/config/', views.api_auth_ldap_config, name='api_auth_ldap_config'),
+    path('api/auth/ldap/restart/', views.api_auth_ldap_restart, name='api_auth_ldap_restart'),
+    path('api/auth/logs/', views.api_auth_logs, name='api_auth_logs'),
+
     # ========== 授权管理 ==========
     path('license-management/', views.license_management, name='license_management'),
     path('api/license/verify-password/', views.api_license_verify_password, name='api_license_verify_password'),

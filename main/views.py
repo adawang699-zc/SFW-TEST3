@@ -60,6 +60,26 @@ except ImportError as e:
 
 logger = logging.getLogger('main')
 
+# 认证服务器操作日志
+_auth_logger = None
+
+def _get_auth_logger():
+    """获取认证服务器操作日志对象"""
+    global _auth_logger
+    if _auth_logger is None:
+        _auth_logger = logging.getLogger('auth_server')
+        _auth_logger.setLevel(logging.INFO)
+        log_dir = '/var/log/test'
+        try:
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            handler = logging.FileHandler(os.path.join(log_dir, 'auth_server.log'))
+            handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+            _auth_logger.addHandler(handler)
+        except Exception:
+            pass
+    return _auth_logger
+
 # ========== Network Namespace 辅助函数 ==========
 
 def get_namespace_list():
@@ -5106,3 +5126,490 @@ def api_system_config_archive_generate(request):
     except Exception as e:
         logger.exception(f"启动归档任务异常: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 认证服务器配置 API ==========
+
+AUTH_LOG_DIR = '/var/log/test'
+RADIUS_CLIENTS_CONF = '/etc/freeradius/3.0/clients.conf'
+RADIUS_USERS_CONF = '/etc/freeradius/3.0/users'
+LDAP_SLAPD_CONF = '/etc/ldap/slapd.d/cn=config.ldif'
+LDAP_LDAP_CONF = '/etc/ldap/ldap.conf'
+RADIUS_PROXY_PATH = '/home/zhangc/radius_proxy.py'
+
+
+def _run_sudo(cmd_args, timeout=15):
+    """执行 sudo 命令并返回结果"""
+    try:
+        result = subprocess.run(
+            ['sudo'] + cmd_args,
+            capture_output=True, text=True, timeout=timeout
+        )
+        return result
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess([], returncode=-1, stdout='', stderr='timeout')
+    except FileNotFoundError:
+        return subprocess.CompletedProcess([], returncode=-1, stdout='', stderr='command not found')
+
+
+def _read_file_sudo(filepath):
+    """用 sudo 读取文件内容"""
+    result = _run_sudo(['cat', filepath])
+    if result.returncode == 0:
+        return result.stdout
+    return ''
+
+
+def _write_file_sudo(filepath, content):
+    """用 sudo 写入文件（先写临时文件再 sudo mv）"""
+    try:
+        tmp = '/tmp/_auth_tmp_' + os.path.basename(filepath)
+        with open(tmp, 'w') as f:
+            f.write(content)
+        _run_sudo(['cp', tmp, filepath])
+        _run_sudo(['chmod', '640', filepath])
+        os.remove(tmp)
+        return True
+    except Exception:
+        return False
+
+
+def _parse_radius_secret(clients_conf_content):
+    """从 clients.conf 内容解析 shared secret"""
+    for line in clients_conf_content.splitlines():
+        line_stripped = line.strip()
+        if line_stripped.startswith('secret') and '=' in line_stripped:
+            parts = line_stripped.split('=', 1)
+            if len(parts) == 2:
+                val = parts[1].strip().strip('"').strip("'")
+                if val:
+                    return val
+    return ''
+
+
+def _parse_radius_accounts(users_content):
+    """从 users 文件内容解析账号列表"""
+    accounts = []
+    for line in users_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or line.startswith('.'):
+            continue
+        parts = line.split()
+        if len(parts) >= 1:
+            username = parts[0]
+            password = ''
+            for i, p in enumerate(parts):
+                if p.lower() in ('cleartext-password', 'crypt-password', 'md5-password',
+                                  'sha-password', 'ssha-password', 'nt-password',
+                                  'lm-password', 'auth-type'):
+                    pw = parts[i + 1] if i + 1 < len(parts) else ''
+                    password = pw.strip('"').strip("'").strip(':=')
+            accounts.append({'username': username, 'password': password})
+    return accounts
+
+
+def _log_auth_operation(action, details='', status='success'):
+    """记录认证服务器操作日志"""
+    try:
+        op_logger = _get_auth_logger()
+        op_logger.info(f"操作={action}, 状态={status}, 详情={details}")
+    except Exception:
+        pass
+
+
+@require_http_methods(["GET"])
+def api_auth_detect(request):
+    """检测认证服务器（Radius/LDAP）安装和运行状态"""
+    result = {
+        'radius': {'installed': False, 'running': False, 'config': {}},
+        'ldap': {'installed': False, 'running': False, 'config': {}},
+    }
+
+    # --- Radius 检测 ---
+    radius_check = _run_sudo(['which', 'freeradius'])
+    result['radius']['installed'] = radius_check.returncode == 0
+    if result['radius']['installed']:
+        # 版本
+        ver = _run_sudo(['freeradius', '-v'])
+        result['radius']['version'] = ver.stdout.splitlines()[0] if ver.stdout else ''
+        # 运行状态
+        st = _run_sudo(['systemctl', 'is-active', 'freeradius'])
+        result['radius']['running'] = 'active' in st.stdout.strip()
+        # 读取配置
+        clients_content = _read_file_sudo(RADIUS_CLIENTS_CONF)
+        secret = _parse_radius_secret(clients_content)
+        users_content = _read_file_sudo(RADIUS_USERS_CONF)
+        accounts = _parse_radius_accounts(users_content)
+        # 检测监听端口
+        ss_out = _run_sudo(['ss', '-tlnp'])
+        auth_port = '1812'
+        acct_port = '1813'
+        if 'freeradius' in ss_out.stdout:
+            for line in ss_out.stdout.splitlines():
+                if '1812' in line:
+                    auth_port = line.split()[-1].split(':')[-1].split(',')[0] if ':' in line.split()[-1] else '1812'
+        result['radius']['config'] = {
+            'secret': secret,
+            'auth_port': auth_port,
+            'acct_port': acct_port,
+            'proxy_port': '11812',
+            'accounts': accounts,
+        }
+        # 检测代理进程
+        ps_out = _run_sudo(['ps', 'aux'])
+        result['radius']['proxy_running'] = 'radius_proxy.py' in ps_out.stdout
+
+    # --- LDAP 检测 ---
+    ldap_check = _run_sudo(['which', 'slapd'])
+    result['ldap']['installed'] = ldap_check.returncode == 0
+    if result['ldap']['installed']:
+        ver = _run_sudo(['slapd', '-V'])
+        result['ldap']['version'] = ver.stdout.splitlines()[0] if ver.stdout else ''
+        st = _run_sudo(['systemctl', 'is-active', 'slapd'])
+        result['ldap']['running'] = 'active' in st.stdout.strip()
+        # 读取配置
+        ldif_content = _read_file_sudo(LDAP_SLAPD_CONF)
+        base_dn = ''
+        admin_dn = ''
+        olc_root_dn = ''
+        for line in ldif_content.splitlines():
+            if 'olcSuffix:' in line:
+                base_dn = line.split(':', 1)[1].strip()
+            elif 'olcRootDN:' in line:
+                olc_root_dn = line.split(':', 1)[1].strip()
+        # 读取 /etc/ldap/ldap.conf
+        ldap_conf_content = _read_file_sudo(LDAP_LDAP_CONF)
+        uri = ''
+        for line in ldap_conf_content.splitlines():
+            if line.strip().startswith('URI') or line.strip().startswith('uri'):
+                uri = line.split(None, 1)[-1] if len(line.split(None, 1)) > 1 else ''
+            elif line.strip().startswith('BASE') or line.strip().startswith('base'):
+                if not base_dn:
+                    base_dn = line.split(None, 1)[-1] if len(line.split(None, 1)) > 1 else ''
+
+        result['ldap']['config'] = {
+            'uri': uri or 'ldap://localhost',
+            'port': '389',
+            'base_dn': base_dn or 'dc=tdhx,dc=local',
+            'admin_dn': olc_root_dn or 'cn=admin,dc=tdhx,dc=local',
+            'user_filter': 'cn',
+            'group_filter': 'cn',
+        }
+
+    _log_auth_operation('detect', f"Radius已安装={result['radius']['installed']}, LDAP已安装={result['ldap']['installed']}")
+    return JsonResponse({'success': True, 'data': result})
+
+
+@require_http_methods(["GET"])
+def api_auth_radius_status(request):
+    """获取 Radius 服务器详细状态和配置"""
+    clients_content = _read_file_sudo(RADIUS_CLIENTS_CONF)
+    secret = _parse_radius_secret(clients_content)
+    users_content = _read_file_sudo(RADIUS_USERS_CONF)
+    accounts = _parse_radius_accounts(users_content)
+
+    st = _run_sudo(['systemctl', 'is-active', 'freeradius'])
+    running = 'active' in st.stdout.strip()
+    ps_out = _run_sudo(['ps', 'aux'])
+    proxy_running = 'radius_proxy.py' in ps_out.stdout
+
+    result = {
+        'running': running,
+        'secret': secret,
+        'accounts': accounts,
+        'auth_port': '1812',
+        'acct_port': '1813',
+        'proxy_port': '11812',
+        'proxy_running': proxy_running,
+    }
+    return JsonResponse({'success': True, 'data': result})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_radius_secret(request):
+    """更新 Radius 共享密钥"""
+    try:
+        data = json.loads(request.body)
+        new_secret = data.get('secret', '').strip()
+        if not new_secret or len(new_secret) < 4:
+            return JsonResponse({'success': False, 'error': '密钥至少 4 个字符'})
+
+        clients_content = _read_file_sudo(RADIUS_CLIENTS_CONF)
+        lines = clients_content.splitlines()
+        new_lines = []
+        updated = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('secret') and '=' in stripped:
+                indent = line[:len(line) - len(line.lstrip())]
+                new_lines.append(f'{indent}secret = {new_secret}')
+                updated = True
+            else:
+                new_lines.append(line)
+        if not updated:
+            return JsonResponse({'success': False, 'error': '未找到 secret 配置项'})
+
+        new_content = '\n'.join(new_lines)
+        if not _write_file_sudo(RADIUS_CLIENTS_CONF, new_content):
+            return JsonResponse({'success': False, 'error': '写入配置文件失败'})
+
+        # 重启服务
+        _run_sudo(['systemctl', 'restart', 'freeradius'])
+        time.sleep(1)
+
+        # 重启代理
+        _run_sudo(['pkill', '-f', 'radius_proxy.py'])
+        time.sleep(0.5)
+        _run_sudo(['python3', RADIUS_PROXY_PATH, '--secret', new_secret], timeout=5)
+
+        _log_auth_operation('update_radius_secret', f'secret=******')
+        return JsonResponse({'success': True, 'message': '密钥已更新，服务已重启'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '请求参数格式错误'})
+    except Exception as e:
+        logger.exception(f"更新 Radius 密钥失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_radius_account_add(request):
+    """添加 Radius 账号"""
+    try:
+        data = json.loads(request.body)
+        username = data.get('username', '').strip()
+        password = data.get('password', '').strip()
+        if not username or not password:
+            return JsonResponse({'success': False, 'error': '用户名和密码不能为空'})
+
+        users_content = _read_file_sudo(RADIUS_USERS_CONF)
+        new_entry = f'\n{username} Cleartext-Password := "{password}"\n'
+        new_content = users_content.rstrip() + new_entry
+
+        if not _write_file_sudo(RADIUS_USERS_CONF, new_content):
+            return JsonResponse({'success': False, 'error': '写入配置文件失败'})
+
+        _log_auth_operation('add_radius_account', f'username={username}')
+        return JsonResponse({'success': True, 'message': f'账号 {username} 已添加'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '请求参数格式错误'})
+    except Exception as e:
+        logger.exception(f"添加 Radius 账号失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_radius_account_update(request):
+    """修改 Radius 账号"""
+    try:
+        data = json.loads(request.body)
+        old_username = data.get('old_username', '').strip()
+        new_username = data.get('new_username', '').strip()
+        new_password = data.get('new_password', '').strip()
+        if not old_username or not new_username or not new_password:
+            return JsonResponse({'success': False, 'error': '参数不完整'})
+
+        users_content = _read_file_sudo(RADIUS_USERS_CONF)
+        lines = users_content.splitlines()
+        new_lines = []
+        updated = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#') and stripped.split()[0] == old_username:
+                indent = line[:len(line) - len(line.lstrip())]
+                new_lines.append(f'{indent}{new_username} Cleartext-Password := "{new_password}"')
+                updated = True
+            else:
+                new_lines.append(line)
+
+        if not updated:
+            return JsonResponse({'success': False, 'error': f'未找到账号 {old_username}'})
+
+        new_content = '\n'.join(new_lines)
+        if not _write_file_sudo(RADIUS_USERS_CONF, new_content):
+            return JsonResponse({'success': False, 'error': '写入配置文件失败'})
+
+        _log_auth_operation('update_radius_account', f'old={old_username}, new={new_username}')
+        return JsonResponse({'success': True, 'message': f'账号 {old_username} 已更新为 {new_username}'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '请求参数格式错误'})
+    except Exception as e:
+        logger.exception(f"修改 Radius 账号失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_radius_account_delete(request):
+    """删除 Radius 账号"""
+    try:
+        data = json.loads(request.body)
+        username = data.get('username', '').strip()
+        if not username:
+            return JsonResponse({'success': False, 'error': '用户名不能为空'})
+
+        users_content = _read_file_sudo(RADIUS_USERS_CONF)
+        lines = users_content.splitlines()
+        new_lines = []
+        deleted = False
+        skip_next = False
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if stripped and not stripped.startswith('#') and stripped.split()[0] == username:
+                deleted = True
+                continue
+            new_lines.append(line)
+
+        if not deleted:
+            return JsonResponse({'success': False, 'error': f'未找到账号 {username}'})
+
+        new_content = '\n'.join(new_lines)
+        if not _write_file_sudo(RADIUS_USERS_CONF, new_content):
+            return JsonResponse({'success': False, 'error': '写入配置文件失败'})
+
+        _log_auth_operation('delete_radius_account', f'username={username}')
+        return JsonResponse({'success': True, 'message': f'账号 {username} 已删除'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '请求参数格式错误'})
+    except Exception as e:
+        logger.exception(f"删除 Radius 账号失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_radius_restart(request):
+    """重启 Radius 服务和代理"""
+    try:
+        data = json.loads(request.body)
+        secret = data.get('secret', '').strip()
+    except (json.JSONDecodeError, Exception):
+        secret = ''
+
+    if not secret:
+        # 从配置文件中读取当前密钥
+        clients_content = _read_file_sudo(RADIUS_CLIENTS_CONF)
+        secret = _parse_radius_secret(clients_content)
+
+    _run_sudo(['systemctl', 'restart', 'freeradius'])
+    time.sleep(1.5)
+    _run_sudo(['pkill', '-f', 'radius_proxy.py'])
+    time.sleep(0.5)
+    proxy_result = _run_sudo(['python3', RADIUS_PROXY_PATH, '--secret', secret], timeout=5)
+
+    _log_auth_operation('restart_radius', f'proxy_secret=******, proxy_rc={proxy_result.returncode}')
+    return JsonResponse({
+        'success': True,
+        'message': 'Radius 服务已重启',
+        'proxy_rc': proxy_result.returncode,
+    })
+
+
+@require_http_methods(["GET"])
+def api_auth_ldap_status(request):
+    """获取 LDAP 服务器状态和配置"""
+    st = _run_sudo(['systemctl', 'is-active', 'slapd'])
+    running = 'active' in st.stdout.strip()
+
+    # 读取配置
+    ldif_content = _read_file_sudo(LDAP_SLAPD_CONF)
+    base_dn = ''
+    olc_root_dn = ''
+    for line in ldif_content.splitlines():
+        if 'olcSuffix:' in line:
+            base_dn = line.split(':', 1)[1].strip()
+        elif 'olcRootDN:' in line:
+            olc_root_dn = line.split(':', 1)[1].strip()
+
+    ldap_conf_content = _read_file_sudo(LDAP_LDAP_CONF)
+    uri = ''
+    for line in ldap_conf_content.splitlines():
+        if line.strip().startswith('URI') or line.strip().startswith('uri'):
+            uri = line.split(None, 1)[-1] if len(line.split(None, 1)) > 1 else ''
+
+    result = {
+        'running': running,
+        'uri': uri or 'ldap://localhost',
+        'port': '389',
+        'base_dn': base_dn or 'dc=tdhx,dc=local',
+        'admin_dn': olc_root_dn or 'cn=admin,dc=tdhx,dc=local',
+        'user_filter': 'cn',
+        'group_filter': 'cn',
+    }
+    return JsonResponse({'success': True, 'data': result})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_ldap_config(request):
+    """更新 LDAP 配置"""
+    try:
+        data = json.loads(request.body)
+        base_dn = data.get('base_dn', '').strip()
+        admin_dn = data.get('admin_dn', '').strip()
+        admin_password = data.get('admin_password', '').strip()
+        user_filter = data.get('user_filter', '').strip()
+        group_filter = data.get('group_filter', '').strip()
+
+        # 更新 /etc/ldap/ldap.conf
+        ldap_conf_content = _read_file_sudo(LDAP_LDAP_CONF)
+        lines = ldap_conf_content.splitlines()
+        new_lines = []
+        base_updated = False
+        uri_updated = False
+        for line in lines:
+            stripped = line.strip()
+            if stripped.upper().startswith('BASE') and base_dn:
+                new_lines.append(f'BASE {base_dn}')
+                base_updated = True
+            elif stripped.upper().startswith('URI'):
+                new_lines.append(line)  # keep as-is
+                uri_updated = True
+            else:
+                new_lines.append(line)
+        if not base_updated and base_dn:
+            new_lines.append(f'BASE {base_dn}')
+        new_content = '\n'.join(new_lines)
+        _write_file_sudo(LDAP_LDAP_CONF, new_content)
+
+        _log_auth_operation('update_ldap_config',
+                            f'base_dn={base_dn}, admin_dn={admin_dn}, '
+                            f'user_filter={user_filter}, group_filter={group_filter}')
+        return JsonResponse({'success': True, 'message': 'LDAP 配置已更新'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': '请求参数格式错误'})
+    except Exception as e:
+        logger.exception(f"更新 LDAP 配置失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_auth_ldap_restart(request):
+    """重启 LDAP 服务"""
+    _run_sudo(['systemctl', 'restart', 'slapd'])
+    _log_auth_operation('restart_ldap')
+    return JsonResponse({'success': True, 'message': 'LDAP 服务已重启'})
+
+
+@require_http_methods(["GET"])
+def api_auth_logs(request):
+    """获取认证服务器操作日志"""
+    try:
+        lines = int(request.GET.get('lines', 100))
+        log_file = os.path.join(AUTH_LOG_DIR, 'auth_server.log')
+        if not os.path.exists(log_file):
+            return JsonResponse({'success': True, 'logs': '暂无日志'})
+        with open(log_file, 'r') as f:
+            all_lines = f.readlines()
+        tail = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        return JsonResponse({'success': True, 'logs': ''.join(tail)})
+    except Exception as e:
+        return JsonResponse({'success': True, 'logs': f'读取日志失败: {e}'})

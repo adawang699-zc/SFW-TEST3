@@ -199,6 +199,36 @@
             </div>
         </div>
     </div>
+
+    <!-- ==================== 认证服务日志 ==================== -->
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-header">认证服务日志</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">
+                        日志内容
+                        <button class="btn btn-sm btn-secondary" onclick="refreshAuthLog()" style="margin-left: 12px; padding: 2px 10px; font-size: 0.8rem;">
+                            <i class="fas fa-sync"></i> 刷新
+                        </button>
+                    </div>
+                    <div id="authLogResult" style="min-height: 150px; max-height: 300px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.8rem; white-space: pre-wrap;">
+                        <div style="color: var(--text-muted);">加载中...</div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div style="background: rgba(0, 168, 150, 0.05); border-radius: 8px; padding: 16px; border: 1px solid rgba(0, 168, 150, 0.2);">
+                    <div style="color: var(--secondary); font-size: 0.9rem; font-weight: 600; margin-bottom: 8px;">说明</div>
+                    <ul style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 20px; line-height: 1.8;">
+                        <li>认证服务器（Radius / LDAP）的所有操作记录</li>
+                        <li>日志文件位置: <code style="font-size: 0.8rem;">/var/log/test/auth_server.log</code></li>
+                        <li>显示最近 100 条操作日志</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ==================== 网口管理 ==================== -->
@@ -217,10 +247,139 @@
 <div class="tab-content" id="tab-auth_server" style="display: none;">
     <div class="card">
         <div class="card-header">认证服务器配置</div>
-        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
-            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
-            <div style="font-size: 1.2rem; margin-bottom: 8px;">认证服务器配置</div>
-            <div>功能开发中，敬请期待...</div>
+        <div style="margin-bottom: 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="detectAuthStatus()">
+                <i class="fas fa-search"></i> 检测状态
+            </button>
+            <span id="auth_radius_badge" style="font-size: 0.85rem; color: var(--text-secondary);">Radius: --</span>
+            <span id="auth_ldap_badge" style="font-size: 0.85rem; color: var(--text-secondary);">LDAP: --</span>
+            <span id="auth_proxy_badge" style="font-size: 0.85rem; color: var(--text-secondary);">代理: --</span>
+        </div>
+
+        <!-- ======== Radius 服务器配置 ======== -->
+        <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="font-weight: 600; font-size: 1.05rem;">
+                    <i class="fas fa-circle" id="radius_status_dot" style="color: #888; font-size: 0.7rem;"></i>
+                    Radius 服务器
+                    <span id="radius_status_text" style="font-size: 0.85rem; color: var(--text-muted); margin-left: 8px;">检测中...</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-primary" onclick="showRadiusSecretModal()">
+                        <i class="fas fa-key"></i> 修改密钥
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="restartRadius()">
+                        <i class="fas fa-sync"></i> 重启服务
+                    </button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <!-- 左：基本信息 -->
+                <div>
+                    <div style="margin-bottom: 12px;">
+                        <table style="width: 100%; font-size: 0.85rem;">
+                            <tr><td style="padding: 4px 8px; color: var(--text-secondary);">共享密钥</td>
+                                <td style="padding: 4px 8px;">
+                                    <code id="radius_secret_display" style="font-size: 0.85rem;">******</code>
+                                </td></tr>
+                            <tr><td style="padding: 4px 8px; color: var(--text-secondary);">认证端口</td>
+                                <td style="padding: 4px 8px;"><code id="radius_auth_port" style="font-size: 0.85rem;">1812</code></td></tr>
+                            <tr><td style="padding: 4px 8px; color: var(--text-secondary);">计费端口</td>
+                                <td style="padding: 4px 8px;"><code id="radius_acct_port" style="font-size: 0.85rem;">1813</code></td></tr>
+                            <tr><td style="padding: 4px 8px; color: var(--text-secondary);">代理端口</td>
+                                <td style="padding: 4px 8px;"><code id="radius_proxy_port" style="font-size: 0.85rem;">11812</code></td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 右：账号管理 -->
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <span style="color: var(--text-secondary); font-size: 0.9rem;">账号列表 (<span id="radius_account_count">0</span>)</span>
+                        <button class="btn btn-sm btn-primary" onclick="showAddAccountModal()">
+                            <i class="fas fa-plus"></i> 添加账号
+                        </button>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: rgba(0,0,0,0.2);">
+                                    <th style="padding: 6px 8px; text-align: left;">用户名</th>
+                                    <th style="padding: 6px 8px; text-align: right;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="radius_accounts_body">
+                                <tr><td colspan="2" style="padding: 20px; text-align: center; color: var(--text-muted);">点击"检测状态"加载...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======== LDAP 服务器配置 ======== -->
+        <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="font-weight: 600; font-size: 1.05rem;">
+                    <i class="fas fa-circle" id="ldap_status_dot" style="color: #888; font-size: 0.7rem;"></i>
+                    LDAP 服务器
+                    <span id="ldap_status_text" style="font-size: 0.85rem; color: var(--text-muted); margin-left: 8px;">检测中...</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-primary" onclick="saveLdapConfig()">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="restartLdap()">
+                        <i class="fas fa-sync"></i> 重启服务
+                    </button>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">服务器地址</label>
+                        <input type="text" class="form-input" id="ldap_uri" placeholder="ldap://localhost">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">端口</label>
+                        <input type="text" class="form-input" id="ldap_port" value="389">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Base DN</label>
+                        <input type="text" class="form-input" id="ldap_base_dn" placeholder="dc=tdhx,dc=local">
+                    </div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">用户过滤字段</label>
+                        <input type="text" class="form-input" id="ldap_user_filter" value="cn">
+                        <small style="color: var(--text-muted);">默认 cn</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">组过滤字段</label>
+                        <input type="text" class="form-input" id="ldap_group_filter" value="cn">
+                        <small style="color: var(--text-muted);">默认 cn</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">管理员 DN</label>
+                        <input type="text" class="form-input" id="ldap_admin_dn" placeholder="cn=admin,dc=tdhx,dc=local">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">管理员密码</label>
+                        <input type="password" class="form-input" id="ldap_admin_password" placeholder="输入密码">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作结果区域 -->
+        <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">操作结果</div>
+            <div id="authResult" style="min-height: 80px; max-height: 200px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap;">
+                <div style="color: var(--text-muted);">点击"检测状态"查看认证服务器配置...</div>
+            </div>
         </div>
     </div>
 </div>
@@ -329,8 +488,16 @@ function switchTab(tabId) {
     });
 
     // 切换到日志管理时检查是否有运行中的任务
-    if (tabId === 'log_manage' && logTaskId && !pollingInterval) {
-        startPolling();
+    if (tabId === 'log_manage') {
+        if (logTaskId && !pollingInterval) {
+            startPolling();
+        }
+        refreshAuthLog();
+    }
+
+    // 切换到认证服务器时自动检测状态
+    if (tabId === 'auth_server') {
+        detectAuthStatus();
     }
 }
 
@@ -888,6 +1055,415 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ========== 认证服务器配置 JS ==========
+
+function addAuthLog(message, type) {
+    const logs = document.getElementById('authResult');
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+    if (!logs) return;
+    if (logs.querySelector('.text-muted') || logs.children.length === 0 || (logs.children.length === 1 && logs.textContent.trim().includes('检测中'))) logs.innerHTML = '';
+    logs.innerHTML += '<div style="color: ' + color + '; margin-bottom: 4px;"><small style="color: var(--text-muted);">[' + time + ']</small> ' + message + '</div>';
+    logs.scrollTop = logs.scrollHeight;
+}
+
+async function detectAuthStatus() {
+    addAuthLog('正在检测认证服务器状态...', 'info');
+    try {
+        const resp = await fetch('/api/auth/detect/');
+        const data = await resp.json();
+        if (!data.success) {
+            addAuthLog('检测失败: ' + (data.error || '未知错误'), 'error');
+            return;
+        }
+        const d = data.data;
+        const radius = d.radius || {};
+        const ldap = d.ldap || {};
+
+        // Radius badge
+        const rDot = document.getElementById('radius_status_dot');
+        const rText = document.getElementById('radius_status_text');
+        if (radius.installed) {
+            rDot.style.color = radius.running ? 'var(--success)' : 'var(--danger)';
+            rText.textContent = (radius.running ? '运行中' : '已停止') + (radius.version ? ' | ' + radius.version : '');
+            document.getElementById('radius_secret_display').textContent = radius.config.secret || '未配置';
+            document.getElementById('radius_auth_port').textContent = radius.config.auth_port || '1812';
+            document.getElementById('radius_acct_port').textContent = radius.config.acct_port || '1813';
+            document.getElementById('radius_proxy_port').textContent = radius.config.proxy_port || '11812';
+        } else {
+            rDot.style.color = '#888';
+            rText.textContent = '未安装';
+        }
+        document.getElementById('auth_radius_badge').textContent = 'Radius: ' + (radius.running ? '运行中' : (radius.installed ? '已停止' : '未安装'));
+
+        // Radius accounts
+        const tbody = document.getElementById('radius_accounts_body');
+        const accounts = (radius.config && radius.config.accounts) || [];
+        document.getElementById('radius_account_count').textContent = accounts.length;
+        if (accounts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">暂无账号</td></tr>';
+        } else {
+            tbody.innerHTML = accounts.map(function(acct) {
+                const u = acct.username;
+                return '<tr>' +
+                    '<td style="padding: 4px 8px;">' + escapeHtml(u) + '</td>' +
+                    '<td style="padding: 4px 8px; text-align: right;">' +
+                    '<button class="btn btn-sm btn-secondary" onclick="showEditAccountModal(\'' + escapeHtml(u) + '\')" style="margin-right: 4px; padding: 2px 8px; font-size: 0.8rem;">编辑</button>' +
+                    '<button class="btn btn-sm btn-danger" onclick="deleteRadiusAccount(\'' + escapeHtml(u) + '\')" style="padding: 2px 8px; font-size: 0.8rem;">删除</button>' +
+                    '</td></tr>';
+            }).join('');
+        }
+
+        // Proxy badge
+        document.getElementById('auth_proxy_badge').textContent = '代理: ' + (radius.proxy_running ? '运行中' : '已停止');
+
+        // LDAP
+        const lDot = document.getElementById('ldap_status_dot');
+        const lText = document.getElementById('ldap_status_text');
+        if (ldap.installed) {
+            lDot.style.color = ldap.running ? 'var(--success)' : 'var(--danger)';
+            lText.textContent = (ldap.running ? '运行中' : '已停止') + (ldap.version ? ' | ' + ldap.version : '');
+            const cfg = ldap.config || {};
+            document.getElementById('ldap_uri').value = cfg.uri || 'ldap://localhost';
+            document.getElementById('ldap_port').value = cfg.port || '389';
+            document.getElementById('ldap_base_dn').value = cfg.base_dn || '';
+            document.getElementById('ldap_user_filter').value = cfg.user_filter || 'cn';
+            document.getElementById('ldap_group_filter').value = cfg.group_filter || 'cn';
+            document.getElementById('ldap_admin_dn').value = cfg.admin_dn || '';
+        } else {
+            lDot.style.color = '#888';
+            lText.textContent = '未安装';
+        }
+        document.getElementById('auth_ldap_badge').textContent = 'LDAP: ' + (ldap.running ? '运行中' : (ldap.installed ? '已停止' : '未安装'));
+
+        addAuthLog('检测完成: Radius ' + (radius.running ? '运行中' : '已停止') + ', LDAP ' + (ldap.running ? '运行中' : '已停止'), 'success');
+    } catch (e) {
+        addAuthLog('检测异常: ' + e, 'error');
+    }
+}
+
+// ---- Radius 密钥修改 ----
+function showRadiusSecretModal() {
+    const currentSecret = document.getElementById('radius_secret_display').textContent;
+    showPromptModal('修改共享密钥', '请输入新的共享密钥：', currentSecret !== '******' ? currentSecret : '', '密钥至少 4 个字符', function(val) {
+        if (val && val.trim().length >= 4) {
+            updateRadiusSecret(val.trim());
+        } else {
+            showToast('密钥至少 4 个字符', 'warning');
+        }
+    });
+}
+
+async function updateRadiusSecret(secret) {
+    addAuthLog('正在更新共享密钥...', 'info');
+    try {
+        const resp = await fetch('/api/auth/radius/secret/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({ secret: secret })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            addAuthLog('密钥已更新，服务已重启', 'success');
+            document.getElementById('radius_secret_display').textContent = secret;
+            showToast('密钥已更新，服务已重启', 'success');
+        } else {
+            addAuthLog('更新失败: ' + (data.error || ''), 'error');
+            showToast('更新失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        addAuthLog('更新异常: ' + e, 'error');
+    }
+}
+
+// ---- Radius 账号管理 ----
+function showAddAccountModal() {
+    showPromptModal2('添加 Radius 账号', [
+        { id: 'add_username', label: '用户名', type: 'text' },
+        { id: 'add_password', label: '密码', type: 'password' }
+    ], function(values) {
+        const username = values.add_username.trim();
+        const password = values.add_password.trim();
+        if (!username || !password) {
+            showToast('用户名和密码不能为空', 'warning');
+            return;
+        }
+        addRadiusAccount(username, password);
+    });
+}
+
+function showEditAccountModal(username) {
+    showPromptModal2('修改 Radius 账号', [
+        { id: 'edit_username', label: '用户名', type: 'text', value: username },
+        { id: 'edit_password', label: '新密码', type: 'password' }
+    ], function(values) {
+        const newUsername = values.edit_username.trim();
+        const newPassword = values.edit_password.trim();
+        if (!newUsername || !newPassword) {
+            showToast('用户名和密码不能为空', 'warning');
+            return;
+        }
+        updateRadiusAccount(username, newUsername, newPassword);
+    });
+}
+
+async function addRadiusAccount(username, password) {
+    addAuthLog('正在添加账号: ' + username, 'info');
+    try {
+        const resp = await fetch('/api/auth/radius/account/add/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({ username: username, password: password })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            addAuthLog('账号 ' + username + ' 已添加', 'success');
+            showToast('账号已添加', 'success');
+            detectAuthStatus();
+        } else {
+            addAuthLog('添加失败: ' + (data.error || ''), 'error');
+            showToast('添加失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        addAuthLog('添加异常: ' + e, 'error');
+    }
+}
+
+async function updateRadiusAccount(oldUsername, newUsername, newPassword) {
+    addAuthLog('正在修改账号: ' + oldUsername + ' -> ' + newUsername, 'info');
+    try {
+        const resp = await fetch('/api/auth/radius/account/update/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({ old_username: oldUsername, new_username: newUsername, new_password: newPassword })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            addAuthLog('账号 ' + oldUsername + ' 已更新', 'success');
+            showToast('账号已更新', 'success');
+            detectAuthStatus();
+        } else {
+            addAuthLog('修改失败: ' + (data.error || ''), 'error');
+            showToast('修改失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        addAuthLog('修改异常: ' + e, 'error');
+    }
+}
+
+async function deleteRadiusAccount(username) {
+    showConfirmModal('确认删除', '确定要删除账号 "' + username + '" 吗？\n此操作不可恢复！', function() {
+        addAuthLog('正在删除账号: ' + username, 'info');
+        fetch('/api/auth/radius/account/delete/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({ username: username })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                addAuthLog('账号 ' + username + ' 已删除', 'success');
+                showToast('账号已删除', 'success');
+                detectAuthStatus();
+            } else {
+                addAuthLog('删除失败: ' + (data.error || ''), 'error');
+                showToast('删除失败: ' + (data.error || ''), 'error');
+            }
+        })
+        .catch(function(e) {
+            addAuthLog('删除异常: ' + e, 'error');
+        });
+    }, '⚠️');
+}
+
+// ---- 重启服务 ----
+async function restartRadius() {
+    showConfirmModal('重启 Radius 服务', '确定要重启 Radius 服务和代理吗？\n认证服务将短暂中断。', function() {
+        addAuthLog('正在重启 Radius 服务和代理...', 'info');
+        document.getElementById('radius_status_text').textContent = '重启中...';
+        fetch('/api/auth/radius/restart/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                addAuthLog('Radius 服务已重启, 代理返回码: ' + data.proxy_rc, 'success');
+                showToast('Radius 服务已重启', 'success');
+                setTimeout(detectAuthStatus, 1000);
+            } else {
+                addAuthLog('重启失败: ' + (data.error || ''), 'error');
+            }
+        })
+        .catch(function(e) {
+            addAuthLog('重启异常: ' + e, 'error');
+        });
+    }, '🔄');
+}
+
+async function restartLdap() {
+    showConfirmModal('重启 LDAP 服务', '确定要重启 LDAP 服务吗？', function() {
+        addAuthLog('正在重启 LDAP 服务...', 'info');
+        fetch('/api/auth/ldap/restart/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({})
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                addAuthLog('LDAP 服务已重启', 'success');
+                showToast('LDAP 服务已重启', 'success');
+                setTimeout(detectAuthStatus, 1000);
+            } else {
+                addAuthLog('重启失败: ' + (data.error || ''), 'error');
+            }
+        })
+        .catch(function(e) {
+            addAuthLog('重启异常: ' + e, 'error');
+        });
+    }, '🔄');
+}
+
+// ---- LDAP 配置保存 ----
+async function saveLdapConfig() {
+    const uri = document.getElementById('ldap_uri').value.trim();
+    const port = document.getElementById('ldap_port').value.trim();
+    const baseDn = document.getElementById('ldap_base_dn').value.trim();
+    const userFilter = document.getElementById('ldap_user_filter').value.trim();
+    const groupFilter = document.getElementById('ldap_group_filter').value.trim();
+    const adminDn = document.getElementById('ldap_admin_dn').value.trim();
+    const adminPw = document.getElementById('ldap_admin_password').value.trim();
+
+    addAuthLog('正在保存 LDAP 配置...', 'info');
+    try {
+        const resp = await fetch('/api/auth/ldap/config/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') || '' },
+            body: JSON.stringify({
+                base_dn: baseDn,
+                admin_dn: adminDn,
+                admin_password: adminPw,
+                user_filter: userFilter,
+                group_filter: groupFilter
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            addAuthLog('LDAP 配置已保存', 'success');
+            showToast('LDAP 配置已保存', 'success');
+        } else {
+            addAuthLog('保存失败: ' + (data.error || ''), 'error');
+            showToast('保存失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        addAuthLog('保存异常: ' + e, 'error');
+    }
+}
+
+// ---- 双输入框模态框 ----
+var currentPromptModal2Callback = null;
+
+function showPromptModal2(title, fields, callback) {
+    currentPromptModal2Callback = callback;
+    var html = fields.map(function(f) {
+        return '<div style="margin-bottom: 12px;">' +
+            '<label style="display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 4px;">' + escapeHtml(f.label) + '</label>' +
+            '<input type="' + (f.type || 'text') + '" id="prompt2_' + f.id + '" class="form-input" value="' + escapeHtml(f.value || '') + '" style="width: 100%;">' +
+            '</div>';
+    }).join('');
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = '<div style="background:var(--bg-card);border-radius:12px;padding:24px;min-width:380px;max-width:500px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">' +
+        '<div style="font-size:1.1rem;font-weight:600;margin-bottom:16px;">' + escapeHtml(title) + '</div>' +
+        '<div>' + html + '</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px;">' +
+        '<button class="btn btn-secondary" id="prompt2_cancel_btn">取消</button>' +
+        '<button class="btn btn-primary" id="prompt2_confirm_btn">确定</button>' +
+        '</div></div>';
+    document.body.appendChild(modal);
+
+    function close2() { modal.remove(); }
+    document.getElementById('prompt2_cancel_btn').onclick = close2;
+    document.getElementById('prompt2_confirm_btn').onclick = function() {
+        var values = {};
+        fields.forEach(function(f) {
+            values[f.id] = document.getElementById('prompt2_' + f.id).value;
+        });
+        close2();
+        if (currentPromptModal2Callback) currentPromptModal2Callback(values);
+        currentPromptModal2Callback = null;
+    };
+
+    var firstF = document.getElementById('prompt2_' + fields[0].id);
+    if (firstF) {
+        firstF.focus();
+        firstF.onkeydown = function(e) {
+            if (e.key === 'Enter') document.getElementById('prompt2_confirm_btn').click();
+            if (e.key === 'Escape') close2();
+        };
+    }
+}
+
+// ---- 单输入框模态框 ----
+var currentPromptModalCallback = null;
+
+function showPromptModal(title, label, defaultValue, placeholder, callback) {
+    currentPromptModalCallback = callback;
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = '<div style="background:var(--bg-card);border-radius:12px;padding:24px;min-width:380px;max-width:500px;box-shadow:0 8px 32px rgba(0,0,0,0.4);">' +
+        '<div style="font-size:1.1rem;font-weight:600;margin-bottom:16px;">' + escapeHtml(title) + '</div>' +
+        '<div style="margin-bottom:12px;">' +
+        '<label style="display:block;color:var(--text-secondary);font-size:0.85rem;margin-bottom:4px;">' + escapeHtml(label) + '</label>' +
+        '<input type="text" id="prompt_input" class="form-input" value="' + escapeHtml(defaultValue || '') + '" placeholder="' + escapeHtml(placeholder || '') + '" style="width:100%;">' +
+        '</div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:12px;">' +
+        '<button class="btn btn-secondary" id="prompt_cancel_btn">取消</button>' +
+        '<button class="btn btn-primary" id="prompt_confirm_btn">确定</button>' +
+        '</div></div>';
+    document.body.appendChild(modal);
+
+    function close1() { modal.remove(); }
+    document.getElementById('prompt_cancel_btn').onclick = close1;
+    document.getElementById('prompt_confirm_btn').onclick = function() {
+        var val = document.getElementById('prompt_input').value;
+        close1();
+        if (currentPromptModalCallback) currentPromptModalCallback(val);
+        currentPromptModalCallback = null;
+    };
+
+    var inp = document.getElementById('prompt_input');
+    inp.focus();
+    inp.onkeydown = function(e) {
+        if (e.key === 'Enter') document.getElementById('prompt_confirm_btn').click();
+        if (e.key === 'Escape') close1();
+    };
+}
+
+// ---- 认证服务日志 ----
+async function refreshAuthLog() {
+    const resultDiv = document.getElementById('authLogResult');
+    if (!resultDiv) return;
+    resultDiv.innerHTML = '<div style="color: var(--text-muted);">加载中...</div>';
+    try {
+        const resp = await fetch('/api/auth/logs/?lines=100');
+        const data = await resp.json();
+        if (data.success) {
+            const logs = data.logs || '';
+            resultDiv.innerHTML = logs ?
+                '<pre style="margin: 0; white-space: pre-wrap; font-size: 0.8rem;">' + escapeHtml(logs) + '</pre>' :
+                '<div style="color: var(--text-muted);">暂无日志</div>';
+        } else {
+            resultDiv.innerHTML = '<div style="color: var(--danger);">加载失败: ' + escapeHtml(data.error || '') + '</div>';
+        }
+    } catch (e) {
+        resultDiv.innerHTML = '<div style="color: var(--danger);">加载异常: ' + escapeHtml(e) + '</div>';
+    }
 }
 </script>
 {% endblock %}
