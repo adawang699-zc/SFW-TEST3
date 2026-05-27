@@ -5650,8 +5650,9 @@ def api_auth_ldap_config(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_auth_ldap_restart(request):
-    """重启 LDAP 服务"""
-    _run_sudo(['systemctl', 'restart', 'slapd'])
+    """重启 LDAP 服务（停止后启动，适用于 SysV 兼容服务）"""
+    _run_sudo(['systemctl', 'stop', 'slapd'])
+    _run_sudo(['systemctl', 'start', 'slapd'])
     _log_auth_operation('restart_ldap')
     return JsonResponse({'success': True, 'message': 'LDAP 服务已重启'})
 
