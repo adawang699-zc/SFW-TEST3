@@ -22,3 +22,7 @@ pysnmpcrypto>=1.0  # SNMPv3 加密支持
 
 # 其他
 python-dotenv>=1.0
+
+# WebSocket 支持（带宽测试）
+channels>=4.0.0
+daphne>=4.0.0
