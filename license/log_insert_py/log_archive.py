@@ -149,6 +149,7 @@ def main():
         print("seq: %d-%d, created %d files, %d GB" % (first_seq, last_seq, total_created, total_size_gb))
     if total_skipped > 0:
         print("skipped: %d files (already exist)" % total_skipped)
+    print("Done")
 
 
 if __name__ == '__main__':
