@@ -5612,7 +5612,7 @@ def api_auth_ldap_config(request):
                                 for pline in pw_content.splitlines():
                                     if pline.strip().startswith('olcRootPW'):
                                         indent = pline[:len(pline) - len(pline.lstrip())]
-                                        new_pw_lines.append(f'{indent}olcRootPW {pw_hash}')
+                                        new_pw_lines.append(f'{indent}olcRootPW: {pw_hash}')
                                     else:
                                         new_pw_lines.append(pline)
                                 _write_file_sudo(target_file, '\n'.join(new_pw_lines))
