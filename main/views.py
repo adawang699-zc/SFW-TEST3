@@ -4535,8 +4535,9 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         chan = _enter_backend_shell(ssh, backend_password)
         _update_task_output(task_id, '已进入 root 后台\n')
 
-        # 步骤 2: 创建目标目录
+        # 步骤 2: 创建目标目录和临时目录
         _exec_backend_cmd(chan, 'mkdir -p /app/local/share/new_self_manage/', wait_time=1)
+        _exec_backend_cmd(chan, 'mkdir -p /data/tmp/', wait_time=0.5)
 
         # 步骤 3: 在防火墙上执行 SCP 从 Ubuntu 拉取脚本
         _update_task_output(task_id, '正在从 Ubuntu 同步脚本...\n')
