@@ -306,11 +306,12 @@
                             <thead>
                                 <tr style="background: rgba(0,0,0,0.2);">
                                     <th style="padding: 6px 8px; text-align: left;">用户名</th>
+                                    <th style="padding: 6px 8px; text-align: left;">密码</th>
                                     <th style="padding: 6px 8px; text-align: right;">操作</th>
                                 </tr>
                             </thead>
                             <tbody id="radius_accounts_body">
-                                <tr><td colspan="2" style="padding: 20px; text-align: center; color: var(--text-muted);">点击"检测状态"加载...</td></tr>
+                                <tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--text-muted);">点击"检测状态"加载...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -336,39 +337,47 @@
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div>
-                    <div class="form-group">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div style="background: rgba(0,0,0,0.15); border-radius: 6px; padding: 14px;">
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05);">基本连接</div>
+                    <div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label">服务器地址</label>
-                        <input type="text" class="form-input" id="ldap_uri" placeholder="ldap://localhost">
+                        <input type="text" class="form-input" id="ldap_uri" placeholder="ldap://127.0.0.1">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label">端口</label>
                         <input type="text" class="form-input" id="ldap_port" value="389">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label">Base DN</label>
                         <input type="text" class="form-input" id="ldap_base_dn" placeholder="dc=tdhx,dc=local">
                     </div>
                 </div>
-                <div>
-                    <div class="form-group">
+                <div style="background: rgba(0,0,0,0.15); border-radius: 6px; padding: 14px;">
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05);">查询过滤</div>
+                    <div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label">用户过滤字段</label>
                         <input type="text" class="form-input" id="ldap_user_filter" value="cn">
                         <small style="color: var(--text-muted);">默认 cn</small>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label">组过滤字段</label>
                         <input type="text" class="form-input" id="ldap_group_filter" value="cn">
                         <small style="color: var(--text-muted);">默认 cn</small>
                     </div>
-                    <div class="form-group">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 12px;">
+                <div style="background: rgba(0,0,0,0.15); border-radius: 6px; padding: 14px;">
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.05);">管理员账户</div>
+                    <div class="form-group" style="margin-bottom: 10px;">
                         <label class="form-label">管理员 DN</label>
                         <input type="text" class="form-input" id="ldap_admin_dn" placeholder="cn=admin,dc=tdhx,dc=local">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label">管理员密码</label>
-                        <input type="password" class="form-input" id="ldap_admin_password" placeholder="输入密码">
+                        <input type="password" class="form-input" id="ldap_admin_password" placeholder="输入密码（留空不修改）">
+                        <small style="color: var(--text-muted);">密码无法读取，如需修改请重新输入</small>
                     </div>
                 </div>
             </div>
@@ -1103,12 +1112,14 @@ async function detectAuthStatus() {
         const accounts = (radius.config && radius.config.accounts) || [];
         document.getElementById('radius_account_count').textContent = accounts.length;
         if (accounts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="2" style="padding: 12px; text-align: center; color: var(--text-muted);">暂无账号</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="padding: 12px; text-align: center; color: var(--text-muted);">暂无账号</td></tr>';
         } else {
             tbody.innerHTML = accounts.map(function(acct) {
                 const u = acct.username;
+                const pw = acct.password;
                 return '<tr>' +
                     '<td style="padding: 4px 8px;">' + escapeHtml(u) + '</td>' +
+                    '<td style="padding: 4px 8px; font-family: monospace;">' + escapeHtml(pw) + '</td>' +
                     '<td style="padding: 4px 8px; text-align: right;">' +
                     '<button class="btn btn-sm btn-secondary" onclick="showEditAccountModal(\'' + escapeHtml(u) + '\')" style="margin-right: 4px; padding: 2px 8px; font-size: 0.8rem;">编辑</button>' +
                     '<button class="btn btn-sm btn-danger" onclick="deleteRadiusAccount(\'' + escapeHtml(u) + '\')" style="padding: 2px 8px; font-size: 0.8rem;">删除</button>' +
@@ -1126,7 +1137,7 @@ async function detectAuthStatus() {
             lDot.style.color = ldap.running ? 'var(--success)' : 'var(--danger)';
             lText.textContent = (ldap.running ? '运行中' : '已停止') + (ldap.version ? ' | ' + ldap.version : '');
             const cfg = ldap.config || {};
-            document.getElementById('ldap_uri').value = cfg.uri || 'ldap://localhost';
+            document.getElementById('ldap_uri').value = cfg.uri || 'ldap://127.0.0.1';
             document.getElementById('ldap_port').value = cfg.port || '389';
             document.getElementById('ldap_base_dn').value = cfg.base_dn || '';
             document.getElementById('ldap_user_filter').value = cfg.user_filter || 'cn';
