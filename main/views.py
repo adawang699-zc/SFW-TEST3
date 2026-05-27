@@ -4439,6 +4439,57 @@ def _check_ssh_connectivity(ip, port=22, user='admin', password='', timeout=10):
         return False, f'SSH 检测异常：{str(e)}'
 
 
+# ========== 防火墙后端 Shell 辅助函数 ==========
+
+# Ubuntu 服务器 SSH 凭据（用于防火墙上 SCP 拉取脚本）
+UBUNTU_SSH_IP = '192.168.81.140'
+UBUNTU_SSH_USER = 'zhangc'
+UBUNTU_SSH_PASSWORD = 'tdhx@2017'
+
+# 天融信防火墙默认后台密码
+DEFAULT_FIREWALL_BACKEND_PASSWORD = '#HiNA_!ns@USHDLk'
+
+
+def _enter_backend_shell(ssh, backend_password):
+    """进入防火墙 root 后台（发送 enter + 密码）"""
+    chan = ssh.invoke_shell()
+    chan.settimeout(30)
+    time.sleep(0.5)
+    while chan.recv_ready():
+        chan.recv(4096)
+
+    # 发送 enter 触发后台登录
+    chan.send('enter\n')
+    time.sleep(0.5)
+    if chan.recv_ready():
+        chan.recv(4096)
+
+    # 发送后台密码
+    chan.send(backend_password + '\n')
+    time.sleep(0.5)
+    if chan.recv_ready():
+        chan.recv(4096)
+
+    return chan
+
+
+def _exec_backend_cmd(chan, cmd, wait_time=1):
+    """在 root shell 中执行命令并返回输出"""
+    chan.send(cmd + '\n')
+    time.sleep(wait_time)
+    out = ''
+    start = time.time()
+    while time.time() - start < max(wait_time * 2, 5):
+        if chan.recv_ready():
+            out += chan.recv(8192).decode('utf-8', errors='ignore')
+        else:
+            time.sleep(0.2)
+            # 如果超过 1s 没新数据，认为执行完毕
+            if not chan.recv_ready():
+                break
+    return out
+
+
 def _execute_log_task(task_id, device, table_name, row_count, start_time, end_time):
     """后台执行日志生成任务（在独立线程中运行）"""
     tasks = _load_log_tasks()
@@ -4448,7 +4499,6 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
     _save_log_tasks(tasks)
 
     try:
-        script_dir = _get_log_script_dir()
         script_files = _get_script_files()
         if not script_files:
             raise Exception('日志脚本文件不存在，请检查 license/log_insert_py/ 目录')
@@ -4457,55 +4507,39 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         port = int(device.get('port', 22))
         user = device.get('user', 'admin')
         password = device.get('password', '')
-        backend_password = device.get('backend_password', '')
-
-        # 使用 sudo 密码（优先 backend_password）
-        sudo_pwd = backend_password or password
+        backend_password = device.get('backend_password', '') or DEFAULT_FIREWALL_BACKEND_PASSWORD
 
         import paramiko
 
-        # 步骤 1: SSH 创建目标目录（需 sudo）
+        # 步骤 1: SSH 连接 + 进入 root 后台
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(ip, port=port, username=user, password=password, timeout=15)
-        _update_task_output(task_id, 'SSH 连接防火墙成功，准备上传脚本...\n')
+        _update_task_output(task_id, 'SSH 连接防火墙成功\n')
 
-        # 使用 sudo 创建目录
-        stdin, stdout, stderr = ssh.exec_command(
-            f'echo "{sudo_pwd}" | sudo -S mkdir -p /app/local/share/new_self_manage/', timeout=10)
-        stdout.channel.recv_exit_status()
-        ssh.close()
+        chan = _enter_backend_shell(ssh, backend_password)
+        _update_task_output(task_id, '已进入 root 后台\n')
 
-        # 步骤 2: SFTP 上传脚本到 /tmp，再用 sudo 移动到目标目录
-        transport = paramiko.Transport((ip, port))
-        transport.connect(username=user, password=password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        # 步骤 2: 创建目标目录
+        _exec_backend_cmd(chan, 'mkdir -p /app/local/share/new_self_manage/', wait_time=1)
 
+        # 步骤 3: 在防火墙上执行 SCP 从 Ubuntu 拉取脚本
+        _update_task_output(task_id, '正在从 Ubuntu 同步脚本...\n')
         for fpath in script_files:
             fname = os.path.basename(fpath)
-            tmp_path = f'/tmp/{fname}'
-            sftp.put(fpath, tmp_path)
-            sftp.chmod(tmp_path, 0o755)
-            _update_task_output(task_id, f'上传脚本 {fname} 完成\n')
-
-        sftp.close()
-        transport.close()
-
-        # 步骤 3: sudo 移动到目标目录
-        ssh2 = paramiko.SSHClient()
-        ssh2.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh2.connect(ip, port=port, username=user, password=password, timeout=15)
-        for fpath in script_files:
-            fname = os.path.basename(fpath)
-            ssh2.exec_command(
-                f'echo "{sudo_pwd}" | sudo -S cp /tmp/{fname} /app/local/share/new_self_manage/{fname}', timeout=10)
-        ssh2.close()
+            remote_path = f'/app/local/share/new_self_manage/{fname}'
+            # sshpass + scp 在防火墙 root shell 中拉取文件
+            scp_cmd = (
+                f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
+                f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{fpath} {remote_path}'
+            )
+            out = _exec_backend_cmd(chan, scp_cmd, wait_time=3)
+            if 'lost connection' in out.lower() or 'not found' in out.lower():
+                raise Exception(f'SCP 传输失败: {fname}\n{out[:500]}')
+            _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.5)
+            _update_task_output(task_id, f'同步脚本 {fname} 完成\n')
 
         # 步骤 4: 在防火墙上执行脚本（后台 nohup）
-        ssh3 = paramiko.SSHClient()
-        ssh3.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh3.connect(ip, port=port, username=user, password=password, timeout=15)
-
         remote_dir = '/app/local/share/new_self_manage/'
         script_name = os.path.basename(script_files[0])
         exec_cmd = (
@@ -4520,61 +4554,71 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
             exec_cmd += f' --end-time "{end_time}"'
 
         output_file = f'/tmp/log_gen_{task_id}.out'
-        nohup_cmd = f'nohup {exec_cmd} > {output_file} 2>&1 & echo $!'
+        # nohup 后台执行 + echo PID
+        nohup_cmd = f'nohup {exec_cmd} > {output_file} 2>&1 &\necho PID=$!'
 
         _update_task_output(task_id, f'开始执行日志生成...\n')
         _update_task_output(task_id, f'表名: {table_name}, 条数: {row_count}\n')
         _update_task_output(task_id, f'预估时间: {_estimate_time(row_count)} 分钟\n')
         _update_task_output(task_id, f'命令: {exec_cmd}\n\n')
 
-        stdin, stdout, stderr = ssh3.exec_command(nohup_cmd, timeout=10)
-        pid = stdout.read().decode().strip()
+        out = _exec_backend_cmd(chan, nohup_cmd, wait_time=2)
+        import re
+        pid_match = re.search(r'PID=(\d+)', out)
+        pid = pid_match.group(1) if pid_match else ''
         task['pid'] = pid
         _save_log_tasks({**_load_log_tasks(), task_id: task})
 
-        ssh3.close()
+        chan.close()
+        ssh.close()
+        _update_task_output(task_id, f'后台进程 PID: {pid}\n')
 
-        # 步骤 5: 监控进度
-        last_output_len = 0
+        # 步骤 5: 监控进度（每次重新 SSH + 进入后台）
         while True:
             time.sleep(5)
-            ssh4 = paramiko.SSHClient()
-            ssh4.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             try:
-                ssh4.connect(ip, port=port, username=user, password=password, timeout=10)
-            except Exception:
+                poll_ssh = paramiko.SSHClient()
+                poll_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                poll_ssh.connect(ip, port=port, username=user, password=password, timeout=10)
+                poll_chan = _enter_backend_shell(poll_ssh, backend_password)
+
+                # 检查进程是否存活
+                poll_out = _exec_backend_cmd(poll_chan, f'kill -0 {pid} 2>/dev/null && echo ALIVE || echo DEAD', wait_time=1)
+                is_alive = 'ALIVE' in poll_out
+
+                # 读取输出文件
+                poll_out2 = _exec_backend_cmd(poll_chan, f'cat {output_file} 2>/dev/null', wait_time=1)
+
+                poll_chan.close()
+                poll_ssh.close()
+
+                if poll_out2.strip():
+                    task['output'] = poll_out2
+                    _save_log_tasks({**_load_log_tasks(), task_id: task})
+
+                if not is_alive:
+                    _update_task_output(task_id, '\n进程已结束，获取最终输出...\n')
+                    break
+            except Exception as e:
+                _update_task_output(task_id, f'轮询异常（将重试）: {e}\n')
                 continue
 
-            # 检查进程是否存活
-            stdin, stdout, stderr = ssh4.exec_command(f'kill -0 {pid} 2>/dev/null && echo running || echo done', timeout=5)
-            proc_status = stdout.read().decode().strip()
+        # 步骤 6: 获取最终输出
+        final_ssh = paramiko.SSHClient()
+        final_ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        final_ssh.connect(ip, port=port, username=user, password=password, timeout=15)
+        final_chan = _enter_backend_shell(final_ssh, backend_password)
 
-            # 读取输出文件
-            stdin, stdout2, stderr2 = ssh4.exec_command(f'cat {output_file} 2>/dev/null || echo ""', timeout=5)
-            output_text = stdout2.read().decode()
-            ssh4.close()
+        final_out = _exec_backend_cmd(final_chan, f'cat {output_file} 2>/dev/null', wait_time=2)
+        # 清理输出文件
+        _exec_backend_cmd(final_chan, f'rm -f {output_file}', wait_time=0.5)
 
-            if output_text:
-                task['output'] = output_text
-                _save_log_tasks({**_load_log_tasks(), task_id: task})
+        final_chan.close()
+        final_ssh.close()
 
-            if proc_status != 'running':
-                break
+        task['output'] = final_out
 
-        # 步骤 6: 最终输出
-        ssh5 = paramiko.SSHClient()
-        ssh5.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        ssh5.connect(ip, port=port, username=user, password=password, timeout=15)
-
-        stdin, stdout, stderr = ssh5.exec_command(f'cat {output_file} 2>/dev/null', timeout=10)
-        final_output = stdout.read().decode()
-        stdin, stdout2, stderr2 = ssh5.exec_command(f'rm -f {output_file}', timeout=5)
-        stdout2.channel.recv_exit_status()
-        ssh5.close()
-
-        task['output'] = final_output
-
-        if 'Done' in final_output and ('Total' in final_output or 'Avg speed' in final_output):
+        if 'Done' in final_out and ('Total' in final_out or 'Avg speed' in final_out):
             task['status'] = 'completed'
             task['completed_at'] = time.time()
         else:
@@ -4723,6 +4767,7 @@ def api_system_config_log_generate(request):
             'user': device.user,
             'password': device.password,
             'backend_password': device.backend_password,
+            'device_type': device.type,
         }
 
         # 启动后台任务
