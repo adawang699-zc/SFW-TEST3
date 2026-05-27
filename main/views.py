@@ -4554,8 +4554,8 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
             exec_cmd += f' --end-time "{end_time}"'
 
         output_file = f'/tmp/log_gen_{task_id}.out'
-        # 后台执行 + disown（替代 nohup）+ echo PID
-        bg_cmd = f'{exec_cmd} > {output_file} 2>&1 &\ndisown\necho PID=$!'
+        # 后台执行 + disown（替代 nohup）
+        bg_cmd = f'{exec_cmd} > {output_file} 2>&1 &\ndisown'
 
         _update_task_output(task_id, f'开始执行日志生成...\n')
         _update_task_output(task_id, f'表名: {table_name}, 条数: {row_count}\n')
@@ -4563,8 +4563,9 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         _update_task_output(task_id, f'命令: {exec_cmd}\n\n')
 
         out = _exec_backend_cmd(chan, bg_cmd, wait_time=2)
+        # 从 job notification [N] PID 解析进程号
         import re
-        pid_match = re.search(r'PID=(\d+)', out)
+        pid_match = re.search(r'\[\d+\]\s+(\d+)', out)
         pid = pid_match.group(1) if pid_match else ''
         task['pid'] = pid
         _save_log_tasks({**_load_log_tasks(), task_id: task})
