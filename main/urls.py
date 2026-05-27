@@ -183,4 +183,11 @@ urlpatterns = [
     path('api/industrial/http_server/<str:action>/', views.api_industrial_http_server, name='api_industrial_http_server'),
     path('api/industrial/http_files/<str:action>/', views.api_industrial_http_files, name='api_industrial_http_files'),
     path('api/industrial/http_files/<str:action>/<str:filename>/', views.api_industrial_http_files, name='api_industrial_http_files_with_filename'),
+
+    # ========== 带宽测试 API ==========
+    path('bandwidth-test/', views.bandwidth_test, name='bandwidth_test'),
+    path('api/bandwidth/my-agents/', views.api_bandwidth_my_agents, name='api_bandwidth_my_agents'),
+    path('api/bandwidth/start/', views.api_bandwidth_start, name='api_bandwidth_start'),
+    path('api/bandwidth/stop/', views.api_bandwidth_stop, name='api_bandwidth_stop'),
+    path('api/bandwidth/status/', views.api_bandwidth_status, name='api_bandwidth_status'),
 ]

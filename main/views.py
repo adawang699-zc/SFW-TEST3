@@ -5671,3 +5671,137 @@ def api_auth_logs(request):
         return JsonResponse({'success': True, 'logs': ''.join(tail)})
     except Exception as e:
         return JsonResponse({'success': True, 'logs': f'读取日志失败: {e}'})
+
+
+# ========== 带宽测试 API ==========
+@require_http_methods(["GET"])
+def api_bandwidth_my_agents(request):
+    """获取当前用户租用的Agent列表"""
+    from .models import AgentLock, LocalAgent
+
+    try:
+        user_identifier = request.GET.get('user_identifier', '').strip()
+
+        if not user_identifier:
+            return JsonResponse({'success': False, 'error': '请输入用户标识符'})
+
+        # 检查租用
+        lock = AgentLock.objects.filter(
+            user_identifier=user_identifier,
+            status='active'
+        ).first()
+
+        if not lock:
+            return JsonResponse({'success': True, 'agents': []})
+
+        agents = lock.agents.all()
+        agent_list = []
+
+        for agent in agents:
+            agent_list.append({
+                'agent_id': agent.agent_id,
+                'interface_name': agent.interface.name,
+                'ip_address': agent.interface.ip_address,
+                'status': agent.status,
+                'port': agent.port,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'agents': agent_list
+        })
+
+    except Exception as e:
+        logger.exception(f"获取用户租用Agent失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+def api_bandwidth_start(request):
+    """启动带宽测试"""
+    from .bandwidth_utils import BandwidthTestManager
+
+    try:
+        data = json.loads(request.body)
+        user_identifier = data.get('user_identifier', '').strip()
+
+        if not user_identifier:
+            return JsonResponse({'success': False, 'error': '请输入用户标识符'})
+
+        # 检查是否已有活跃测试
+        if BandwidthTestManager.active_tests:
+            for test_id, test_info in BandwidthTestManager.active_tests.items():
+                if test_info.get('user_identifier') == user_identifier:
+                    return JsonResponse({
+                        'success': False,
+                        'error': '您已有正在进行的带宽测试'
+                    })
+
+        result = BandwidthTestManager.start_test(data, user_identifier)
+
+        return JsonResponse(result)
+
+    except Exception as e:
+        logger.exception(f"启动带宽测试失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+def api_bandwidth_stop(request):
+    """停止带宽测试"""
+    from .bandwidth_utils import BandwidthTestManager
+
+    try:
+        data = json.loads(request.body)
+        test_id = data.get('test_id')
+
+        if not test_id:
+            return JsonResponse({'success': False, 'error': '缺少test_id参数'})
+
+        result = BandwidthTestManager.stop_test(test_id)
+
+        return JsonResponse(result)
+
+    except Exception as e:
+        logger.exception(f"停止带宽测试失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_bandwidth_status(request):
+    """查询测试状态"""
+    from .bandwidth_utils import BandwidthTestManager
+
+    try:
+        test_id = request.GET.get('test_id')
+
+        if not test_id:
+            return JsonResponse({'success': False, 'error': '缺少test_id参数'})
+
+        if test_id not in BandwidthTestManager.active_tests:
+            return JsonResponse({
+                'success': True,
+                'status': 'stopped',
+                'test_id': test_id
+            })
+
+        test_info = BandwidthTestManager.active_tests[test_id]
+
+        return JsonResponse({
+            'success': True,
+            'status': 'running',
+            'test_id': test_id,
+            'server_agent_id': test_info['server_agent_id'],
+            'client_agent_id': test_info['client_agent_id'],
+            'duration': test_info['duration'],
+            'start_time': test_info['start_time'].isoformat(),
+        })
+
+    except Exception as e:
+        logger.exception(f"查询带宽测试状态失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def bandwidth_test(request):
+    """带宽测试页面"""
+    return render(request, 'bandwidth_test.html')
