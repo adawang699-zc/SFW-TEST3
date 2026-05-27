@@ -4452,24 +4452,36 @@ DEFAULT_FIREWALL_BACKEND_PASSWORD = '#HiNA_!ns@USHDLk'
 
 
 def _enter_backend_shell(ssh, backend_password):
-    """进入防火墙 root 后台（发送 enter + 密码）"""
+    """进入防火墙 root 后台（发送 enter + 密码），验证成功"""
     chan = ssh.invoke_shell()
     chan.settimeout(30)
     time.sleep(0.5)
+    # 清空初始输出（包括欢迎信息）
+    init_out = ''
     while chan.recv_ready():
-        chan.recv(4096)
+        init_out += chan.recv(4096).decode('utf-8', errors='ignore')
 
     # 发送 enter 触发后台登录
     chan.send('enter\n')
     time.sleep(0.5)
-    if chan.recv_ready():
-        chan.recv(4096)
+    resp = ''
+    while chan.recv_ready():
+        resp += chan.recv(4096).decode('utf-8', errors='ignore')
 
     # 发送后台密码
     chan.send(backend_password + '\n')
     time.sleep(0.5)
-    if chan.recv_ready():
-        chan.recv(4096)
+    resp2 = ''
+    while chan.recv_ready():
+        resp2 += chan.recv(4096).decode('utf-8', errors='ignore')
+    full_resp = resp + resp2
+
+    if '[root' not in full_resp and 'Password:' in full_resp:
+        # 密码错误，尝试读取更多输出
+        time.sleep(0.5)
+        while chan.recv_ready():
+            full_resp += chan.recv(4096).decode('utf-8', errors='ignore')
+        raise Exception(f'后台密码错误，无法进入 root shell')
 
     return chan
 
@@ -4509,10 +4521,8 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         user = device.get('user', 'admin')
         password = device.get('password', '')
         from .device_utils import get_backend_password
-        backend_password = get_backend_password(
-            device.get('device_type', 'ic_firewall'),
-            device.get('backend_password', '')
-        )
+        # 使用设备类型对应的默认后台密码，忽略用户可能填错的自定义密码
+        backend_password = get_backend_password(device.get('device_type', 'ic_firewall'))
 
         import paramiko
 
@@ -4559,24 +4569,33 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
             exec_cmd += f' --end-time "{end_time}"'
 
         output_file = f'/tmp/log_gen_{task_id}.out'
-        # 后台执行 + disown（替代 nohup）
-        bg_cmd = f'{exec_cmd} > {output_file} 2>&1 &\ndisown'
+        # 后台执行（先 & 后台运行获取 PID，再 disown 脱离控制）
+        bg_cmd1 = f'{exec_cmd} > {output_file} 2>&1 &'
 
         _update_task_output(task_id, f'开始执行日志生成...\n')
         _update_task_output(task_id, f'表名: {table_name}, 条数: {row_count}\n')
         _update_task_output(task_id, f'预估时间: {_estimate_time(row_count)} 分钟\n')
         _update_task_output(task_id, f'命令: {exec_cmd}\n\n')
 
-        out = _exec_backend_cmd(chan, bg_cmd, wait_time=2)
-        # 从 job notification [N] PID 解析进程号
+        # 发送后台执行命令 &，立即读取 job notification [N] PID
+        chan.send(bg_cmd1 + '\n')
+        time.sleep(1.5)
+        out = ''
+        while chan.recv_ready():
+            out += chan.recv(8192).decode('utf-8', errors='ignore')
+
+        # 从 job notification 解析 PID
         import re
         pid_match = re.search(r'\[\d+\]\s+(\d+)', out)
         pid = pid_match.group(1) if pid_match else ''
         task['pid'] = pid
-        _save_log_tasks({**_load_log_tasks(), task_id: task})
 
+        # 再 disown
+        _exec_backend_cmd(chan, 'disown', wait_time=0.5)
         chan.close()
         ssh.close()
+
+        _save_log_tasks({**_load_log_tasks(), task_id: task})
         _update_task_output(task_id, f'后台进程 PID: {pid}\n')
 
         # 步骤 5: 监控进度（每次重新 SSH + 进入后台）

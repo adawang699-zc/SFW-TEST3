@@ -2,9 +2,6 @@
 {% block title %}其他配置{% endblock %}
 
 {% block content %}
-<style>
-.help-tooltip:hover .help-tooltip-content { display: block !important; }
-</style>
 <div class="card">
     <div class="card-header">其他配置</div>
     <p style="color: var(--text-secondary); margin-bottom: 20px;">
@@ -73,23 +70,10 @@
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="display: flex; gap: 12px;">
                     <button class="btn btn-primary" onclick="confirmAndGenerateLogs()" id="generateLogBtn">
                         <i class="fas fa-play"></i> 生成日志
                     </button>
-                    <span class="help-tooltip" style="position: relative; cursor: help; color: var(--primary); font-size: 1.2rem; display: inline-flex; align-items: center;">
-                        <i class="fas fa-question-circle"></i>
-                        <div class="help-tooltip-content" style="display: none; position: absolute; left: 28px; top: -8px; width: 340px; background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 14px 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 1000; font-size: 0.8rem; color: #333; line-height: 1.7; white-space: normal; text-align: left; font-weight: normal;">
-                            <strong style="color: #e67e22;">使用说明</strong>
-                            <ol style="padding-left: 18px; margin: 6px 0 0 0;">
-                                <li>从测试设备中选择要生成日志的防火墙设备</li>
-                                <li>选择日志表名称和插入数据条数（最大 100W 条/次）</li>
-                                <li>设置日志时间范围（默认当天 00:00~23:59）</li>
-                                <li>生成日志期间，<strong style="color: #e67e22;">尽量不要查询日志</strong>，会阻塞日志生成</li>
-                                <li>100W 条约 <strong style="color: #00a896;">10 分钟</strong>，数据量越大速度越慢</li>
-                            </ol>
-                        </div>
-                    </span>
                     <button class="btn btn-secondary" onclick="downloadScript()">
                         <i class="fas fa-download"></i> 下载脚本
                     </button>
