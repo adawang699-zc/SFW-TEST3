@@ -2505,6 +2505,100 @@ def iperf_server_stop():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/iperf/client/start', methods=['POST'])
+def iperf_client_start():
+    """启动 iperf client"""
+    try:
+        data = request.get_json()
+        server_ip = data.get('server_ip')
+        port = data.get('port', 5201)
+        duration = data.get('duration', 10)
+        protocol = data.get('protocol', 'tcp')
+        mtu = data.get('mtu', 1400)
+        bandwidth = data.get('bandwidth')
+
+        if not server_ip:
+            return jsonify({'success': False, 'error': '缺少server_ip参数'})
+
+        # 构建命令
+        cmd = ['iperf3', '-c', server_ip, '-p', str(port), '-t', str(duration), '-l', str(mtu)]
+
+        if protocol == 'udp':
+            cmd.append('-u')
+            if bandwidth:
+                cmd.extend(['-b', f'{bandwidth}M'])
+
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        with iperf_processes_lock:
+            iperf_processes['iperf_client'] = proc
+
+        logger.info(f"iperf client启动: cmd={' '.join(cmd)}, pid={proc.pid}")
+
+        return jsonify({
+            'success': True,
+            'pid': proc.pid,
+            'cmd': ' '.join(cmd)
+        })
+
+    except Exception as e:
+        logger.exception(f"iperf client启动失败: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/iperf/client/stop', methods=['POST'])
+def iperf_client_stop():
+    """停止 iperf client"""
+    try:
+        with iperf_processes_lock:
+            if 'iperf_client' in iperf_processes:
+                proc = iperf_processes['iperf_client']
+                if proc.poll() is None:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait()
+                del iperf_processes['iperf_client']
+                logger.info("iperf client已停止")
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        logger.exception(f"iperf client停止失败: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/iperf/status', methods=['GET'])
+def iperf_status():
+    """获取iperf进程状态"""
+    try:
+        status = {}
+
+        with iperf_processes_lock:
+            for name, proc in list(iperf_processes.items()):
+                if proc.poll() is None:
+                    status[name] = 'running'
+                else:
+                    status[name] = 'stopped'
+                    del iperf_processes[name]
+
+        return jsonify({
+            'success': True,
+            'status': status
+        })
+
+    except Exception as e:
+        logger.exception(f"获取iperf状态失败: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 # ========== 主入口 ==========
 
 # Gunicorn 入口：在模块导入时初始化 start_time
