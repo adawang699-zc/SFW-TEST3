@@ -27,8 +27,17 @@ class BandwidthTestConsumer(AsyncWebsocketConsumer):
         await self.accept()
         logger.info(f"WebSocket连接建立: test_id={test_id}")
 
+        # 启动iperf监控线程
+        from main.bandwidth_utils import BandwidthTestMonitor
+        self.monitor = BandwidthTestMonitor(test_id, self)
+        self.monitor.start()
+
     async def disconnect(self, close_code: int) -> None:
         """WebSocket断开"""
+        # 停止监控线程
+        if hasattr(self, 'monitor'):
+            self.monitor.stop()
+
         # 离开频道组（添加安全检查）
         if hasattr(self, 'group_name'):
             await self.channel_layer.group_discard(

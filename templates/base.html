@@ -574,6 +574,11 @@
             </a>
         </div>
         <div class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'bandwidth_test' %}active{% endif %}" href="{% url 'main:bandwidth_test' %}">
+                <i>⚡</i>带宽测试
+            </a>
+        </div>
+        <div class="nav-item">
             <a class="nav-link {% if request.resolver_match.url_name == 'knowledge_base' %}active{% endif %}" href="{% url 'main:knowledge_base' %}">
                 <i>📚</i>知识库管理
             </a>
