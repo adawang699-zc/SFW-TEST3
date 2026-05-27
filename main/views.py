@@ -70,14 +70,11 @@ def _get_auth_logger():
         _auth_logger = logging.getLogger('auth_server')
         _auth_logger.setLevel(logging.INFO)
         log_dir = '/var/log/test'
-        try:
-            if not os.path.exists(log_dir):
-                os.makedirs(log_dir)
-            handler = logging.FileHandler(os.path.join(log_dir, 'auth_server.log'))
-            handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-            _auth_logger.addHandler(handler)
-        except Exception:
-            pass
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        handler = logging.FileHandler(os.path.join(log_dir, 'auth_server.log'))
+        handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+        _auth_logger.addHandler(handler)
     return _auth_logger
 
 # ========== Network Namespace 辅助函数 ==========
