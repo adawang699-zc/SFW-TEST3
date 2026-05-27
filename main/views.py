@@ -4530,21 +4530,20 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh.connect(ip, port=port, username=user, password=password, timeout=15)
-        _update_task_output(task_id, 'SSH 连接防火墙成功\n')
+        _update_task_output(task_id, f'SSH 连接 {ip} 成功\n')
 
         chan = _enter_backend_shell(ssh, backend_password)
-        _update_task_output(task_id, '已进入 root 后台\n')
+        _update_task_output(task_id, f'进程: {task_id[:8]}, 表: {table_name}, 条数: {row_count}\n')
 
         # 步骤 2: 创建目标目录和临时目录
         _exec_backend_cmd(chan, 'mkdir -p /app/local/share/new_self_manage/', wait_time=1)
         _exec_backend_cmd(chan, 'mkdir -p /data/tmp/', wait_time=0.5)
 
         # 步骤 3: 在防火墙上执行 SCP 从 Ubuntu 拉取脚本
-        _update_task_output(task_id, '正在从 Ubuntu 同步脚本...\n')
+        _update_task_output(task_id, '同步脚本...\n')
         for fpath in script_files:
             fname = os.path.basename(fpath)
             remote_path = f'/app/local/share/new_self_manage/{fname}'
-            # sshpass + scp 在防火墙 root shell 中拉取文件
             scp_cmd = (
                 f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
                 f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{fpath} {remote_path}'
@@ -4553,7 +4552,6 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
             if 'lost connection' in out.lower() or 'not found' in out.lower():
                 raise Exception(f'SCP 传输失败: {fname}\n{out[:500]}')
             _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.5)
-            _update_task_output(task_id, f'同步脚本 {fname} 完成\n')
 
         # 步骤 4: 在防火墙上执行脚本（后台 nohup）
         remote_dir = '/app/local/share/new_self_manage/'
@@ -4573,10 +4571,7 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         # 后台执行（先 & 后台运行获取 PID，再 disown 脱离控制）
         bg_cmd1 = f'{exec_cmd} > {output_file} 2>&1 &'
 
-        _update_task_output(task_id, f'开始执行日志生成...\n')
-        _update_task_output(task_id, f'表名: {table_name}, 条数: {row_count}\n')
-        _update_task_output(task_id, f'预估时间: {_estimate_time(row_count)} 分钟\n')
-        _update_task_output(task_id, f'命令: {exec_cmd}\n\n')
+        _update_task_output(task_id, f'执行中 (预估 {_estimate_time(row_count)} min)...\n')
 
         # 发送后台执行命令 &，立即读取 job notification [N] PID
         chan.send(bg_cmd1 + '\n')
@@ -4597,7 +4592,7 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         ssh.close()
 
         _save_log_tasks({**_load_log_tasks(), task_id: task})
-        _update_task_output(task_id, f'后台进程 PID: {pid}\n')
+        _update_task_output(task_id, f'PID: {pid}\n')
 
         # 步骤 5: 监控进度（每次重新 SSH + 进入后台）
         while True:
@@ -4622,12 +4617,10 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
                     task['output'] = poll_out2
                     _save_log_tasks({**_load_log_tasks(), task_id: task})
                     # 从输出检测是否已完成（防止 PID 被回收误判）
-                    if 'Done' in poll_out2 and ('Total' in poll_out2 or 'Avg speed' in poll_out2):
-                        _update_task_output(task_id, '\n检测到脚本已完成，获取最终输出...\n')
+                    if 'Done' in poll_out2:
                         break
 
                 if not is_alive:
-                    _update_task_output(task_id, '\n进程已结束，获取最终输出...\n')
                     break
             except Exception as e:
                 _update_task_output(task_id, f'轮询异常（将重试）: {e}\n')
@@ -4648,7 +4641,7 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
 
         task['output'] = final_out
 
-        if 'Done' in final_out and ('Total' in final_out or 'Avg speed' in final_out):
+        if 'Done' in final_out:
             task['status'] = 'completed'
             task['completed_at'] = time.time()
         else:
