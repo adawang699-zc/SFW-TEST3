@@ -4621,6 +4621,10 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
                 if poll_out2.strip():
                     task['output'] = poll_out2
                     _save_log_tasks({**_load_log_tasks(), task_id: task})
+                    # 从输出检测是否已完成（防止 PID 被回收误判）
+                    if 'Done' in poll_out2 and ('Total' in poll_out2 or 'Avg speed' in poll_out2):
+                        _update_task_output(task_id, '\n检测到脚本已完成，获取最终输出...\n')
+                        break
 
                 if not is_alive:
                     _update_task_output(task_id, '\n进程已结束，获取最终输出...\n')
