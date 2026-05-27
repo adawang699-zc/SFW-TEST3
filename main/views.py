@@ -4503,6 +4503,28 @@ def _exec_backend_cmd(chan, cmd, wait_time=1):
     return out
 
 
+def _clean_cat_output(raw_output):
+    """清洗 cat 命令输出：去掉命令回显行和 shell 提示符"""
+    if not raw_output or not raw_output.strip():
+        return ''
+    lines = raw_output.split('\n')
+    cleaned = []
+    for line in lines:
+        s = line.strip()
+        # 跳过 cat 命令回显
+        if s.startswith('cat ') and ('/tmp/' in s or '.out' in s or '.txt' in s):
+            continue
+        # 跳过 shell 提示符
+        if '[root' in s and (']$ ' in s or ']# ' in s):
+            continue
+        # 跳过只有路径的行（如 /dev/null）
+        if s == '/dev/null':
+            continue
+        cleaned.append(line)
+    result = '\n'.join(cleaned).strip()
+    return result
+
+
 def _execute_log_task(task_id, device, table_name, row_count, start_time, end_time):
     """后台执行日志生成任务（在独立线程中运行）"""
     tasks = _load_log_tasks()
@@ -4609,15 +4631,15 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
 
                 # 读取输出文件
                 poll_out2 = _exec_backend_cmd(poll_chan, f'cat {output_file} 2>/dev/null', wait_time=1)
+                poll_out2_clean = _clean_cat_output(poll_out2)
 
                 poll_chan.close()
                 poll_ssh.close()
 
-                if poll_out2.strip():
-                    task['output'] = poll_out2
+                if poll_out2_clean:
+                    task['output'] = poll_out2_clean
                     _save_log_tasks({**_load_log_tasks(), task_id: task})
-                    # 从输出检测是否已完成（防止 PID 被回收误判）
-                    if 'Done' in poll_out2:
+                    if 'Done' in poll_out2_clean:
                         break
 
                 if not is_alive:
@@ -4633,15 +4655,16 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         final_chan = _enter_backend_shell(final_ssh, backend_password)
 
         final_out = _exec_backend_cmd(final_chan, f'cat {output_file} 2>/dev/null', wait_time=2)
+        final_out_clean = _clean_cat_output(final_out)
         # 清理输出文件
         _exec_backend_cmd(final_chan, f'rm -f {output_file}', wait_time=0.5)
 
         final_chan.close()
         final_ssh.close()
 
-        task['output'] = final_out
+        task['output'] = final_out_clean
 
-        if 'Done' in final_out:
+        if 'Done' in final_out_clean:
             task['status'] = 'completed'
             task['completed_at'] = time.time()
         else:
@@ -4941,14 +4964,15 @@ def _execute_archive_task(task_id, device, date_str, days, file_size_gb, file_co
                 is_alive = 'ALIVE' in poll_out
 
                 poll_out2 = _exec_backend_cmd(poll_chan, f'cat {output_file} 2>/dev/null', wait_time=1)
+                poll_out2_clean = _clean_cat_output(poll_out2)
 
                 poll_chan.close()
                 poll_ssh.close()
 
-                if poll_out2.strip():
-                    task['output'] = poll_out2
+                if poll_out2_clean:
+                    task['output'] = poll_out2_clean
                     _save_log_tasks({**_load_log_tasks(), task_id: task})
-                    if 'Done' in poll_out2:
+                    if 'Done' in poll_out2_clean:
                         break
 
                 if not is_alive:
@@ -4964,14 +4988,15 @@ def _execute_archive_task(task_id, device, date_str, days, file_size_gb, file_co
         final_chan = _enter_backend_shell(final_ssh, backend_password)
 
         final_out = _exec_backend_cmd(final_chan, f'cat {output_file} 2>/dev/null', wait_time=2)
+        final_out_clean = _clean_cat_output(final_out)
         _exec_backend_cmd(final_chan, f'rm -f {output_file}', wait_time=0.5)
 
         final_chan.close()
         final_ssh.close()
 
-        task['output'] = final_out
+        task['output'] = final_out_clean
 
-        if 'Done' in final_out:
+        if 'Done' in final_out_clean:
             task['status'] = 'completed'
             task['completed_at'] = time.time()
         else:
