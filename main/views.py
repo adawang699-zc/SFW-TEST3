@@ -4322,28 +4322,324 @@ def api_namespace_status(request):
     })
 
 
-# ========== 其他配置 ==========
+# ========== 其他配置 - 日志生成任务管理 ==========
+
+import threading
+import uuid as uuid_lib
+import base64
+
+# 支持的日志表
+SUPPORTED_LOG_TABLES = {
+    'whitelist_log': '安全策略日志',
+    'ipmac_log': 'IP/MAC日志',
+    'blacklist_log': '黑名单日志',
+    'attack_log': '攻击防护日志',
+    'ip_session_log': 'IP会话日志',
+    'tcp_session_log': 'TCP会话日志',
+    'industry_log': '入侵防御日志',
+    'virus_scan_log': '病毒扫描日志',
+    'events': '系统日志',
+    'operationlogs': '操作日志',
+}
+
+# 任务存储
+LOG_TASKS_FILE = None
+_log_task_lock = threading.Lock()
+
+
+def _init_log_tasks_file():
+    """初始化任务存储文件"""
+    global LOG_TASKS_FILE
+    if LOG_TASKS_FILE:
+        return
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    LOG_TASKS_FILE = os.path.join(project_root, 'logs', 'log_gen_tasks.json')
+    os.makedirs(os.path.dirname(LOG_TASKS_FILE), exist_ok=True)
+    if not os.path.exists(LOG_TASKS_FILE):
+        with open(LOG_TASKS_FILE, 'w') as f:
+            json.dump({}, f)
+
+
+def _load_log_tasks():
+    """加载所有任务"""
+    _init_log_tasks_file()
+    with _log_task_lock:
+        if os.path.exists(LOG_TASKS_FILE):
+            with open(LOG_TASKS_FILE, 'r') as f:
+                return json.load(f)
+        return {}
+
+
+def _save_log_tasks(tasks):
+    """保存所有任务"""
+    _init_log_tasks_file()
+    with _log_task_lock:
+        with open(LOG_TASKS_FILE, 'w') as f:
+            json.dump(tasks, f, indent=2)
+
+
+def _get_supported_table_mapping():
+    """获取支持的日志表映射列表（前端下拉框用）"""
+    return [{'key': k, 'label': v} for k, v in SUPPORTED_LOG_TABLES.items()]
+
+
+def _get_log_script_dir():
+    """获取日志脚本目录"""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(project_root, 'license', 'log_insert_py')
+
+
+def _get_script_files():
+    """获取日志脚本文件列表"""
+    script_dir = _get_log_script_dir()
+    if os.path.isdir(script_dir):
+        return [os.path.join(script_dir, f) for f in os.listdir(script_dir) if f.endswith('.py')]
+    return []
+
+
+def _estimate_time(row_count):
+    """预估执行时间（分钟），非线性增长"""
+    base = 10  # 100W ~ 10min
+    if row_count <= 1000000:
+        return int(base * (row_count / 1000000))
+    else:
+        # 200W 约 25min，非线性
+        ratio = row_count / 1000000
+        return int(base * ratio * (1 + 0.25 * (ratio - 1)))
+
+
+def _check_ssh_port(ip, port=22, timeout=5):
+    """检测 SSH 端口是否开放"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+def _execute_log_task(task_id, device, table_name, row_count, start_time, end_time):
+    """后台执行日志生成任务（在独立线程中运行）"""
+    tasks = _load_log_tasks()
+    task = tasks.get(task_id, {})
+    task['status'] = 'running'
+    task['started_at'] = time.time()
+    _save_log_tasks(tasks)
+
+    try:
+        script_dir = _get_log_script_dir()
+        script_files = _get_script_files()
+        if not script_files:
+            raise Exception('日志脚本文件不存在，请检查 license/log_insert_py/ 目录')
+
+        ip = device.get('ip', '')
+        port = int(device.get('port', 22))
+        user = device.get('user', 'admin')
+        password = device.get('password', '')
+        backend_password = device.get('backend_password', '')
+
+        # 使用 sudo 密码（优先 backend_password）
+        sudo_pwd = backend_password or password
+
+        import paramiko
+
+        # 步骤 1: SSH 创建目标目录（需 sudo）
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(ip, port=port, username=user, password=password, timeout=15)
+        _update_task_output(task_id, 'SSH 连接防火墙成功，准备上传脚本...\n')
+
+        # 使用 sudo 创建目录
+        stdin, stdout, stderr = ssh.exec_command(
+            f'echo "{sudo_pwd}" | sudo -S mkdir -p /app/local/share/new_self_manage/', timeout=10)
+        stdout.channel.recv_exit_status()
+        ssh.close()
+
+        # 步骤 2: SFTP 上传脚本到 /tmp，再用 sudo 移动到目标目录
+        transport = paramiko.Transport((ip, port))
+        transport.connect(username=user, password=password)
+        sftp = paramiko.SFTPClient.from_transport(transport)
+
+        for fpath in script_files:
+            fname = os.path.basename(fpath)
+            tmp_path = f'/tmp/{fname}'
+            sftp.put(fpath, tmp_path)
+            sftp.chmod(tmp_path, 0o755)
+            _update_task_output(task_id, f'上传脚本 {fname} 完成\n')
+
+        sftp.close()
+        transport.close()
+
+        # 步骤 3: sudo 移动到目标目录
+        ssh2 = paramiko.SSHClient()
+        ssh2.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh2.connect(ip, port=port, username=user, password=password, timeout=15)
+        for fpath in script_files:
+            fname = os.path.basename(fpath)
+            ssh2.exec_command(
+                f'echo "{sudo_pwd}" | sudo -S cp /tmp/{fname} /app/local/share/new_self_manage/{fname}', timeout=10)
+        ssh2.close()
+
+        # 步骤 4: 在防火墙上执行脚本（后台 nohup）
+        ssh3 = paramiko.SSHClient()
+        ssh3.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh3.connect(ip, port=port, username=user, password=password, timeout=15)
+
+        remote_dir = '/app/local/share/new_self_manage/'
+        script_name = os.path.basename(script_files[0])
+        exec_cmd = (
+            f'cd {remote_dir} && '
+            f'python {remote_dir}{script_name} '
+            f'--table "{table_name}" '
+            f'--count {row_count}'
+        )
+        if start_time:
+            exec_cmd += f' --start-time "{start_time}"'
+        if end_time:
+            exec_cmd += f' --end-time "{end_time}"'
+
+        output_file = f'/tmp/log_gen_{task_id}.out'
+        nohup_cmd = f'nohup {exec_cmd} > {output_file} 2>&1 & echo $!'
+
+        _update_task_output(task_id, f'开始执行日志生成...\n')
+        _update_task_output(task_id, f'表名: {table_name}, 条数: {row_count}\n')
+        _update_task_output(task_id, f'预估时间: {_estimate_time(row_count)} 分钟\n')
+        _update_task_output(task_id, f'命令: {exec_cmd}\n\n')
+
+        stdin, stdout, stderr = ssh3.exec_command(nohup_cmd, timeout=10)
+        pid = stdout.read().decode().strip()
+        task['pid'] = pid
+        _save_log_tasks({**_load_log_tasks(), task_id: task})
+
+        ssh3.close()
+
+        # 步骤 5: 监控进度
+        last_output_len = 0
+        while True:
+            time.sleep(5)
+            ssh4 = paramiko.SSHClient()
+            ssh4.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            try:
+                ssh4.connect(ip, port=port, username=user, password=password, timeout=10)
+            except Exception:
+                continue
+
+            # 检查进程是否存活
+            stdin, stdout, stderr = ssh4.exec_command(f'kill -0 {pid} 2>/dev/null && echo running || echo done', timeout=5)
+            proc_status = stdout.read().decode().strip()
+
+            # 读取输出文件
+            stdin, stdout2, stderr2 = ssh4.exec_command(f'cat {output_file} 2>/dev/null || echo ""', timeout=5)
+            output_text = stdout2.read().decode()
+            ssh4.close()
+
+            if output_text:
+                task['output'] = output_text
+                _save_log_tasks({**_load_log_tasks(), task_id: task})
+
+            if proc_status != 'running':
+                break
+
+        # 步骤 6: 最终输出
+        ssh5 = paramiko.SSHClient()
+        ssh5.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh5.connect(ip, port=port, username=user, password=password, timeout=15)
+
+        stdin, stdout, stderr = ssh5.exec_command(f'cat {output_file} 2>/dev/null', timeout=10)
+        final_output = stdout.read().decode()
+        stdin, stdout2, stderr2 = ssh5.exec_command(f'rm -f {output_file}', timeout=5)
+        stdout2.channel.recv_exit_status()
+        ssh5.close()
+
+        task['output'] = final_output
+
+        if 'Done' in final_output and ('Total' in final_output or 'Avg speed' in final_output):
+            task['status'] = 'completed'
+            task['completed_at'] = time.time()
+        else:
+            task['status'] = 'failed'
+            task['error'] = '脚本执行未正常完成，请查看输出日志'
+
+        _save_log_tasks({**_load_log_tasks(), task_id: task})
+
+    except Exception as e:
+        logger.exception(f"日志生成任务异常: {e}")
+        task['status'] = 'failed'
+        task['error'] = str(e)
+        try:
+            _save_log_tasks({**_load_log_tasks(), task_id: task})
+        except Exception:
+            pass
+
+
+def _update_task_output(task_id, text):
+    """追加任务输出"""
+    try:
+        tasks = _load_log_tasks()
+        if task_id in tasks:
+            tasks[task_id]['output'] = tasks[task_id].get('output', '') + text
+            _save_log_tasks(tasks)
+    except Exception:
+        pass
+
+
+# ========== 其他配置 API ==========
 
 def system_config(request):
     """其他配置页面"""
     return render(request, 'system_config.html')
 
 
+@require_http_methods(["GET"])
+def api_system_config_log_devices(request):
+    """获取测试设备列表（供日志生成选择防火墙）"""
+    try:
+        devices = TestDevice.objects.all().values('id', 'name', 'ip', 'port', 'type')
+        return JsonResponse({
+            'success': True,
+            'devices': list(devices),
+            'table_mapping': _get_supported_table_mapping(),
+        })
+    except Exception as e:
+        logger.exception(f"获取设备列表失败: {e}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_system_config_log_status(request):
+    """获取日志生成任务状态"""
+    task_id = request.GET.get('task_id', '').strip()
+    if not task_id:
+        return JsonResponse({'success': False, 'error': '缺少 task_id'})
+
+    tasks = _load_log_tasks()
+    task = tasks.get(task_id)
+    if not task:
+        return JsonResponse({'success': False, 'error': '任务不存在'})
+
+    return JsonResponse({
+        'success': True,
+        'task': {
+            'task_id': task.get('task_id', task_id),
+            'status': task.get('status', 'unknown'),
+            'output': task.get('output', ''),
+            'error': task.get('error', ''),
+            'started_at': task.get('started_at'),
+            'completed_at': task.get('completed_at'),
+        }
+    })
+
+
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_system_config_log_generate(request):
-    """日志生成 API - 将日志脚本拷贝到防火墙设备并执行
-
-    流程:
-        1. 从本机 license 目录获取 log_insert_py 脚本
-        2. SCP 到防火墙设备的 /app/local/share/new_self_manage/ 目录
-        3. 在防火墙上执行脚本并返回结果
+    """日志生成 API - 后台执行
 
     请求参数:
-        device_ip: 防火墙设备 IP
-        device_user: SSH 用户名
-        device_password: SSH 密码
-        table_name: 日志表名
+        device_id: 测试设备 ID（从测试设备中选择）
+        table_name: 日志表名（key，如 whitelist_log）
         row_count: 插入条数（最大 100W）
         start_time: 时间范围起始
         end_time: 时间范围结束
@@ -4354,161 +4650,93 @@ def api_system_config_log_generate(request):
         # 处理脚本下载请求
         action = data.get('action', '')
         if action == 'download_script':
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            script_dir = os.path.join(project_root, 'license', 'log_insert_py')
-
-            if os.path.isfile(script_dir):
-                import base64
-                with open(script_dir, 'rb') as f:
+            script_files = _get_script_files()
+            if script_files:
+                with open(script_files[0], 'rb') as f:
                     content = base64.b64encode(f.read()).decode('utf-8')
                 return JsonResponse({
                     'success': True,
                     'content': content,
-                    'filename': os.path.basename(script_dir)
+                    'filename': os.path.basename(script_files[0])
                 })
-            elif os.path.isdir(script_dir):
-                py_files = [f for f in os.listdir(script_dir) if f.endswith('.py')]
-                if py_files:
-                    import base64
-                    target = os.path.join(script_dir, py_files[0])
-                    with open(target, 'rb') as f:
-                        content = base64.b64encode(f.read()).decode('utf-8')
-                    return JsonResponse({
-                        'success': True,
-                        'content': content,
-                        'filename': py_files[0]
-                    })
             return JsonResponse({'success': False, 'error': '脚本文件不存在'})
 
-        device_ip = data.get('device_ip', '').strip()
-        device_user = data.get('device_user', 'admin')
-        device_password = data.get('device_password', '')
+        device_id = data.get('device_id', '')
         table_name = data.get('table_name', '').strip()
         row_count = int(data.get('row_count', 1000))
         start_time = data.get('start_time', '').strip()
         end_time = data.get('end_time', '').strip()
 
-        if not device_ip:
-            return JsonResponse({'success': False, 'error': '缺少设备 IP'})
-        if not table_name:
-            return JsonResponse({'success': False, 'error': '缺少日志表名称'})
+        # 验证参数
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '请选择防火墙设备'})
+        if table_name not in SUPPORTED_LOG_TABLES:
+            return JsonResponse({'success': False, 'error': f'不支持的日志表: {table_name}'})
         if row_count < 1 or row_count > 1000000:
             return JsonResponse({'success': False, 'error': '插入条数范围为 1~1000000'})
 
-        # 查找脚本文件
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        script_dir = os.path.join(project_root, 'license', 'log_insert_py')
-        script_local_path = None
-
-        if os.path.isfile(script_dir):
-            script_local_path = script_dir
-            script_name = os.path.basename(script_dir)
-        elif os.path.isdir(script_dir):
-            # 如果是目录，寻找 .py 文件
-            py_files = [f for f in os.listdir(script_dir) if f.endswith('.py')]
-            if not py_files:
-                return JsonResponse({'success': False, 'error': f'脚本目录 {script_dir} 中未找到 .py 文件'})
-            script_local_path = script_dir
-            script_name = py_files[0]
-        else:
-            return JsonResponse({'success': False, 'error': f'脚本文件不存在，请将 log_insert_py 放置在 license/ 目录下'})
-
-        # 防火墙目标路径
-        remote_dir = '/app/local/share/new_self_manage/'
-        remote_script_path = os.path.join(remote_dir, script_name).replace('\\', '/')
-
-        # 步骤 1: SSH 到防火墙并创建目录，然后 SCP 脚本
-        import paramiko
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
+        # 获取设备信息
         try:
-            ssh.connect(device_ip, port=22, username=device_user,
-                       password=device_password, timeout=15)
-            logger.info(f"SSH 连接防火墙 {device_ip} 成功")
+            device = TestDevice.objects.get(id=device_id)
+        except TestDevice.DoesNotExist:
+            return JsonResponse({'success': False, 'error': '设备不存在'})
 
-            # 创建远程目录
-            stdin, stdout, stderr = ssh.exec_command(f'mkdir -p {remote_dir}')
-            stdout.channel.recv_exit_status()
-            logger.info(f"创建远程目录: {remote_dir}")
+        # 检测 SSH 是否开放
+        if not _check_ssh_port(device.ip, device.port):
+            return JsonResponse({
+                'success': False,
+                'error': f'设备 {device.name}({device.ip}) SSH 端口未开放，请在防火墙上开启 SSH 后重试',
+                'need_enable_ssh': True,
+            })
 
-            # 关闭 SSH（SCP 用独立的传输）
-            ssh.close()
+        # 检查脚本文件
+        script_files = _get_script_files()
+        if not script_files:
+            return JsonResponse({'success': False, 'error': '日志脚本文件不存在，请检查 license/log_insert_py/ 目录'})
 
-            # 步骤 2: SCP 脚本到防火墙
-            transport = paramiko.Transport((device_ip, 22))
-            transport.connect(username=device_user, password=device_password)
-            sftp = paramiko.SFTPClient.from_transport(transport)
+        # 创建设备信息字典
+        device_info = {
+            'ip': device.ip,
+            'port': device.port,
+            'user': device.user,
+            'password': device.password,
+            'backend_password': device.backend_password,
+        }
 
-            if os.path.isdir(script_local_path):
-                # 如果是目录，上传所有 .py 文件
-                for f in os.listdir(script_local_path):
-                    if f.endswith('.py'):
-                        local_file = os.path.join(script_local_path, f)
-                        remote_file = os.path.join(remote_dir, f).replace('\\', '/')
-                        sftp.put(local_file, remote_file)
-                        sftp.chmod(remote_file, 0o755)
-                        logger.info(f"上传脚本: {local_file} -> {remote_file}")
-            else:
-                sftp.put(script_local_path, remote_script_path)
-                sftp.chmod(remote_script_path, 0o755)
-                logger.info(f"上传脚本: {script_local_path} -> {remote_script_path}")
+        # 启动后台任务
+        task_id = str(uuid_lib.uuid4())[:8]
+        tasks = _load_log_tasks()
+        tasks[task_id] = {
+            'task_id': task_id,
+            'status': 'starting',
+            'output': '',
+            'error': '',
+            'device_ip': device.ip,
+            'table_name': table_name,
+            'row_count': row_count,
+            'created_at': time.time(),
+        }
+        _save_log_tasks(tasks)
 
-            sftp.close()
-            transport.close()
+        thread = threading.Thread(
+            target=_execute_log_task,
+            args=(task_id, device_info, table_name, row_count, start_time, end_time),
+            daemon=True
+        )
+        thread.start()
 
-        except Exception as e:
-            logger.exception(f"连接或上传脚本到防火墙失败: {e}")
-            return JsonResponse({'success': False, 'error': f'连接防火墙失败: {str(e)}'})
+        # 预估时间
+        estimate_min = _estimate_time(row_count)
 
-        # 步骤 3: 重新 SSH 到防火墙并执行脚本
-        try:
-            ssh2 = paramiko.SSHClient()
-            ssh2.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh2.connect(device_ip, port=22, username=device_user,
-                        password=device_password, timeout=15)
-
-            # 构建执行命令
-            exec_cmd = (
-                f'cd {remote_dir} && '
-                f'python {remote_script_path} '
-                f'--table "{table_name}" '
-                f'--count {row_count}'
-            )
-            if start_time:
-                exec_cmd += f' --start-time "{start_time}"'
-            if end_time:
-                exec_cmd += f' --end-time "{end_time}"'
-
-            logger.info(f"在防火墙执行脚本: {exec_cmd}")
-
-            stdin, stdout, stderr = ssh2.exec_command(exec_cmd, timeout=300)
-            exit_code = stdout.channel.recv_exit_status()
-            out = stdout.read().decode('utf-8', errors='replace')
-            err = stderr.read().decode('utf-8', errors='replace')
-
-            ssh2.close()
-
-            if exit_code == 0:
-                return JsonResponse({
-                    'success': True,
-                    'output': out,
-                    'message': f'日志生成成功，共插入 {row_count} 条数据'
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'脚本执行失败 (exit: {exit_code})',
-                    'output': out,
-                    'stderr': err
-                })
-
-        except Exception as e:
-            logger.exception(f"在防火墙执行脚本失败: {e}")
-            return JsonResponse({'success': False, 'error': f'执行脚本失败: {str(e)}'})
+        return JsonResponse({
+            'success': True,
+            'task_id': task_id,
+            'estimate_minutes': estimate_min,
+            'message': f'日志生成任务已启动，预计 {estimate_min} 分钟完成，请耐心等待'
+        })
 
     except json.JSONDecodeError:
         return JsonResponse({'success': False, 'error': '请求参数格式错误'})
     except Exception as e:
-        logger.exception(f"日志生成异常: {e}")
+        logger.exception(f"启动日志生成任务异常: {e}")
         return JsonResponse({'success': False, 'error': str(e)})
