@@ -106,9 +106,10 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
         error_message: 空字符串表示成功，否则为错误描述
     """
     # 一次性获取所有网口的 ethtool 信息
+    # 先列出所有网口，再逐个获取 ethtool 信息
     # 使用 for 循环批量执行，减少 SSH 连接次数
     cmd = """
-for iface in $(ls /sys/class/net/ | grep -v -E '^(lo|docker|virbr|vnet|br|ip6tnl|sit|teql|sw|bond|team|tun|tap|vlan|ifb|Virtual|agl|ext)'); do
+for iface in $(ls /sys/class/net/); do
     echo "=== $iface ==="
     ethtool $iface 2>/dev/null | grep -E "Link detected|Speed|Duplex|Auto-negotiation"
 done
@@ -188,33 +189,63 @@ done
             'autoneg': current_info['autoneg']
         })
 
-    # 过滤虚拟接口并排序
+    # 过滤虚拟接口（在Python中过滤，支持所有物理网口格式）
+    # 物理网口格式：eth*, ens*, enp*, s*p* (如 s0p1, s1p2), em*, p*p*
+    # 虚拟接口：lo, docker, virbr, vnet, br, bond, team, tun, tap, vlan, ip6tnl, sit, teql, sw 等
     virtual_prefixes = [
-        'lo', 'docker', 'virbr', 'vnet', 'br', 'br-', 'ifb',
+        'lo', 'docker', 'docker0', 'virbr', 'vnet', 'br', 'br-', 'ifb',
         'bond', 'team', 'tun', 'tap', 'vlan', 'ip6tnl', 'sit', 'teql',
-        'sw', 'Virtual', 'agl', 'ext'
+        'sw', 'Virtual', 'agl', 'ext', 'enx', 'usb'
     ]
 
-    filtered_ports = []
-    for p in ports_info:
-        iface = p['name']
-        is_virtual = False
+    # 判断是否为物理网口的函数
+    def is_physical_interface(iface):
+        # 过滤虚拟接口前缀
         for prefix in virtual_prefixes:
             if iface.lower().startswith(prefix.lower()):
-                is_virtual = True
-                break
-        if is_virtual:
-            continue
+                return False
+        # 过滤纯数字或太短的名称
         if iface.isdigit() or len(iface) < 2:
-            continue
-        filtered_ports.append(p)
+            return False
+        # 物理网口格式匹配：
+        # eth* (eth0, eth1, eth11...)
+        # ens* (ens33, ens192...)
+        # enp* (enp0s3, enp3s0...)
+        # s*p* (s0p1, s1p0, s0p2...) - 扩展卡槽格式
+        # em* (em1, em2...)
+        # p*p* (p1p1, p2p2...)
+        physical_patterns = [
+            r'^eth\d+$',          # eth0, eth1, eth11
+            r'^ens\d+$',          # ens33, ens192
+            r'^enp\d+s\d+$',      # enp0s3, enp3s0
+            r'^enp\d+$',          # enp0, enp1
+            r'^s\d+p\d+$',        # s0p1, s1p0, s0p2 - 扩展卡槽
+            r'^em\d+$',           # em1, em2
+            r'^p\d+p\d+$',        # p1p1, p2p2
+            r'^e\d+$',            # e0, e1
+        ]
+        for pattern in physical_patterns:
+            if re.match(pattern, iface):
+                return True
+        # 如果不匹配任何已知格式，但有 ethtool 输出（link/speed/duplex），可能是物理网口
+        return True  # 默认保留，让用户看到
 
-    # 按网口名称排序
-    filtered_ports.sort(key=lambda x: (
-        x['name'].rstrip('0123456789').rstrip('p').rstrip('0123456789'),
-        int(re.search(r'\d+', x['name']).group()) if re.search(r'\d+', x['name']) else 0,
-        int(re.search(r'p(\d+)', x['name']).group(1)) if re.search(r'p(\d+)', x['name']) else 0
-    ))
+    filtered_ports = [p for p in ports_info if is_physical_interface(p['name'])]
+
+    # 按网口名称排序（支持 eth1, eth2... 和 s0p1, s0p2, s1p0... 格式）
+    def sort_key(iface_name):
+        # 提取前缀
+        prefix = iface_name.rstrip('0123456789')
+        # 处理 s0p1 格式：提取 s 作为前缀
+        if 'p' in iface_name and iface_name.startswith('s'):
+            prefix = 's'
+        # 提取第一个数字（s后面的数字或eth后面的数字）
+        first_num = int(re.search(r'\d+', iface_name).group()) if re.search(r'\d+', iface_name) else 0
+        # 对于 s0p1 格式，提取 p 后的数字
+        second_num = int(re.search(r'p(\d+)', iface_name).group(1)) if re.search(r'p(\d+)', iface_name) else 0
+        return (prefix, first_num, second_num)
+
+    filtered_ports.sort(key=lambda x: sort_key(x['name']))
 
     logger.info(f"设备 {device.ip} 网口列表: {len(filtered_ports)} 个网口")
 
