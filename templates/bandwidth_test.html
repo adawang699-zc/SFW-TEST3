@@ -229,7 +229,8 @@
     margin-top: 16px;
 }
 
-.btn-start {
+/* 基础按钮样式 */
+.action-buttons button {
     background: linear-gradient(135deg, #00c9b1, #00a896);
     border: none;
     color: #fff;
@@ -237,34 +238,28 @@
     border-radius: 10px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
     flex: 1;
+    min-height: 44px;
 }
 
-.btn-start:hover:not(:disabled) {
+.action-buttons button:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(0, 201, 177, 0.4);
 }
 
-.btn-start:disabled {
+.action-buttons button:disabled {
     background: #2a2a4a;
     cursor: not-allowed;
     opacity: 0.6;
 }
 
-.btn-stop {
+/* 停止状态样式 */
+.action-buttons button.btn-stop {
     background: linear-gradient(135deg, #d00000, #b00000);
-    border: none;
-    color: #fff;
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
 }
 
-.btn-stop:hover {
-    transform: translateY(-2px);
+.action-buttons button.btn-stop:hover {
     box-shadow: 0 8px 25px rgba(208, 0, 0, 0.4);
 }
 
@@ -1367,7 +1362,8 @@ function drawGaugeArc(ctx, cx, cy, r) {
 }
 
 function mapBandwidthToAngle(bw, maxBw) {
-    return -135 + Math.min(bw / maxBw, 1) * 270;
+    // 仪表盘从135°开始，到405°结束（顺时针270°范围）
+    return 135 + Math.min(bw / maxBw, 1) * 270;
 }
 
 function stopCanvasAnimation() {
