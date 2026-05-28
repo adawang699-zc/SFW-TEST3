@@ -11,6 +11,7 @@ OPC UA 服务端模拟器
 import asyncio
 import threading
 import time
+import socket
 import logging
 from typing import Dict, Any, Optional, Tuple, List
 from datetime import datetime
@@ -50,6 +51,7 @@ class OpcUaServer:
         self._thread: Optional[threading.Thread] = None
         self._running: bool = False
         self._update_task: Optional[asyncio.Task] = None
+        self._last_error: Optional[str] = None  # 记录最后的错误信息
 
         # 配置
         self._host: str = "0.0.0.0"
@@ -73,6 +75,20 @@ class OpcUaServer:
 
         # 启动时间戳（用于计算 elapsed_time）
         self._start_timestamp: float = 0
+
+    def _check_port_available(self, host: str, port: int) -> Tuple[bool, str]:
+        """检查端口是否可用"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            # 尝试连接，如果连接成功说明端口被占用
+            result = sock.connect_ex((host if host != "0.0.0.0" else "127.0.0.1", port))
+            sock.close()
+            if result == 0:
+                return (False, f"端口 {port} 已被占用")
+            return (True, "")
+        except Exception as e:
+            return (True, "")  # 检查失败时假设端口可用
 
     def is_available(self) -> bool:
         """检查库是否可用"""
@@ -239,6 +255,7 @@ class OpcUaServer:
             await self._server.start()
 
             self._running = True
+            self._last_error = None  # 清除错误
             self._start_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
             logger.info(f"OPC UA 服务端启动: opc.tcp://{self._host}:{self._port}/")
@@ -250,7 +267,17 @@ class OpcUaServer:
             while self._running:
                 await asyncio.sleep(0.5)
 
+        except OSError as e:
+            error_msg = str(e)
+            if "Address already in use" in error_msg or "端口" in error_msg:
+                self._last_error = f"端口 {self._port} 已被占用"
+                logger.error(f"端口 {self._port} 已被占用: {e}")
+            else:
+                self._last_error = f"服务器启动失败: {e}"
+                logger.error(f"服务器运行异常 (OSError): {e}")
+            self._running = False
         except Exception as e:
+            self._last_error = f"服务器启动失败: {e}"
             logger.error(f"服务器运行异常: {e}")
             self._running = False
         finally:
@@ -274,6 +301,12 @@ class OpcUaServer:
             if self._running:
                 return (False, "服务端已在运行")
 
+            # 检查端口是否可用
+            port_ok, port_error = self._check_port_available(host, port)
+            if not port_ok:
+                return (False, port_error)
+
+            self._last_error = None
             self._host = host
             self._port = port
             self._server_name = server_name
@@ -291,13 +324,15 @@ class OpcUaServer:
                 self._thread = threading.Thread(target=run_loop, daemon=True, name="opcua-server")
                 self._thread.start()
 
-                # 等待启动
-                time.sleep(2)
+                # 等待启动（增加到 3 秒）
+                time.sleep(3)
 
                 if self._running:
                     return (True, f"OPC UA 服务端启动成功: opc.tcp://{host}:{port}/")
                 else:
-                    return (False, "服务端启动失败")
+                    # 返回具体的错误信息
+                    error_msg = self._last_error or "服务端启动失败，请检查 asyncua 是否正确安装或端口是否被占用"
+                    return (False, error_msg)
 
             except Exception as e:
                 logger.error(f"启动异常: {e}")
