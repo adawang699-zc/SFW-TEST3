@@ -5836,7 +5836,9 @@ def api_get_device_ports(request, device_id):
     try:
         device = TestDevice.objects.get(id=device_id)
         from main.port_test_utils import get_all_firewall_ports
-        ports = get_all_firewall_ports(device)
+        ports, error = get_all_firewall_ports(device)
+        if error:
+            return JsonResponse({'success': False, 'error': error})
         return JsonResponse({'success': True, 'ports': ports})
     except TestDevice.DoesNotExist:
         return JsonResponse({'success': False, 'error': '设备不存在'})

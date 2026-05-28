@@ -91,7 +91,7 @@ def get_firewall_port_info(device: TestDevice, interface: str) -> Dict[str, Any]
     return {'link': 'error', 'speed': 'error', 'duplex': 'error', 'autoneg': 'error', 'raw_output': ''}
 
 
-def get_all_firewall_ports(device: TestDevice) -> List[Dict[str, Any]]:
+def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], str]:
     """
     获取防火墙所有网口信息
 
@@ -99,7 +99,9 @@ def get_all_firewall_ports(device: TestDevice) -> List[Dict[str, Any]]:
         device: TestDevice对象
 
     Returns:
-        list: [{'name': 'eth0', 'link': 'up', ...}, ...]
+        tuple: (ports列表, 错误消息)
+        ports: [{'name': 'eth0', 'link': 'up', ...}, ...]
+        error_message: 空字符串表示成功，否则为错误描述
     """
     # 获取网口列表 (包括各种命名模式: eth, ens, enp, eno, enx, etc.)
     cmd = "ls /sys/class/net/ | grep -vE 'lo|docker|virbr|vnet|br|wlan'"
@@ -112,8 +114,11 @@ def get_all_firewall_ports(device: TestDevice) -> List[Dict[str, Any]]:
         timeout=10
     )
 
+    if output is False:
+        return [], f"SSH连接失败: {device.ip}:{device.port}@{device.user}"
+
     if not output:
-        return []
+        return [], "无法获取网口列表"
 
     interfaces = [iface.strip() for iface in output.split('\n') if iface.strip()]
     ports_info = []
@@ -128,7 +133,7 @@ def get_all_firewall_ports(device: TestDevice) -> List[Dict[str, Any]]:
             'autoneg': info['autoneg']
         })
 
-    return ports_info
+    return ports_info, ''
 
 
 def configure_agent_port(agent: LocalAgent, interface: str,
