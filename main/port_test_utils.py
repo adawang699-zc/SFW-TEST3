@@ -439,12 +439,6 @@ class PortTestManager:
             logger.exception(f"拓扑检测失败: {e}")
             return {'success': False, 'error': str(e)}
 
-            return {'success': True, 'mappings': mappings}
-
-        except Exception as e:
-            logger.exception(f"拓扑检测失败: {e}")
-            return {'success': False, 'error': str(e)}
-
     @classmethod
     def generate_test_scenarios(cls, autoneg_options: List[str],
                                 speed_options: List[str],
