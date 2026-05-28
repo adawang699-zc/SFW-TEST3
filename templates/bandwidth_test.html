@@ -571,7 +571,7 @@
                 <label class="config-label">端口</label>
                 <input type="number" id="bw-port" class="config-input" value="5201" min="1" max="65535">
             </div>
-            <div class="config-row" id="bw-bandwidth-group" style="display: none;">
+            <div class="config-row" id="bw-bandwidth-group" style="visibility: hidden; height: 0; overflow: hidden;">
                 <label class="config-label">带宽目标</label>
                 <input type="number" id="bw-bandwidth" class="config-input" value="100" min="1" max="10000">
                 <span style="color: #6c6c8c; font-size: 0.8rem;">Mbps</span>
@@ -842,14 +842,18 @@ function updateStartButton() {
 document.getElementById('bw-protocol').addEventListener('change', function() {
     const bandwidthGroup = document.getElementById('bw-bandwidth-group');
     const protocolBadge = document.getElementById('bw-protocol-badge');
+    const bandwidthInput = document.getElementById('bw-bandwidth');
 
     if (this.value === 'udp') {
-        bandwidthGroup.style.display = 'flex';
+        bandwidthGroup.style.visibility = 'visible';
+        bandwidthGroup.style.height = 'auto';
         protocolBadge.style.background = 'rgba(255, 107, 53, 0.2)';
         protocolBadge.style.color = '#ff6b35';
         protocolBadge.textContent = 'UDP';
+        if (!bandwidthInput.value) bandwidthInput.value = '100';
     } else {
-        bandwidthGroup.style.display = 'none';
+        bandwidthGroup.style.visibility = 'hidden';
+        bandwidthGroup.style.height = '0';
         protocolBadge.style.background = 'rgba(0, 201, 177, 0.2)';
         protocolBadge.style.color = '#00c9b1';
         protocolBadge.textContent = 'TCP';
@@ -877,17 +881,46 @@ async function startBandwidthTest() {
         return;
     }
 
+    // 前端参数验证和默认值
+    const durationInput = document.getElementById('bw-duration').value;
+    const mtuInput = document.getElementById('bw-mtu').value;
+    const portInput = document.getElementById('bw-port').value;
+
+    const duration = durationInput ? parseInt(durationInput) || 10 : 10;
+    const mtu = mtuInput ? parseInt(mtuInput) || 1400 : 1400;
+    const port = portInput ? parseInt(portInput) || 5201 : 5201;
+
+    // 数值范围验证
+    if (duration < 1 || duration > 3600) {
+        showToast('测试时长必须在1-3600秒之间', 'error');
+        return;
+    }
+    if (mtu < 64 || mtu > 9000) {
+        showToast('MTU必须在64-9000之间', 'error');
+        return;
+    }
+    if (port < 1 || port > 65535) {
+        showToast('端口必须在1-65535之间', 'error');
+        return;
+    }
+
     const params = {
         server_agent_id: selectedServerAgent,
         client_agent_id: selectedClientAgent,
         protocol: document.getElementById('bw-protocol').value,
-        duration: parseInt(document.getElementById('bw-duration').value),
-        mtu: parseInt(document.getElementById('bw-mtu').value),
-        port: parseInt(document.getElementById('bw-port').value),
+        duration: duration,
+        mtu: mtu,
+        port: port,
     };
 
     if (params.protocol === 'udp') {
-        params.bandwidth = parseInt(document.getElementById('bw-bandwidth').value);
+        const bwInput = document.getElementById('bw-bandwidth').value;
+        const bandwidth = bwInput ? parseInt(bwInput) || 100 : 100;
+        if (bandwidth < 1 || bandwidth > 10000) {
+            showToast('带宽目标必须在1-10000 Mbps之间', 'error');
+            return;
+        }
+        params.bandwidth = bandwidth;
     }
 
     try {
@@ -941,6 +974,8 @@ async function stopBandwidthTest() {
         const result = await apiRequest('/api/bandwidth/stop/', 'POST', { test_id: currentTestId });
         if (result.success) {
             showToast('测试已停止');
+            // 显示停止状态的结果摘要
+            displayStoppedSummary();
             cleanupTest();
         } else {
             showToast(result.error || '停止失败', 'error');
@@ -948,6 +983,33 @@ async function stopBandwidthTest() {
     } catch (e) {
         showToast('停止测试失败: ' + e.message, 'error');
     }
+}
+
+function displayStoppedSummary() {
+    // 手动停止时显示当前统计数据
+    const avgSpeed = bandwidthData.avg_speed || 0;
+    const peakSpeed = bandwidthData.peak_speed || 0;
+    const totalTransfer = bandwidthData.transfer || 0;
+
+    document.getElementById('bw-summary').innerHTML = `
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="summary-value" style="color: #f9c74f;">${avgSpeed.toFixed(1)}</div>
+                <div class="summary-label">平均带宽 (Mbps)</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value" style="color: #f9c74f;">${peakSpeed.toFixed(1)}</div>
+                <div class="summary-label">峰值带宽 (Mbps)</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value" style="color: #f9c74f;">${totalTransfer.toFixed(1)}</div>
+                <div class="summary-label">传输总量 (MB)</div>
+            </div>
+        </div>
+        <div style="margin-top: 12px; color: #f9c74f; font-size: 0.85rem; text-align: center;">
+            测试已手动停止
+        </div>
+    `;
 }
 
 function cleanupTest() {
@@ -1105,12 +1167,12 @@ function animateFlow() {
     ctx.fillStyle = '#0a0a1e';
     ctx.fillRect(0, 0, width, height);
 
-    // Server端
-    drawAgentNode(ctx, 40, height/2 - 30, 50, 60, 'SERVER', '#00c9b1');
+    // Client端（左边）
+    drawAgentNode(ctx, 40, height/2 - 30, 50, 60, 'CLIENT', '#ff6b35');
     // 防火墙
     drawFirewallNode(ctx, width/2 - 25, height/2 - 35, 50, 70, 'FW');
-    // Client端
-    drawAgentNode(ctx, width - 90, height/2 - 30, 50, 60, 'CLIENT', '#ff6b35');
+    // Server端（右边）
+    drawAgentNode(ctx, width - 90, height/2 - 30, 50, 60, 'SERVER', '#00c9b1');
 
     // 连接线
     ctx.strokeStyle = '#f9c74f';
@@ -1126,7 +1188,7 @@ function animateFlow() {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 粒子
+    // 粒子（从Client流向Server）
     particles.forEach(p => {
         p.update(bandwidthData.instant_speed);
         p.draw(ctx);
@@ -1306,9 +1368,9 @@ function drawStaticCanvas() {
     ctx.fillStyle = '#0a0a1e';
     ctx.fillRect(0, 0, width, height);
 
-    drawAgentNode(ctx, 40, height/2 - 30, 50, 60, 'SERVER', '#3a3a5a');
+    drawAgentNode(ctx, 40, height/2 - 30, 50, 60, 'CLIENT', '#3a3a5a');
     drawFirewallNode(ctx, width/2 - 25, height/2 - 35, 50, 70, 'FW');
-    drawAgentNode(ctx, width - 90, height/2 - 30, 50, 60, 'CLIENT', '#3a3a5a');
+    drawAgentNode(ctx, width - 90, height/2 - 30, 50, 60, 'SERVER', '#3a3a5a');
 
     ctx.strokeStyle = '#2a2a4a';
     ctx.lineWidth = 1;
