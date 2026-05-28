@@ -1643,6 +1643,11 @@ function detectTopology() {
         return;
     }
 
+    // 显示检测过程容器
+    const container = document.getElementById('topology_mapping_container');
+    container.innerHTML = '<div style="color: var(--text-secondary); padding: 12px;">⏳ 正在检测拓扑...</div>';
+
+    // 使用 fetch 流式读取 SSE
     fetch('/api/port-test/detect-topology/', {
         method: 'POST',
         headers: {
@@ -1654,22 +1659,70 @@ function detectTopology() {
             agent_ids: selectedAgents
         })
     })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            topologyMappings = data.mappings;
-            const container = document.getElementById('topology_mapping_container');
-            container.innerHTML = '';
-            data.mappings.forEach(m => {
-                container.innerHTML += `<div style="margin-bottom: 8px;">${escapeHtml(m.agent_interface)} → ${escapeHtml(m.firewall_interface)}</div>`;
+    .then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let mappings = [];
+
+        function readStream() {
+            return reader.read().then(({ done, value }) => {
+                if (done) {
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+
+                            if (data.type === 'start') {
+                                container.innerHTML = `<div style="color: var(--text-secondary);">${escapeHtml(data.message)}</div>`;
+                            }
+                            else if (data.type === 'progress') {
+                                let html = `<div style="margin-bottom: 8px; color: var(--accent-color);">${escapeHtml(data.message)}</div>`;
+                                if (data.up_ports) {
+                                    html += `<div style="color: var(--text-secondary); font-size: 0.85rem;">已连接网口: ${data.up_ports.join(', ')}</div>`;
+                                }
+                                if (data.agent) {
+                                    html += `<div style="color: var(--text-secondary); font-size: 0.85rem;">检测进度: ${data.index + 1}/${data.total}</div>`;
+                                }
+                                container.innerHTML = html;
+                            }
+                            else if (data.type === 'mapping_found') {
+                                mappings.push(data.mapping);
+                                let html = '<div style="margin-bottom: 8px; color: var(--success-color);">✓ 发现映射:</div>';
+                                mappings.forEach(m => {
+                                    html += `<div style="margin-bottom: 4px; padding: 4px 8px; background: var(--bg-dark); border-radius: 4px;">${escapeHtml(m.agent_interface)} → ${escapeHtml(m.firewall_interface)}</div>`;
+                                });
+                                container.innerHTML = html;
+                            }
+                            else if (data.type === 'complete') {
+                                topologyMappings = data.mappings || mappings;
+                                if (topologyMappings.length === 0) {
+                                    container.innerHTML = '<div style="color: var(--warning-color);">⚠ 未发现拓扑映射，请检查Agent网口是否连接到防火墙已连接网口</div>';
+                                }
+                                showToast(data.success ? '拓扑检测完成' : '拓扑检测失败: ' + escapeHtml(data.error), data.success ? 'success' : 'error');
+                            }
+                        } catch (e) {
+                            console.error('解析 SSE 数据失败:', e);
+                        }
+                    }
+                }
+
+                return readStream();
             });
-            showToast('拓扑检测成功', 'success');
-        } else {
-            showToast('拓扑检测失败: ' + escapeHtml(data.error), 'error');
         }
+
+        return readStream();
     })
     .catch(error => {
-        showToast('拓扑检测请求失败: ' + error.message, 'error');
+        showToast('拓扑检测失败: ' + escapeHtml(error.message), 'error');
+        container.innerHTML = '<div style="color: var(--error-color);">检测失败</div>';
     });
 }
 

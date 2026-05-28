@@ -5902,7 +5902,7 @@ def api_get_device_ports(request, device_id):
 @csrf_exempt
 @require_http_methods(["POST"])
 def api_detect_topology(request):
-    """拓扑检测"""
+    """拓扑检测 - 使用 SSE 流式返回进度"""
     try:
         data = json.loads(request.body)
         device_id = data.get('device_id')
@@ -5917,9 +5917,22 @@ def api_detect_topology(request):
         device = TestDevice.objects.get(id=device_id)
         agents = [LocalAgent.objects.get(agent_id=aid) for aid in agent_ids]
 
+        # 使用流式响应
+        from django.http import StreamingHttpResponse
         from main.port_test_utils import PortTestManager
-        result = PortTestManager.start_topology_detection(device, agents)
-        return JsonResponse(result)
+
+        def generate_progress():
+            import json
+            yield f"data: {json.dumps({'type': 'start', 'message': '开始拓扑检测...'})}\n\n"
+
+            result = PortTestManager.start_topology_detection_with_progress(device, agents, yield)
+
+            yield f"data: {json.dumps({'type': 'complete', 'success': result['success'], 'mappings': result.get('mappings', []), 'error': result.get('error', '')})}\n\n"
+
+        response = StreamingHttpResponse(generate_progress(), content_type='text/event-stream')
+        response['Cache-Control'] = 'no-cache'
+        response['X-Accel-Buffering'] = 'no'
+        return response
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
