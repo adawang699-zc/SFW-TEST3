@@ -204,6 +204,146 @@ def interface_info():
         'port': AGENT_PORT
     })
 
+# ========== 网口控制 API ==========
+
+@app.route('/api/interface/down', methods=['POST'])
+def api_interface_down():
+    """DOWN 网口"""
+    try:
+        data = request.json
+        interface = data.get('interface')
+
+        if not interface:
+            return jsonify({
+                'success': False,
+                'error': '缺少网口参数'
+            }), 400
+
+        # 执行 ip link set <interface> down
+        import subprocess
+        result = subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface, 'down'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            logger.info(f"[API] 网口 {interface} DOWN 成功")
+            return jsonify({
+                'success': True,
+                'message': f'网口 {interface} 已 DOWN'
+            })
+        else:
+            logger.warning(f"[API] 网口 {interface} DOWN 失败: {result.stderr}")
+            return jsonify({
+                'success': False,
+                'error': result.stderr
+            }), 500
+
+    except Exception as e:
+        logger.exception(f"[API] DOWN 网口异常: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/interface/up', methods=['POST'])
+def api_interface_up():
+    """UP 网口"""
+    try:
+        data = request.json
+        interface = data.get('interface')
+
+        if not interface:
+            return jsonify({
+                'success': False,
+                'error': '缺少网口参数'
+            }), 400
+
+        # 执行 ip link set <interface> up
+        import subprocess
+        result = subprocess.run(
+            ['sudo', 'ip', 'link', 'set', interface, 'up'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            logger.info(f"[API] 网口 {interface} UP 成功")
+            return jsonify({
+                'success': True,
+                'message': f'网口 {interface} 已 UP'
+            })
+        else:
+            logger.warning(f"[API] 网口 {interface} UP 失败: {result.stderr}")
+            return jsonify({
+                'success': False,
+                'error': result.stderr
+            }), 500
+
+    except Exception as e:
+        logger.exception(f"[API] UP 网口异常: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/interface/config', methods=['POST'])
+def api_interface_config():
+    """配置网口参数（自协商、速率、双工）"""
+    try:
+        data = request.json
+        interface = data.get('interface')
+        autoneg = data.get('autoneg', 'on')
+        speed = data.get('speed', '1000')
+        duplex = data.get('duplex', 'full')
+
+        if not interface:
+            return jsonify({
+                'success': False,
+                'error': '缺少网口参数'
+            }), 400
+
+        import subprocess
+
+        # 构建 ethtool 配置命令
+        cmd = ['sudo', 'ethtool', '-s', interface]
+        cmd.extend(['autoneg', autoneg])
+        if autoneg == 'off':
+            cmd.extend(['speed', speed, 'duplex', duplex])
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            logger.info(f"[API] 网口 {interface} 配置成功: autoneg={autoneg}, speed={speed}, duplex={duplex}")
+            return jsonify({
+                'success': True,
+                'message': f'网口 {interface} 已配置'
+            })
+        else:
+            logger.warning(f"[API] 网口 {interface} 配置失败: {result.stderr}")
+            return jsonify({
+                'success': False,
+                'error': result.stderr
+            }), 500
+
+    except Exception as e:
+        logger.exception(f"[API] 配置网口异常: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown():
     """优雅关闭"""
