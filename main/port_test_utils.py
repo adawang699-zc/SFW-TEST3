@@ -286,7 +286,7 @@ def configure_agent_port(agent: LocalAgent, interface: str,
 
 def restore_agent_port(agent: LocalAgent, interface: str) -> Tuple[bool, str]:
     """
-    恢复Agent网口为自协商模式
+    恢复Agent网口（UP + 自协商模式）
 
     Args:
         agent: LocalAgent对象
@@ -295,6 +295,17 @@ def restore_agent_port(agent: LocalAgent, interface: str) -> Tuple[bool, str]:
     Returns:
         (success, error_message)
     """
+    # 先 UP 网口
+    success, result, error = forward_to_agent(
+        agent, 'POST', '/api/interface/up',
+        data={'interface': interface},
+        timeout=10
+    )
+
+    if not success:
+        return False, f"UP网口失败: {error}"
+
+    # 再配置为自协商模式
     return configure_agent_port(agent, interface, 'on', '1000', 'full')
 
 
