@@ -1563,9 +1563,12 @@ function loadPortTestDevices() {
                 const select = document.getElementById('port_device');
                 select.innerHTML = '<option value="">-- 请选择设备 --</option>';
                 data.devices.forEach(d => {
-                    select.innerHTML += `<option value="${d.id}">${d.name} (${d.ip})</option>`;
+                    select.innerHTML += `<option value="${d.id}">${escapeHtml(d.name)} (${escapeHtml(d.ip)})</option>`;
                 });
             }
+        })
+        .catch(error => {
+            showToast('加载设备列表失败: ' + error.message, 'error');
         });
 }
 
@@ -1580,10 +1583,13 @@ function loadDevicePorts() {
                 const container = document.getElementById('device_ports_container');
                 container.innerHTML = '<table class="table"><thead><tr><th>网口</th><th>LINK</th><th>速率</th><th>双工</th></tr></thead><tbody>';
                 data.ports.forEach(p => {
-                    container.innerHTML += `<tr><td>${p.name}</td><td>${p.link}</td><td>${p.speed}</td><td>${p.duplex}</td></tr>`;
+                    container.innerHTML += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.link)}</td><td>${escapeHtml(p.speed)}</td><td>${escapeHtml(p.duplex)}</td></tr>`;
                 });
                 container.innerHTML += '</tbody></table>';
             }
+        })
+        .catch(error => {
+            showToast('加载网口信息失败: ' + error.message, 'error');
         });
 }
 
@@ -1597,12 +1603,15 @@ function loadPortTestAgents() {
                 data.agents.forEach(a => {
                     container.innerHTML += `
                         <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                            <input type="checkbox" id="agent_${a.agent_id}" onchange="toggleAgent('${a.agent_id}')">
-                            <label for="agent_${a.agent_id}" style="margin-left: 8px;">${a.agent_id} (${a.interface.name})</label>
+                            <input type="checkbox" id="agent_${escapeHtml(a.agent_id)}" onchange="toggleAgent('${escapeHtml(a.agent_id)}')">
+                            <label for="agent_${escapeHtml(a.agent_id)}" style="margin-left: 8px;">${escapeHtml(a.agent_id)} (${escapeHtml(a.interface.name)})</label>
                         </div>
                     `;
                 });
             }
+        })
+        .catch(error => {
+            showToast('加载Agent列表失败: ' + error.message, 'error');
         });
 }
 
@@ -1623,7 +1632,10 @@ function detectTopology() {
 
     fetch('/api/port-test/detect-topology/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken') || ''
+        },
         body: JSON.stringify({
             device_id: deviceId,
             agent_ids: selectedAgents
@@ -1636,12 +1648,15 @@ function detectTopology() {
             const container = document.getElementById('topology_mapping_container');
             container.innerHTML = '';
             data.mappings.forEach(m => {
-                container.innerHTML += `<div style="margin-bottom: 8px;">${m.agent_interface} → ${m.firewall_interface}</div>`;
+                container.innerHTML += `<div style="margin-bottom: 8px;">${escapeHtml(m.agent_interface)} → ${escapeHtml(m.firewall_interface)}</div>`;
             });
             showToast('拓扑检测成功', 'success');
         } else {
-            showToast('拓扑检测失败: ' + data.error, 'error');
+            showToast('拓扑检测失败: ' + escapeHtml(data.error), 'error');
         }
+    })
+    .catch(error => {
+        showToast('拓扑检测请求失败: ' + error.message, 'error');
     });
 }
 
@@ -1662,7 +1677,10 @@ function startPortTest() {
 
     fetch('/api/port-test/start/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken') || ''
+        },
         body: JSON.stringify({
             device_id: deviceId,
             mappings: topologyMappings,
@@ -1679,8 +1697,11 @@ function startPortTest() {
             document.getElementById('start_port_test').style.display = 'none';
             document.getElementById('stop_port_test').style.display = 'inline-block';
         } else {
-            showToast('启动测试失败: ' + data.error, 'error');
+            showToast('启动测试失败: ' + escapeHtml(data.error), 'error');
         }
+    })
+    .catch(error => {
+        showToast('启动测试请求失败: ' + error.message, 'error');
     });
 }
 
@@ -1689,7 +1710,10 @@ function stopPortTest() {
 
     fetch('/api/port-test/stop/', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken') || ''
+        },
         body: JSON.stringify({test_id: currentPortTestId})
     })
     .then(r => r.json())
@@ -1702,6 +1726,9 @@ function stopPortTest() {
             document.getElementById('stop_port_test').style.display = 'none';
             showToast('测试已停止', 'info');
         }
+    })
+    .catch(error => {
+        showToast('停止测试请求失败: ' + error.message, 'error');
     });
 }
 
@@ -1722,12 +1749,16 @@ function connectPortTestWebSocket(url) {
         document.getElementById('start_port_test').style.display = 'inline-block';
         document.getElementById('stop_port_test').style.display = 'none';
     };
+
+    portTestWebSocket.onerror = function(e) {
+        showToast('WebSocket连接错误', 'error');
+    };
 }
 
 function handlePortTestMessage(data) {
     if (data.type === 'progress') {
         const container = document.getElementById('test_progress_container');
-        container.innerHTML = `测试进度: ${data.current}/${data.total} (${data.percent}%)`;
+        container.innerHTML = `测试进度: ${escapeHtml(data.current)}/${escapeHtml(data.total)} (${escapeHtml(data.percent)}%)`;
     }
     else if (data.type === 'scenario_result') {
         const tbody = document.getElementById('results_body');
@@ -1735,12 +1766,12 @@ function handlePortTestMessage(data) {
         const resultClass = r.result === 'PASS' ? 'success' : (r.result === 'FAIL' ? 'danger' : 'warning');
         tbody.innerHTML += `
             <tr class="${resultClass}">
-                <td>${r.scenario_id}</td>
-                <td>${r.autoneg_config || '-'}</td>
-                <td>${r.speed_config || '-'}</td>
-                <td>${r.duplex_config || '-'}</td>
-                <td>${r.firewall_speed}/${r.firewall_duplex}</td>
-                <td><strong>${r.result}</strong></td>
+                <td>${escapeHtml(r.scenario_id)}</td>
+                <td>${escapeHtml(r.autoneg_config) || '-'}</td>
+                <td>${escapeHtml(r.speed_config) || '-'}</td>
+                <td>${escapeHtml(r.duplex_config) || '-'}</td>
+                <td>${escapeHtml(r.firewall_speed)}/${escapeHtml(r.firewall_duplex)}</td>
+                <td><strong>${escapeHtml(r.result)}</strong></td>
             </tr>
         `;
     }
@@ -1753,7 +1784,7 @@ function handlePortTestMessage(data) {
         }
     }
     else if (data.type === 'error') {
-        showToast('测试错误: ' + data.message, 'error');
+        showToast('测试错误: ' + escapeHtml(data.message), 'error');
     }
 }
 
