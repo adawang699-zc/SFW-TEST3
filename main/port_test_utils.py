@@ -10,6 +10,7 @@ import threading
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 from django.conf import settings
+from asgiref.sync import async_to_sync
 
 from main.models import TestDevice, LocalAgent, PortMapping, PortTestResult
 from main.device_utils import execute_ssh_command
@@ -43,8 +44,8 @@ def parse_ethtool_output(output: str) -> Dict[str, Any]:
     if link_match:
         result['link'] = link_match.group(1).lower()
 
-    # 解析Speed
-    speed_match = re.search(r'Speed:\s*(\d+Mb/s|\d+Gb/s)', output)
+    # 解析Speed (支持 Mb/s, Mbps, Gb/s, Gbps 格式)
+    speed_match = re.search(r'Speed:\s*(\d+Mb/?s|\d+Gb/?s)', output)
     if speed_match:
         result['speed'] = speed_match.group(1)
 
@@ -67,10 +68,10 @@ def get_firewall_port_info(device: TestDevice, interface: str) -> Dict[str, Any]
 
     Args:
         device: TestDevice对象
-        interface: 网口名称
+        interface: 口名称
 
     Returns:
-        dict: 网口信息
+        dict: 网口信息, 包含 raw_output 字段存储原始输出
     """
     cmd = f"ethtool {interface}"
     output = execute_ssh_command(
@@ -83,9 +84,11 @@ def get_firewall_port_info(device: TestDevice, interface: str) -> Dict[str, Any]
     )
 
     if output:
-        return parse_ethtool_output(output)
+        parsed = parse_ethtool_output(output)
+        parsed['raw_output'] = output
+        return parsed
 
-    return {'link': 'error', 'speed': 'error', 'duplex': 'error', 'autoneg': 'error'}
+    return {'link': 'error', 'speed': 'error', 'duplex': 'error', 'autoneg': 'error', 'raw_output': ''}
 
 
 def get_all_firewall_ports(device: TestDevice) -> List[Dict[str, Any]]:
@@ -178,6 +181,7 @@ class PortTestManager:
     """网口测试管理器"""
 
     active_tests = {}  # {test_id: {...}}
+    _lock = threading.Lock()  # 线程安全锁
 
     @classmethod
     def start_topology_detection(cls, device: TestDevice,
@@ -306,15 +310,16 @@ class PortTestManager:
         """
         test_id = f"port_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-        cls.active_tests[test_id] = {
-            'device_id': test_params['device_id'],
-            'mappings': test_params['mappings'],
-            'scenarios': test_params['scenarios'],
-            'current_scenario': 0,
-            'total_scenarios': len(test_params['scenarios']),
-            'results': [],
-            'running': True
-        }
+        with cls._lock:
+            cls.active_tests[test_id] = {
+                'device_id': test_params['device_id'],
+                'mappings': test_params['mappings'],
+                'scenarios': test_params['scenarios'],
+                'current_scenario': 0,
+                'total_scenarios': len(test_params['scenarios']),
+                'results': [],
+                'running': True
+            }
 
         return {'success': True, 'test_id': test_id}
 
@@ -329,9 +334,10 @@ class PortTestManager:
         Returns:
             dict: {'success': bool}
         """
-        if test_id in cls.active_tests:
-            cls.active_tests[test_id]['running'] = False
-            return {'success': True}
+        with cls._lock:
+            if test_id in cls.active_tests:
+                cls.active_tests[test_id]['running'] = False
+                return {'success': True}
         return {'success': False, 'error': '测试不存在'}
 
 
@@ -347,8 +353,6 @@ class PortTestMonitor(threading.Thread):
 
     def run(self) -> None:
         """执行测试并推送结果"""
-        from asgiref.sync import async_to_sync
-
         if self.test_id not in PortTestManager.active_tests:
             self._send_error('测试不存在')
             return
@@ -382,7 +386,8 @@ class PortTestMonitor(threading.Thread):
                             firewall_duplex=result['firewall_duplex'],
                             firewall_link=result['firewall_link'],
                             result=result['result'],
-                            ethtool_output=result['ethtool_output']
+                            ethtool_output=result['ethtool_output'],
+                            error_message=result.get('error_message', '')
                         )
 
                 # 推送进度
@@ -410,7 +415,8 @@ class PortTestMonitor(threading.Thread):
             'firewall_duplex': 'unknown',
             'firewall_link': 'unknown',
             'result': 'ERROR',
-            'ethtool_output': ''
+            'ethtool_output': '',
+            'error_message': ''
         }
 
         try:
@@ -434,6 +440,7 @@ class PortTestMonitor(threading.Thread):
                 result['firewall_speed'] = firewall_info['speed']
                 result['firewall_duplex'] = firewall_info['duplex']
                 result['firewall_link'] = firewall_info['link']
+                result['ethtool_output'] = firewall_info.get('raw_output', '')
 
                 # 判断PASS/FAIL
                 if scenario['autoneg'] == 'on':
@@ -455,14 +462,18 @@ class PortTestMonitor(threading.Thread):
                     else:
                         result['result'] = 'FAIL'
 
-            # 恢复Agent网口
-            for mapping in mappings:
-                agent = LocalAgent.objects.get(agent_id=mapping['agent_id'])
-                restore_agent_port(agent, mapping['agent_interface'])
-
         except Exception as e:
             result['result'] = 'ERROR'
             result['error_message'] = str(e)
+
+        finally:
+            # 恢复Agent网口 (无论成功或异常都要恢复)
+            for mapping in mappings:
+                try:
+                    agent = LocalAgent.objects.get(agent_id=mapping['agent_id'])
+                    restore_agent_port(agent, mapping['agent_interface'])
+                except Exception as restore_error:
+                    logger.warning(f"恢复Agent网口失败: {restore_error}")
 
         return result
 
@@ -472,7 +483,6 @@ class PortTestMonitor(threading.Thread):
 
     def _push_progress(self, current: int, total: int) -> None:
         """推送进度"""
-        from asgiref.sync import async_to_sync
         async_to_sync(self.consumer.channel_layer.group_send)(
             self.consumer.group_name,
             {
@@ -488,7 +498,6 @@ class PortTestMonitor(threading.Thread):
 
     def _push_result(self, scenario_id: int, result: Dict) -> None:
         """推送场景结果"""
-        from asgiref.sync import async_to_sync
         async_to_sync(self.consumer.channel_layer.group_send)(
             self.consumer.group_name,
             {
@@ -503,7 +512,6 @@ class PortTestMonitor(threading.Thread):
 
     def _send_complete(self) -> None:
         """推送完成"""
-        from asgiref.sync import async_to_sync
         async_to_sync(self.consumer.channel_layer.group_send)(
             self.consumer.group_name,
             {
@@ -517,7 +525,6 @@ class PortTestMonitor(threading.Thread):
 
     def _send_error(self, message: str) -> None:
         """推送错误"""
-        from asgiref.sync import async_to_sync
         async_to_sync(self.consumer.channel_layer.group_send)(
             self.consumer.group_name,
             {
