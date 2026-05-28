@@ -95,7 +95,7 @@ def get_firewall_port_info(device: TestDevice, interface: str) -> Dict[str, Any]
 
 def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], str]:
     """
-    获取防火墙所有网口信息
+    获取防火墙所有网口信息（优化版：一次SSH获取所有信息）
 
     Args:
         device: TestDevice对象
@@ -105,8 +105,14 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
         ports: [{'name': 'eth0', 'link': 'up', ...}, ...]
         error_message: 空字符串表示成功，否则为错误描述
     """
-    # 获取网口列表 (只获取物理网口: eth开头 或 s数字p数字格式)
-    cmd = "ls /sys/class/net/"
+    # 一次性获取所有网口的 ethtool 信息
+    # 使用 for 循环批量执行，减少 SSH 连接次数
+    cmd = """
+for iface in $(ls /sys/class/net/ | grep -v -E '^(lo|docker|virbr|vnet|br|ip6tnl|sit|teql|sw|bond|team|tun|tap|vlan|ifb|Virtual|agl|ext)'); do
+    echo "=== $iface ==="
+    ethtool $iface 2>/dev/null | grep -E "Link detected|Speed|Duplex|Auto-negotiation"
+done
+"""
     # 使用 execute_in_backend 进入后台root执行命令
     output = execute_in_backend(
         cmd,
@@ -129,36 +135,69 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
     ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
     output = ansi_escape.sub('', output)
 
-    # 解析网口列表
-    raw_interfaces = [iface.strip() for iface in output.split('\n') if iface.strip()]
+    # 解析输出
+    ports_info = []
+    current_iface = None
+    current_info = {'link': 'unknown', 'speed': 'unknown', 'duplex': 'unknown', 'autoneg': 'unknown'}
 
-    # 处理多列格式（ls命令可能输出为多列，空格分隔）
-    all_interfaces = []
-    for line in raw_interfaces:
-        # 过滤掉命令提示符
-        if line.startswith('[') or line.startswith('#') or line.startswith('$') or line.startswith('~'):
-            continue
-        if 'root@' in line or 'admin@' in line:
-            continue
-        # 拆分空格分隔的多个网口名
-        parts = line.split()
-        for part in parts:
-            if part and len(part) >= 2:
-                all_interfaces.append(part)
+    for line in output.split('\n'):
+        line = line.strip()
 
-    # 过滤掉虚拟接口
-    # 网桥: br, br-
-    # 隧道: tun, tap, ip6tnl, sit, teql
-    # 软交换: sw
-    # 其他虚拟: lo, docker, virbr, vnet, ifb, bond, team, vlan, Virtual, agl, ext
+        # 检测网口名称
+        iface_match = re.match(r'=== (\S+) ===', line)
+        if iface_match:
+            # 保存上一个网口的信息
+            if current_iface:
+                ports_info.append({
+                    'name': current_iface,
+                    'link': current_info['link'],
+                    'speed': current_info['speed'],
+                    'duplex': current_info['duplex'],
+                    'autoneg': current_info['autoneg']
+                })
+            # 开始新网口
+            current_iface = iface_match.group(1)
+            current_info = {'link': 'unknown', 'speed': 'unknown', 'duplex': 'unknown', 'autoneg': 'unknown'}
+            continue
+
+        # 解析 ethtool 输出
+        if current_iface:
+            link_match = re.search(r'Link detected:\s*(\w+)', line)
+            if link_match:
+                current_info['link'] = link_match.group(1).lower()
+
+            speed_match = re.search(r'Speed:\s*(\d+Mb/?s|\d+Gb/?s)', line)
+            if speed_match:
+                current_info['speed'] = speed_match.group(1)
+
+            duplex_match = re.search(r'Duplex:\s*(\w+)', line)
+            if duplex_match:
+                current_info['duplex'] = duplex_match.group(1)
+
+            autoneg_match = re.search(r'Auto-negotiation:\s*(\w+)', line)
+            if autoneg_match:
+                current_info['autoneg'] = autoneg_match.group(1).lower()
+
+    # 保存最后一个网口
+    if current_iface:
+        ports_info.append({
+            'name': current_iface,
+            'link': current_info['link'],
+            'speed': current_info['speed'],
+            'duplex': current_info['duplex'],
+            'autoneg': current_info['autoneg']
+        })
+
+    # 过滤虚拟接口并排序
     virtual_prefixes = [
         'lo', 'docker', 'virbr', 'vnet', 'br', 'br-', 'ifb',
         'bond', 'team', 'tun', 'tap', 'vlan', 'ip6tnl', 'sit', 'teql',
         'sw', 'Virtual', 'agl', 'ext'
     ]
 
-    interfaces = []
-    for iface in all_interfaces:
+    filtered_ports = []
+    for p in ports_info:
+        iface = p['name']
         is_virtual = False
         for prefix in virtual_prefixes:
             if iface.lower().startswith(prefix.lower()):
@@ -168,31 +207,18 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
             continue
         if iface.isdigit() or len(iface) < 2:
             continue
-        interfaces.append(iface)
+        filtered_ports.append(p)
 
-    # 按网口名称排序（eth1, eth2, eth3... 或 s0p1, s0p2, s1p0...）
-    interfaces.sort(key=lambda x: (
-        # 提取前缀（eth, ens, enp等）
-        x.rstrip('0123456789').rstrip('p').rstrip('0123456789'),
-        # 提取第一个数字
-        int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 0,
-        # 对于s0p1格式，提取p后的数字
-        int(re.search(r'p(\d+)', x).group(1)) if re.search(r'p(\d+)', x) else 0
+    # 按网口名称排序
+    filtered_ports.sort(key=lambda x: (
+        x['name'].rstrip('0123456789').rstrip('p').rstrip('0123456789'),
+        int(re.search(r'\d+', x['name']).group()) if re.search(r'\d+', x['name']) else 0,
+        int(re.search(r'p(\d+)', x['name']).group(1)) if re.search(r'p(\d+)', x['name']) else 0
     ))
 
-    logger.info(f"设备 {device.ip} 网口列表: 排序后={interfaces}")
+    logger.info(f"设备 {device.ip} 网口列表: {len(filtered_ports)} 个网口")
 
-    ports_info = []
-
-    for iface in interfaces:
-        info = get_firewall_port_info(device, iface)
-        ports_info.append({
-            'name': iface,
-            'link': info['link'],
-            'speed': info['speed'],
-            'duplex': info['duplex'],
-            'autoneg': info['autoneg']
-        })
+    return filtered_ports, ''
 
     return ports_info, ''
 
