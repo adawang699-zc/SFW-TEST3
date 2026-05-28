@@ -265,6 +265,7 @@
         <div class="protocol-tab" onclick="switchTab('enip')">ENIP</div>
         <div class="protocol-tab" onclick="switchTab('mms')">MMS</div>
         <div class="protocol-tab" onclick="switchTab('http')">HTTP</div>
+        <div class="protocol-tab" onclick="switchTab('opcua')">OPC UA</div>
     </div>
 
     <!-- Modbus Tab -->
@@ -1256,6 +1257,137 @@
             </div>
         </div>
     </div>
+
+    <!-- OPC UA Tab -->
+    <div id="opcua-content" class="protocol-content">
+        <div class="client-server-grid">
+            <!-- OPC UA Server -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">OPC UA Server</h4>
+                <div class="config-section">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Server Agent</h5>
+                    <div id="opcua-server-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <span style="color: var(--text-muted);">加载中...</span>
+                    </div>
+                </div>
+                <div class="config-section">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">监听地址</label>
+                            <input type="text" id="opcua-server-host" class="form-input" value="0.0.0.0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">端口</label>
+                            <input type="number" id="opcua-server-port" class="form-input" value="4840">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                        <button class="btn btn-success" id="opcua-server-toggle-btn" onclick="opcuaServerToggle()">启动</button>
+                        <div id="opcua-server-status" style="padding: 4px 12px; background: var(--bg-secondary); border-radius: 4px;">
+                            <span class="status-badge status-stopped">未启动</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-section" id="opcua-variables-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">模拟变量列表</h5>
+                    <div style="overflow-x: auto;">
+                        <table class="data-table" id="opcua-variables-table">
+                            <thead>
+                                <tr><th>变量名</th><th>类型</th><th>模式</th><th>当前值</th></tr>
+                            </thead>
+                            <tbody id="opcua-variables-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-primary" onclick="opcuaRefreshVariables()">刷新变量</button>
+                        <button class="btn btn-secondary" onclick="opcuaShowHistory('Temperature')">查看温度历史</button>
+                    </div>
+                </div>
+
+                <div class="config-section" id="opcua-history-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">历史数据 - <span id="opcua-history-var-name">Temperature</span></h5>
+                    <div id="opcua-history-content" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; background: var(--bg-dark); padding: 8px; border-radius: 4px;"></div>
+                </div>
+            </div>
+
+            <!-- OPC UA Client -->
+            <div>
+                <h4 style="color: var(--primary); margin-bottom: 12px;">OPC UA Client</h4>
+                <div class="config-section">
+                    <h5 style="margin-bottom: 8px; color: var(--text-secondary);">选择 Client Agent</h5>
+                    <div id="opcua-client-agent-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+                        <span style="color: var(--text-muted);">加载中...</span>
+                    </div>
+                </div>
+                <div class="config-section">
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">目标端点</label>
+                            <input type="text" id="opcua-client-endpoint" class="form-input" placeholder="opc.tcp://192.168.1.100:4840/" value="opc.tcp://localhost:4840/">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; margin-top: 12px; align-items: center;">
+                        <button class="btn btn-success" id="opcua-client-toggle-btn" onclick="opcuaClientToggle()">连接</button>
+                        <div id="opcua-client-status" style="padding: 4px 12px; background: var(--bg-secondary); border-radius: 4px;">
+                            <span class="status-badge status-stopped">未连接</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-section" id="opcua-browse-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">节点浏览</h5>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                        <input type="text" id="opcua-browse-node" class="form-input" value="Objects" placeholder="节点ID (如 Objects, ns=2;s=xxx)">
+                        <button class="btn btn-primary" onclick="opcuaBrowse()">浏览</button>
+                    </div>
+                    <div id="opcua-browse-result" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; background: var(--bg-dark); padding: 8px; border-radius: 4px;"></div>
+                </div>
+
+                <div class="config-section" id="opcua-readwrite-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">数据读写</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">节点 ID</label>
+                            <input type="text" id="opcua-rw-node" class="form-input" placeholder="ns=2;s=SimulationDevice.Temperature">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">写入值</label>
+                            <input type="text" id="opcua-rw-value" class="form-input" placeholder="值">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                        <button class="btn btn-primary" onclick="opcuaRead()">读取</button>
+                        <button class="btn btn-warning" onclick="opcuaWrite()">写入</button>
+                    </div>
+                    <div id="opcua-rw-result" style="margin-top: 12px; padding: 8px; background: var(--bg-dark); border-radius: 4px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OPC Classic 网关说明 -->
+        <div class="config-section" style="margin-top: 20px;">
+            <h4 style="color: var(--primary); margin-bottom: 12px;">OPC Classic 网关辅助</h4>
+            <p style="color: var(--text-muted); margin-bottom: 12px;">通过 Windows UaGateway 网关间接支持 OPC Classic 协议（DA/HDA/AE）</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label class="form-label">UA Server 地址</label>
+                    <input type="text" id="opcua-gateway-host" class="form-input" placeholder="192.168.1.100" value="localhost">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">端口</label>
+                    <input type="number" id="opcua-gateway-port" class="form-input" value="4840">
+                </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <button class="btn btn-primary" onclick="opcuaGatewayCheck()">连通性检测</button>
+                <button class="btn btn-secondary" onclick="opcuaShowGuide()">部署指南</button>
+                <button class="btn btn-secondary" onclick="opcuaShowDcom()">DCOM 清单</button>
+                <button class="btn btn-secondary" onclick="opcuaShowDiagram()">架构图</button>
+            </div>
+            <div id="opcua-gateway-result" style="margin-top: 12px; padding: 8px; background: var(--bg-dark); border-radius: 4px; display: none;"></div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -1400,6 +1532,9 @@ async function loadAgents() {
             // DNP3 协议的 Agent 选择器
             renderAgentSelector('dnp3-client-agent-selector', runningAgents, 'client');
             renderAgentSelector('dnp3-server-agent-selector', runningAgents, 'server');
+            // OPC UA Agent 选择器
+            renderAgentSelector('opcua-server-agent-selector', runningAgents, 'server');
+            renderAgentSelector('opcua-client-agent-selector', runningAgents, 'client');
         } else {
             document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('modbus-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
@@ -1412,6 +1547,8 @@ async function loadAgents() {
             document.getElementById('sv-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('dnp3-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
             document.getElementById('dnp3-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('opcua-server-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
+            document.getElementById('opcua-client-agent-selector').innerHTML = '<span style="color: var(--text-muted);">没有可用的 Agent</span>';
         }
     } catch (e) {
         document.getElementById('modbus-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
@@ -1424,6 +1561,8 @@ async function loadAgents() {
         document.getElementById('goose-sv-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('dnp3-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
         document.getElementById('dnp3-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('opcua-server-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
+        document.getElementById('opcua-client-agent-selector').innerHTML = '<span style="color: red;">加载失败</span>';
     }
 }
 
@@ -3954,6 +4093,214 @@ async function httpFileDownload(filename) {
     showToast(result.success ? '文件内容已获取' : '下载失败: ' + (result.message || result.error), result.success ? 'success' : 'error');
     if (result.success) {
         document.getElementById('http-files-list').innerHTML += `<div class="hex-display">${result.content || JSON.stringify(result)}</div>`;
+    }
+}
+
+// ========== OPC UA ==========
+let opcuaServerRunning = false;
+let opcuaClientConnected = false;
+
+// 获取 OPC UA 使用的 Agent API 基础路径
+function opcuaApiBase() {
+    return '/api/industrial_protocol/opcua_';
+}
+
+async function opcuaServerToggle() {
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
+
+    if (opcuaServerRunning) {
+        const result = await apiRequest(opcuaApiBase() + 'server/stop', 'POST', {});
+        if (result.success) {
+            opcuaServerRunning = false;
+            document.getElementById('opcua-server-toggle-btn').textContent = '启动';
+            document.getElementById('opcua-server-toggle-btn').classList.remove('btn-danger');
+            document.getElementById('opcua-server-toggle-btn').classList.add('btn-success');
+            document.getElementById('opcua-server-status').innerHTML = '<span class="status-badge status-stopped">未启动</span>';
+            document.getElementById('opcua-variables-section').style.display = 'none';
+            document.getElementById('opcua-history-section').style.display = 'none';
+            showToast('OPC UA Server 已停止', 'success');
+        } else {
+            showToast('停止失败: ' + (result.message || result.error), 'error');
+        }
+    } else {
+        const data = {
+            host: document.getElementById('opcua-server-host').value,
+            port: parseInt(document.getElementById('opcua-server-port').value)
+        };
+        const result = await apiRequest(opcuaApiBase() + 'server/start', 'POST', data);
+        if (result.success) {
+            opcuaServerRunning = true;
+            document.getElementById('opcua-server-toggle-btn').textContent = '停止';
+            document.getElementById('opcua-server-toggle-btn').classList.remove('btn-success');
+            document.getElementById('opcua-server-toggle-btn').classList.add('btn-danger');
+            document.getElementById('opcua-server-status').innerHTML = '<span class="status-badge status-running">运行中</span>';
+            document.getElementById('opcua-variables-section').style.display = 'block';
+            showToast('OPC UA Server 启动成功', 'success');
+            opcuaRefreshVariables();
+        } else {
+            showToast('启动失败: ' + (result.message || result.error), 'error');
+        }
+    }
+}
+
+async function opcuaRefreshVariables() {
+    const result = await apiRequest(opcuaApiBase() + 'server/variables', 'GET');
+    if (result.success && result.variables) {
+        const tbody = document.getElementById('opcua-variables-tbody');
+        tbody.innerHTML = '';
+        result.variables.forEach(v => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${v.name}</td><td>${v.type}</td><td>${v.mode}</td><td id="opcua-var-${v.name}">-</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+}
+
+async function opcuaShowHistory(variable) {
+    document.getElementById('opcua-history-section').style.display = 'block';
+    document.getElementById('opcua-history-var-name').textContent = variable;
+    const result = await apiRequest(opcuaApiBase() + 'server/history/' + variable + '?count=50', 'GET');
+    if (result.success && result.history) {
+        const div = document.getElementById('opcua-history-content');
+        if (result.history.length === 0) {
+            div.innerHTML = '<span style="color: var(--text-muted);">暂无历史数据</span>';
+            return;
+        }
+        let html = '';
+        result.history.forEach(r => {
+            html += `<div>${r.timestamp} | ${typeof r.value === 'number' ? r.value.toFixed(2) : r.value} | ${r.quality}</div>`;
+        });
+        div.innerHTML = html;
+    }
+}
+
+async function opcuaClientToggle() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    if (opcuaClientConnected) {
+        const result = await apiRequest(opcuaApiBase() + 'client/disconnect', 'POST', {});
+        if (result.success) {
+            opcuaClientConnected = false;
+            document.getElementById('opcua-client-toggle-btn').textContent = '连接';
+            document.getElementById('opcua-client-toggle-btn').classList.remove('btn-danger');
+            document.getElementById('opcua-client-toggle-btn').classList.add('btn-success');
+            document.getElementById('opcua-client-status').innerHTML = '<span class="status-badge status-stopped">未连接</span>';
+            document.getElementById('opcua-browse-section').style.display = 'none';
+            document.getElementById('opcua-readwrite-section').style.display = 'none';
+            showToast('已断开连接', 'success');
+        } else {
+            showToast('断开失败: ' + (result.message || result.error), 'error');
+        }
+    } else {
+        const data = {
+            endpoint: document.getElementById('opcua-client-endpoint').value
+        };
+        const result = await apiRequest(opcuaApiBase() + 'client/connect', 'POST', data);
+        if (result.success) {
+            opcuaClientConnected = true;
+            document.getElementById('opcua-client-toggle-btn').textContent = '断开';
+            document.getElementById('opcua-client-toggle-btn').classList.remove('btn-success');
+            document.getElementById('opcua-client-toggle-btn').classList.add('btn-danger');
+            document.getElementById('opcua-client-status').innerHTML = '<span class="status-badge status-running">已连接</span>';
+            document.getElementById('opcua-browse-section').style.display = 'block';
+            document.getElementById('opcua-readwrite-section').style.display = 'block';
+            showToast('连接成功', 'success');
+        } else {
+            showToast('连接失败: ' + (result.message || result.error), 'error');
+        }
+    }
+}
+
+async function opcuaBrowse() {
+    const nodeId = document.getElementById('opcua-browse-node').value;
+    const result = await apiRequest(opcuaApiBase() + 'client/browse', 'POST', { node_id: nodeId });
+    const div = document.getElementById('opcua-browse-result');
+    if (result.success && result.nodes) {
+        if (result.nodes.length === 0) {
+            div.innerHTML = '<span style="color: var(--text-muted);">无子节点</span>';
+            return;
+        }
+        let html = '';
+        result.nodes.forEach(n => {
+            html += `<div style="padding: 2px 0; cursor: pointer; color: var(--primary);" onclick="document.getElementById('opcua-rw-node').value='${n.node_id}'; document.getElementById('opcua-browse-node').value='${n.node_id}';">
+                ${n.browse_name} <span style="color: var(--text-muted);">(${n.node_id})</span> <span style="color: var(--text-muted); font-size: 0.8rem;">[${n.node_class}]</span>
+            </div>`;
+        });
+        div.innerHTML = html;
+    } else {
+        div.innerHTML = '<span style="color: red;">浏览失败: ' + (result.message || '') + '</span>';
+    }
+}
+
+async function opcuaRead() {
+    const nodeId = document.getElementById('opcua-rw-node').value;
+    if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
+    const result = await apiRequest(opcuaApiBase() + 'client/read', 'POST', { node_id: nodeId });
+    const div = document.getElementById('opcua-rw-result');
+    if (result.success) {
+        div.innerHTML = `<span style="color: var(--success);">读取成功:</span> <strong>${result.value}</strong>`;
+    } else {
+        div.innerHTML = `<span style="color: red;">读取失败: ${result.message || ''}</span>`;
+    }
+}
+
+async function opcuaWrite() {
+    const nodeId = document.getElementById('opcua-rw-node').value;
+    const value = document.getElementById('opcua-rw-value').value;
+    if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
+    if (value === '') { showToast('请输入写入值', 'error'); return; }
+    // 尝试转换数字
+    let writeValue = value;
+    if (!isNaN(value)) writeValue = parseFloat(value);
+    const result = await apiRequest(opcuaApiBase() + 'client/write', 'POST', { node_id: nodeId, value: writeValue });
+    const div = document.getElementById('opcua-rw-result');
+    if (result.success) {
+        div.innerHTML = `<span style="color: var(--success);">写入成功</span>`;
+    } else {
+        div.innerHTML = `<span style="color: red;">写入失败: ${result.message || ''}</span>`;
+    }
+}
+
+async function opcuaGatewayCheck() {
+    const host = document.getElementById('opcua-gateway-host').value;
+    const port = parseInt(document.getElementById('opcua-gateway-port').value);
+    if (!host) { showToast('请输入地址', 'error'); return; }
+    const result = await apiRequest(opcuaApiBase() + 'gateway/check', 'POST', { host, port });
+    const div = document.getElementById('opcua-gateway-result');
+    div.style.display = 'block';
+    if (result.success && result.result) {
+        const r = result.result;
+        const color = r.reachable ? 'var(--success)' : 'var(--danger)';
+        div.innerHTML = `<span style="color: ${color};">${r.message}</span> (${r.host}:${r.port})`;
+    } else {
+        div.innerHTML = '<span style="color: red;">检测失败</span>';
+    }
+}
+
+async function opcuaShowGuide() {
+    const result = await apiRequest(opcuaApiBase() + 'gateway/guide', 'GET');
+    const div = document.getElementById('opcua-gateway-result');
+    div.style.display = 'block';
+    if (result.success) {
+        div.innerHTML = `<pre style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">${result.guide}</pre>`;
+    }
+}
+
+async function opcuaShowDcom() {
+    const result = await apiRequest(opcuaApiBase() + 'gateway/dcom', 'GET');
+    const div = document.getElementById('opcua-gateway-result');
+    div.style.display = 'block';
+    if (result.success) {
+        div.innerHTML = `<pre style="white-space: pre-wrap; max-height: 400px; overflow-y: auto;">${result.checklist}</pre>`;
+    }
+}
+
+async function opcuaShowDiagram() {
+    const result = await apiRequest(opcuaApiBase() + 'gateway/diagram', 'GET');
+    const div = document.getElementById('opcua-gateway-result');
+    div.style.display = 'block';
+    if (result.success) {
+        div.innerHTML = `<pre style="white-space: pre-wrap;">${result.diagram}</pre>`;
     }
 }
 

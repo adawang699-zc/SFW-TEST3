@@ -196,6 +196,22 @@ CORS(app,
      }
 )
 
+# OPC UA 模块导入
+OPCUA_IMPORTS = False
+OPCUA_AVAILABLE = False
+opcua_server = None
+opcua_client = None
+opcua_gateway = None
+try:
+    from agents.protocols.opcua_common import OPCUA_AVAILABLE
+    from agents.protocols.opcua_server import opcua_server
+    from agents.protocols.opcua_client import opcua_client
+    from agents.protocols.opcua_gateway import opcua_gateway
+    OPCUA_IMPORTS = True
+    print("[OK] OPC UA 模块导入成功")
+except ImportError as e:
+    print(f"警告: OPC UA 模块导入失败: {e}")
+
 # 创建 Blueprint 供其他模块导入
 from flask import Blueprint
 industrial_bp = Blueprint('industrial_protocol', __name__, url_prefix='/api/industrial_protocol')
@@ -6372,6 +6388,259 @@ def http_files_set_dir():
     except Exception as e:
         add_log('ERROR', f'设置HTTP文件目录失败: {str(e)}')
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ========== OPC UA Server API ==========
+@app.route('/api/industrial_protocol/opcua_server/start', methods=['POST', 'OPTIONS'])
+def opcua_server_start():
+    """启动 OPC UA 服务端"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    if not OPCUA_IMPORTS:
+        return jsonify({'success': False, 'error': 'OPC UA 模块未安装'}), 400
+
+    data = request.json or {}
+    host = data.get('host', '0.0.0.0')
+    port = data.get('port', 4840)
+    server_name = data.get('server_name', 'OPC UA Simulator')
+    update_interval = data.get('update_interval', 1.0)
+    history_size = data.get('history_size', 10000)
+
+    success, message = opcua_server.start(host, port, server_name, update_interval, history_size)
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_server/stop', methods=['POST', 'OPTIONS'])
+def opcua_server_stop():
+    """停止 OPC UA 服务端"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    success, message = opcua_server.stop()
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_server/status', methods=['GET', 'OPTIONS'])
+def opcua_server_status():
+    """获取 OPC UA 服务端状态"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    return jsonify(opcua_server.status())
+
+
+@app.route('/api/industrial_protocol/opcua_server/variables', methods=['GET', 'OPTIONS'])
+def opcua_server_variables():
+    """获取变量列表"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    variables = opcua_server.get_variables()
+    return jsonify({'success': True, 'variables': variables})
+
+
+@app.route('/api/industrial_protocol/opcua_server/history/<variable>', methods=['GET', 'OPTIONS'])
+def opcua_server_history(variable):
+    """获取历史数据"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    count = request.args.get('count', 100, type=int)
+    history = opcua_server.get_history(variable, count)
+    return jsonify({'success': True, 'variable': variable, 'history': history, 'count': len(history)})
+
+
+# ========== OPC UA Client API ==========
+@app.route('/api/industrial_protocol/opcua_client/connect', methods=['POST', 'OPTIONS'])
+def opcua_client_connect():
+    """连接 OPC UA 服务器"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    if not OPCUA_IMPORTS:
+        return jsonify({'success': False, 'error': 'OPC UA 模块未安装'}), 400
+
+    data = request.json or {}
+    endpoint = data.get('endpoint', 'opc.tcp://localhost:4840/')
+    security_mode = data.get('security_mode', 'None')
+
+    success, message = opcua_client.connect(endpoint, security_mode)
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/disconnect', methods=['POST', 'OPTIONS'])
+def opcua_client_disconnect():
+    """断开连接"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    success, message = opcua_client.disconnect()
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/status', methods=['GET', 'OPTIONS'])
+def opcua_client_status():
+    """获取客户端状态"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    return jsonify(opcua_client.status())
+
+
+@app.route('/api/industrial_protocol/opcua_client/browse', methods=['POST', 'OPTIONS'])
+def opcua_client_browse():
+    """浏览节点"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    node_id = data.get('node_id', 'Objects')
+
+    success, nodes, message = opcua_client.browse(node_id)
+    return jsonify({'success': success, 'nodes': nodes, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/read', methods=['POST', 'OPTIONS'])
+def opcua_client_read():
+    """读取节点值"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    node_id = data.get('node_id')
+
+    if not node_id:
+        return jsonify({'success': False, 'message': 'node_id required'}), 400
+
+    success, value, message = opcua_client.read(node_id)
+    return jsonify({'success': success, 'value': value, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/write', methods=['POST', 'OPTIONS'])
+def opcua_client_write():
+    """写入节点值"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    node_id = data.get('node_id')
+    value = data.get('value')
+
+    if not node_id:
+        return jsonify({'success': False, 'message': 'node_id required'}), 400
+    if value is None:
+        return jsonify({'success': False, 'message': 'value required'}), 400
+
+    success, message = opcua_client.write(node_id, value)
+    return jsonify({'success': success, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/history', methods=['POST', 'OPTIONS'])
+def opcua_client_history():
+    """查询历史数据"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    node_id = data.get('node_id')
+    start_time_str = data.get('start_time')
+    end_time_str = data.get('end_time')
+
+    if not node_id or not start_time_str or not end_time_str:
+        return jsonify({'success': False, 'message': 'node_id, start_time, end_time required'}), 400
+
+    try:
+        start_time = datetime.fromisoformat(start_time_str)
+        end_time = datetime.fromisoformat(end_time_str)
+
+        success, history, message = opcua_client.read_history(node_id, start_time, end_time)
+        return jsonify({'success': success, 'history': history, 'message': message, 'count': len(history)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'时间格式错误: {e}'}), 400
+
+
+@app.route('/api/industrial_protocol/opcua_client/method', methods=['POST', 'OPTIONS'])
+def opcua_client_method():
+    """调用方法"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    object_node = data.get('object_node')
+    method_name = data.get('method_name')
+    args = data.get('args', [])
+
+    if not object_node or not method_name:
+        return jsonify({'success': False, 'message': 'object_node and method_name required'}), 400
+
+    success, result, message = opcua_client.call_method(object_node, method_name, args)
+    return jsonify({'success': success, 'result': result, 'message': message})
+
+
+# ========== OPC UA Gateway API ==========
+@app.route('/api/industrial_protocol/opcua_gateway/check', methods=['POST', 'OPTIONS'])
+def opcua_gateway_check():
+    """检测 UA Server 连通性"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    host = data.get('host')
+    port = data.get('port', 4840)
+
+    if not host:
+        return jsonify({'success': False, 'message': 'host required'}), 400
+
+    result = opcua_gateway.check_uaserver_reachable(host, port)
+    return jsonify({'success': True, 'result': result})
+
+
+@app.route('/api/industrial_protocol/opcua_gateway/guide', methods=['GET', 'OPTIONS'])
+def opcua_gateway_guide():
+    """获取部署指南"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    guide = opcua_gateway.get_deployment_guide()
+    return jsonify({'success': True, 'guide': guide})
+
+
+@app.route('/api/industrial_protocol/opcua_gateway/dcom', methods=['GET', 'OPTIONS'])
+def opcua_gateway_dcom():
+    """获取 DCOM 配置清单"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    checklist = opcua_gateway.get_dcom_checklist()
+    return jsonify({'success': True, 'checklist': checklist})
+
+
+@app.route('/api/industrial_protocol/opcua_gateway/diagram', methods=['GET', 'OPTIONS'])
+def opcua_gateway_diagram():
+    """获取架构图"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    diagram = opcua_gateway.get_architecture_diagram()
+    return jsonify({'success': True, 'diagram': diagram})
 
 
 if __name__ == '__main__':
