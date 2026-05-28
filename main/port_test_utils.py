@@ -262,12 +262,12 @@ class PortTestManager:
                                                 agents: List[LocalAgent],
                                                 progress_callback: Optional[Any]) -> Dict[str, Any]:
         """
-        启动拓扑检测（带进度推送）
+        启动拓扑检测（带进度推送，快速版）
 
         Args:
             device: 防火墙设备
             agents: Agent列表
-            progress_callback: 进度推送函数（yield）
+            progress_callback: 进度推送函数
 
         Returns:
             dict: {'success': bool, 'mappings': [...], 'error': str}
@@ -283,14 +283,15 @@ class PortTestManager:
             if error:
                 return {'success': False, 'error': f'获取防火墙网口失败: {error}'}
 
-            # 只检测 LINK=yes 的网口
-            initial_up_ports = {p['name'] for p in initial_ports if p['link'] == 'yes'}
-            initial_down_ports = {p['name'] for p in initial_ports if p['link'] == 'no'}
+            # 记录每个网口的 LINK 状态
+            initial_link_status = {p['name']: p['link'] for p in initial_ports}
+            initial_up_ports = [p['name'] for p in initial_ports if p['link'] == 'yes']
 
-            logger.info(f"防火墙初始状态: UP={initial_up_ports}, DOWN={initial_down_ports}")
+            logger.info(f"防火墙初始状态: {initial_link_status}")
+            logger.info(f"已连接网口: {initial_up_ports}")
 
             if progress_callback:
-                progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'init_done', 'message': f'发现 {len(initial_up_ports)} 个已连接网口', 'up_ports': list(initial_up_ports)})}\n\n")
+                progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'init_done', 'message': f'发现 {len(initial_up_ports)} 个已连接网口', 'up_ports': initial_up_ports})}\n\n")
 
             mappings = []
 
@@ -298,17 +299,21 @@ class PortTestManager:
             for idx, agent in enumerate(agents):
                 agent_iface = agent.interface.name if agent.interface else None
                 if not agent_iface:
+                    logger.warning(f"Agent {agent.agent_id} 没有绑定网口")
                     continue
 
                 if progress_callback:
                     progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'detect', 'agent': agent.agent_id, 'interface': agent_iface, 'message': f'正在检测 {agent.agent_id} ({agent_iface})...', 'index': idx, 'total': len(agents)})}\n\n")
 
                 # DOWN Agent网口
-                success, _, error = forward_to_agent(
+                logger.info(f"尝试 DOWN Agent {agent.agent_id} 网口 {agent_iface}")
+                success, result, error = forward_to_agent(
                     agent, 'POST', '/api/interface/down',
                     data={'interface': agent_iface},
-                    timeout=10
+                    timeout=5
                 )
+
+                logger.info(f"DOWN Agent 网口结果: success={success}, result={result}, error={error}")
 
                 if not success:
                     logger.warning(f"DOWN Agent网口失败: {agent_iface}, error: {error}")
@@ -316,20 +321,24 @@ class PortTestManager:
                         progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'down_failed', 'agent': agent.agent_id, 'message': f'DOWN网口失败: {error}'})}\n\n")
                     continue
 
-                time.sleep(2)  # 等待生效
+                # 等待生效（减少到1秒）
+                time.sleep(1)
 
-                # 检查防火墙哪些网口LINK状态变化
+                # 检查防火墙网口状态变化（只检查已连接网口，加快速度）
+                logger.info(f"检查防火墙网口状态变化...")
                 current_ports, error = get_all_firewall_ports(device)
                 if error:
                     logger.warning(f"获取防火墙当前状态失败: {error}")
+                    restore_agent_port(agent, agent_iface)
                     continue
 
-                current_up_ports = {p['name'] for p in current_ports if p['link'] == 'yes'}
-                current_down_ports = {p['name'] for p in current_ports if p['link'] == 'no'}
+                current_link_status = {p['name']: p['link'] for p in current_ports}
+                logger.info(f"防火墙当前状态: {current_link_status}")
 
-                # 检测变化：从 yes 变为 no（正向检测）
+                # 检测变化：从 yes 变为 no
+                found_mapping = False
                 for port_name in initial_up_ports:
-                    if port_name not in current_up_ports:
+                    if initial_link_status.get(port_name) == 'yes' and current_link_status.get(port_name) == 'no':
                         # 发现映射关系
                         mapping = {
                             'agent_id': agent.agent_id,
@@ -342,12 +351,19 @@ class PortTestManager:
                         if progress_callback:
                             progress_callback(f"data: {json.dumps({'type': 'mapping_found', 'mapping': mapping, 'message': f'发现映射: {agent_iface} → {port_name}'})}\n\n")
 
+                        found_mapping = True
                         # 只记录第一个匹配的
                         break
 
+                if not found_mapping:
+                    logger.info(f"Agent {agent_iface} DOWN 后未发现防火墙网口变化")
+                    if progress_callback:
+                        progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'no_change', 'agent': agent.agent_id, 'message': f'{agent_iface} DOWN 后无变化'})}\n\n")
+
                 # 恢复Agent网口
+                logger.info(f"恢复 Agent {agent.agent_id} 网口 {agent_iface}")
                 restore_agent_port(agent, agent_iface)
-                time.sleep(1)
+                time.sleep(0.5)  # 减少等待时间
 
             # 保存映射到数据库
             if mappings:
@@ -361,6 +377,12 @@ class PortTestManager:
                         agent_interface=mapping['agent_interface'],
                         firewall_interface=mapping['firewall_interface']
                     )
+
+            return {'success': True, 'mappings': mappings}
+
+        except Exception as e:
+            logger.exception(f"拓扑检测失败: {e}")
+            return {'success': False, 'error': str(e)}
 
             return {'success': True, 'mappings': mappings}
 
