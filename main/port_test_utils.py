@@ -378,8 +378,8 @@ class PortTestManager:
                         progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'down_failed', 'agent': agent.agent_id, 'message': f'DOWN网口失败: {error}'})}\n\n")
                     continue
 
-                # 等待生效（减少到1秒）
-                time.sleep(1)
+                # 等待生效（确保网口状态变化传播）
+                time.sleep(2)
 
                 # 检查防火墙网口状态变化（只检查已连接网口，加快速度）
                 logger.info(f"检查防火墙网口状态变化...")
@@ -420,7 +420,7 @@ class PortTestManager:
                 # 恢复Agent网口
                 logger.info(f"恢复 Agent {agent.agent_id} 网口 {agent_iface}")
                 restore_agent_port(agent, agent_iface)
-                time.sleep(0.5)  # 减少等待时间
+                time.sleep(1)  # 等待恢复生效
 
             # 保存映射到数据库
             if mappings:
