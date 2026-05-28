@@ -1576,22 +1576,28 @@ function loadDevicePorts() {
     const deviceId = document.getElementById('port_device').value;
     if (!deviceId) return;
 
+    const container = document.getElementById('device_ports_container');
+    container.innerHTML = '<div style="color: var(--text-secondary); padding: 12px;">⏳ 正在加载网口信息...</div>';
+
     fetch(`/api/port/devices/${deviceId}/ports/`)
         .then(r => r.json())
         .then(data => {
-            const container = document.getElementById('device_ports_container');
             if (data.success) {
-                container.innerHTML = '<table class="table"><thead><tr><th>网口</th><th>LINK</th><th>速率</th><th>双工</th></tr></thead><tbody>';
-                data.ports.forEach(p => {
-                    container.innerHTML += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.link)}</td><td>${escapeHtml(p.speed)}</td><td>${escapeHtml(p.duplex)}</td></tr>`;
-                });
-                container.innerHTML += '</tbody></table>';
+                if (data.ports && data.ports.length > 0) {
+                    container.innerHTML = '<table class="table"><thead><tr><th>网口</th><th>LINK</th><th>速率</th><th>双工</th></tr></thead><tbody>';
+                    data.ports.forEach(p => {
+                        container.innerHTML += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.link)}</td><td>${escapeHtml(p.speed)}</td><td>${escapeHtml(p.duplex)}</td></tr>`;
+                    });
+                    container.innerHTML += '</tbody></table>';
+                } else {
+                    container.innerHTML = '<div style="color: var(--text-secondary); padding: 12px;">暂无物理网口</div>';
+                }
             } else {
                 container.innerHTML = `<div style="color: #f44336; padding: 12px; background: rgba(244,67,54,0.1); border-radius: 4px;">⚠️ ${escapeHtml(data.error || '未知错误')}</div>`;
             }
         })
         .catch(error => {
-            showToast('加载网口信息失败: ' + error.message, 'error');
+            container.innerHTML = `<div style="color: #f44336; padding: 12px; background: rgba(244,67,54,0.1); border-radius: 4px;">⚠️ 加载失败: ${escapeHtml(error.message)}</div>`;
         });
 }
 

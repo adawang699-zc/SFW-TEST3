@@ -227,7 +227,10 @@ class PortTestManager:
         """
         try:
             # 1. 获取防火墙初始状态
-            initial_ports = get_all_firewall_ports(device)
+            initial_ports, error = get_all_firewall_ports(device)
+            if error:
+                return {'success': False, 'error': f'获取防火墙网口失败: {error}'}
+
             initial_links = {p['name']: p['link'] for p in initial_ports}
 
             mappings = []
@@ -260,9 +263,13 @@ class PortTestManager:
                     time.sleep(2)  # 等待生效
 
                     # 检查防火墙哪些网口LINK变为Down
-                    current_ports = get_all_firewall_ports(device)
+                    current_ports, error = get_all_firewall_ports(device)
+                    if error:
+                        logger.warning(f"获取防火墙当前状态失败: {error}")
+                        continue
+
                     for port in current_ports:
-                        if initial_links.get(port['name']) == 'up' and port['link'] == 'down':
+                        if initial_links.get(port['name']) == 'yes' and port['link'] == 'no':
                             # 发现映射关系
                             mappings.append({
                                 'agent_id': agent.agent_id,
