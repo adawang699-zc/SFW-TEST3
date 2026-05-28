@@ -1584,11 +1584,12 @@ function loadDevicePorts() {
         .then(data => {
             if (data.success) {
                 if (data.ports && data.ports.length > 0) {
-                    container.innerHTML = '<table class="table"><thead><tr><th>网口</th><th>LINK</th><th>速率</th><th>双工</th></tr></thead><tbody>';
+                    let tableHtml = '<table class="table"><thead><tr><th>网口</th><th>LINK</th><th>速率</th><th>双工</th></tr></thead><tbody>';
                     data.ports.forEach(p => {
-                        container.innerHTML += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.link)}</td><td>${escapeHtml(p.speed)}</td><td>${escapeHtml(p.duplex)}</td></tr>`;
+                        tableHtml += `<tr><td>${escapeHtml(p.name)}</td><td>${escapeHtml(p.link)}</td><td>${escapeHtml(p.speed)}</td><td>${escapeHtml(p.duplex)}</td></tr>`;
                     });
-                    container.innerHTML += '</tbody></table>';
+                    tableHtml += '</tbody></table>';
+                    container.innerHTML = tableHtml;
                 } else {
                     container.innerHTML = '<div style="color: var(--text-secondary); padding: 12px;">暂无物理网口</div>';
                 }
