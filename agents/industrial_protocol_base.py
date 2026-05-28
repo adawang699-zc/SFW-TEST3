@@ -6563,6 +6563,12 @@ def opcua_client_history():
         return jsonify({'success': False, 'message': 'node_id, start_time, end_time required'}), 400
 
     try:
+        # 处理带 'Z' 结尾的 ISO 8601 格式（Python fromisoformat 不支持）
+        if start_time_str.endswith('Z'):
+            start_time_str = start_time_str[:-1] + '+00:00'
+        if end_time_str.endswith('Z'):
+            end_time_str = end_time_str[:-1] + '+00:00'
+
         start_time = datetime.fromisoformat(start_time_str)
         end_time = datetime.fromisoformat(end_time_str)
 

@@ -153,7 +153,7 @@ class OpcUaClient:
 
             logger.info(f"浏览节点: {node_id}, node={node}, nodeid={node.nodeid}")
             children = await node.get_children()
-            logger.info(f"子节点数量: {len(children)}")
+            logger.info(f"子节点数量: {len(children)})")
             result = []
 
             for child in children:
@@ -161,8 +161,30 @@ class OpcUaClient:
                 node_class = await child.read_node_class()
                 display_name = await child.read_display_name()
 
+                # 将 NodeId 转换为标准 OPC UA 格式字符串
+                # 格式: ns=<namespace>;i=<identifier> 或 ns=<namespace>;s=<identifier>
+                nid = child.nodeid
+                if nid.NamespaceIndex == 0:
+                    # 默认命名空间
+                    if hasattr(nid.Identifier, '__iter__') and not isinstance(nid.Identifier, str):
+                        # 字节串类型，转换为字符串
+                        node_id_str = f"i={nid.Identifier}"
+                    elif isinstance(nid.Identifier, int):
+                        node_id_str = f"i={nid.Identifier}"
+                    elif isinstance(nid.Identifier, str):
+                        node_id_str = f"s={nid.Identifier}"
+                    else:
+                        node_id_str = str(nid)
+                else:
+                    if isinstance(nid.Identifier, int):
+                        node_id_str = f"ns={nid.NamespaceIndex};i={nid.Identifier}"
+                    elif isinstance(nid.Identifier, str):
+                        node_id_str = f"ns={nid.NamespaceIndex};s={nid.Identifier}"
+                    else:
+                        node_id_str = f"ns={nid.NamespaceIndex};{str(nid.Identifier)}"
+
                 result.append({
-                    "node_id": str(child.nodeid),
+                    "node_id": node_id_str,
                     "browse_name": browse_name.Name,
                     "node_class": str(node_class),
                     "display_name": display_name.Text if hasattr(display_name, 'Text') else str(display_name)

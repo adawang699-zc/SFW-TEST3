@@ -1296,6 +1296,20 @@
 
                 <div class="config-section" id="opcua-readwrite-section" style="display: none;">
                     <h5 style="margin-bottom: 12px;">数据读写</h5>
+                    <div style="margin-bottom: 12px; padding: 8px; background: var(--bg-secondary); border-radius: 4px; font-size: 0.85rem;">
+                        <strong style="color: var(--primary);">常用节点 ID:</strong>
+                        <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px;">
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Temperature'">温度</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Pressure'">压力</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Flow'">流量</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Speed'">转速</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Level'">液位</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.SwitchState'">开关</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Counter'">计数器</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.Mode'">模式</button>
+                            <button class="btn btn-sm" style="padding: 4px 8px; font-size: 0.8rem;" onclick="document.getElementById('opcua-rw-node').value='ns=2;s=SimulationDevice.AlarmActive'">报警</button>
+                        </div>
+                    </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label class="form-label">节点 ID</label>
@@ -1303,7 +1317,7 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">写入值</label>
-                            <input type="text" id="opcua-rw-value" class="form-input" placeholder="值">
+                            <input type="text" id="opcua-rw-value" class="form-input" placeholder="值 (数字或布尔)">
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
@@ -4349,11 +4363,22 @@ async function opcuaBrowse() {
         }
         let html = '';
         result.nodes.forEach(n => {
-            html += `<div style="padding: 2px 0; cursor: pointer; color: var(--primary);" onclick="document.getElementById('opcua-rw-node').value='${n.node_id}'; document.getElementById('opcua-browse-node').value='${n.node_id}';">
-                ${n.browse_name} <span style="color: var(--text-muted);">(${n.node_id})</span> <span style="color: var(--text-muted); font-size: 0.8rem;">[${n.node_class}]</span>
+            const isObject = n.node_class === 'Object' || n.node_class.includes('Object');
+            const icon = isObject ? '📁' : '📊';
+            const clickAction = isObject
+                ? `onclick="document.getElementById('opcua-browse-node').value='${n.node_id}'; opcuaBrowse();"`
+                : `onclick="document.getElementById('opcua-rw-node').value='${n.node_id}';"`;
+            html += `<div style="padding: 4px 0; cursor: pointer;" ${clickAction}>
+                <span style="color: var(--primary);">${icon} ${n.browse_name}</span>
+                <span style="color: var(--text-muted); font-size: 0.85rem;">[${n.node_id}]</span>
+                <span style="color: var(--text-muted); font-size: 0.75rem;">[${n.node_class}]</span>
             </div>`;
         });
         div.innerHTML = html;
+        // 添加返回按钮
+        if (nodeId !== 'Objects') {
+            div.innerHTML = `<div style="padding: 4px 0; cursor: pointer; color: var(--warning);" onclick="document.getElementById('opcua-browse-node').value='Objects'; opcuaBrowse();">⬆️ 返回 Objects</div>` + html;
+        }
     } else {
         div.innerHTML = '<span style="color: red;">浏览失败: ' + (result.message || '') + '</span>';
     }
