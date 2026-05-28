@@ -1138,9 +1138,12 @@ def api_agent_config_ip(request):
             return JsonResponse({'success': False, 'error': 'Agent 正在运行，请先停止 Agent'})
 
         # 获取命令执行函数（考虑 namespace）
+        # 注意: sudo 应该在整个命令外面，而不是在 namespace 内
         def run_ip_cmd(args):
             if namespace:
-                return exec_in_namespace(namespace, ['sudo'] + args)
+                # sudo ip netns exec <namespace> <command>
+                full_cmd = ['sudo', 'ip', 'netns', 'exec', namespace] + args
+                return subprocess.run(full_cmd, capture_output=True, text=True, timeout=10)
             else:
                 return subprocess.run(['sudo'] + args, capture_output=True, text=True, timeout=10)
 
