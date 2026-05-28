@@ -331,47 +331,51 @@ def execute_in_backend(
         ssh.connect(host, port, user, password, timeout=10)
 
         chan = ssh.invoke_shell()
-        chan.settimeout(30)
+        chan.settimeout(60)
 
         # 清空初始输出
-        time.sleep(0.1)
+        time.sleep(0.5)
         if chan.recv_ready():
             chan.recv(4096)
 
         # 输入 enter 进入后台
         chan.send('enter\n')
-        time.sleep(0.3)
+        time.sleep(1)
         if chan.recv_ready():
             chan.recv(4096)
 
         # 输入密码获取 root 权限
         chan.send(backend_pwd + '\n')
-        time.sleep(0.3)
+        time.sleep(1)
         if chan.recv_ready():
             chan.recv(4096)
 
         # 发送要执行的命令
         chan.send(cmd + '\n')
-        time.sleep(0.5)
+
+        # 根据命令长度调整等待时间
+        # 批量命令（如 for 循环）需要更长时间
+        wait_time = 3 if 'for' in cmd or len(cmd) > 100 else 1
+        time.sleep(wait_time)
 
         # 读取输出
         output = ''
-        max_wait = 15
+        max_wait = 30
         start_time = time.time()
 
         while time.time() - start_time < max_wait:
             if chan.recv_ready():
-                data = chan.recv(4096).decode('utf-8', errors='ignore')
+                data = chan.recv(8192).decode('utf-8', errors='ignore')
                 output += data
                 # 如果出现提示符，说明命令执行完成
                 if output.count('\n') > 1:
-                    if any(p in output[-20:] for p in ['# ', '$ ', '\n#', '\n$']):
-                        time.sleep(0.2)
+                    if any(p in output[-30:] for p in ['# ', '$ ', '\n#', '\n$', ']#']):
+                        time.sleep(0.3)
                         if chan.recv_ready():
                             output += chan.recv(4096).decode('utf-8', errors='ignore')
                         break
             else:
-                time.sleep(0.1)
+                time.sleep(0.2)
 
         ssh.close()
 

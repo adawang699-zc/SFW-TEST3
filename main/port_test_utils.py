@@ -251,8 +251,6 @@ done
 
     return filtered_ports, ''
 
-    return ports_info, ''
-
 
 def configure_agent_port(agent: LocalAgent, interface: str,
                          autoneg: str, speed: str, duplex: str) -> Tuple[bool, str]:
