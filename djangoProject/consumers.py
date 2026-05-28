@@ -140,6 +140,7 @@ class PortTestConsumer(AsyncWebsocketConsumer):
                 logger.warning(f"未知操作: {action}")
 
         except json.JSONDecodeError:
+            logger.error(f"无效的JSON数据: {text_data}")
             await self.send(text_data=json.dumps({
                 'type': 'error',
                 'message': '无效JSON格式'
