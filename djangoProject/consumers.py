@@ -131,15 +131,24 @@ class PortTestConsumer(AsyncWebsocketConsumer):
             if action == 'stop':
                 from main.port_test_utils import PortTestManager
                 PortTestManager.stop_test(self.test_id)
+                logger.info(f"收到停止请求: test_id={self.test_id}")
             else:
                 await self.send(text_data=json.dumps({
                     'type': 'error',
                     'message': f'未知操作: {action}'
                 }))
+                logger.warning(f"未知操作: {action}")
+
         except json.JSONDecodeError:
             await self.send(text_data=json.dumps({
                 'type': 'error',
                 'message': '无效JSON格式'
+            }))
+        except Exception as e:
+            logger.exception(f"处理消息异常: {e}")
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': '服务器内部错误'
             }))
 
     async def scenario_result_message(self, event: Dict[str, Any]) -> None:
