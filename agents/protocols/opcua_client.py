@@ -157,9 +157,9 @@ class OpcUaClient:
             result = []
 
             for child in children:
-                browse_name = await child.get_browse_name()
-                node_class = await child.get_node_class()
-                display_name = await child.get_display_name()
+                browse_name = await child.read_browse_name()
+                node_class = await child.read_node_class()
+                display_name = await child.read_display_name()
 
                 result.append({
                     "node_id": str(child.nodeid),
