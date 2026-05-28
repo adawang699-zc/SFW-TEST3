@@ -151,7 +151,9 @@ class OpcUaClient:
             else:
                 node = self._client.get_node(node_id)
 
+            logger.info(f"浏览节点: {node_id}, node={node}, nodeid={node.nodeid}")
             children = await node.get_children()
+            logger.info(f"子节点数量: {len(children)}")
             result = []
 
             for child in children:
@@ -169,7 +171,7 @@ class OpcUaClient:
             return result
 
         except Exception as e:
-            logger.error(f"浏览节点异常: {e}")
+            logger.error(f"浏览节点异常: {e}", exc_info=True)
             return []
 
     def browse(self, node_id: str = "Objects") -> Tuple[bool, List, str]:
