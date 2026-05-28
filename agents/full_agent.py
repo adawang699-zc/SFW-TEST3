@@ -2411,18 +2411,23 @@ try:
     from agents.industrial_protocol_base import app as industrial_app
     # 复制 industrial_app 的所有路由到 full_agent 的 app
     merged_count = 0
+    skipped_count = 0
     for rule in industrial_app.url_map.iter_rules():
         if rule.endpoint != 'static' and rule.rule.startswith('/api/industrial_protocol'):
             view_func = industrial_app.view_functions.get(rule.endpoint)
             if view_func:
-                app.add_url_rule(
-                    rule.rule,
-                    rule.endpoint,
-                    view_func,
-                    methods=list(rule.methods - {'HEAD', 'OPTIONS'})
-                )
-                merged_count += 1
-    logger.info(f"工业协议路由导入成功: {merged_count} 个路由")
+                try:
+                    app.add_url_rule(
+                        rule.rule,
+                        rule.endpoint,
+                        view_func,
+                        methods=list(rule.methods - {'HEAD', 'OPTIONS'})
+                    )
+                    merged_count += 1
+                except (AssertionError, ValueError):
+                    # 端点名冲突（已存在同名路由），跳过
+                    skipped_count += 1
+    logger.info(f"工业协议路由导入成功: {merged_count} 个路由 (跳过 {skipped_count} 个冲突)")
 except ImportError as e:
     logger.warning(f"工业协议路由导入失败: {e}")
 except Exception as e:
