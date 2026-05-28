@@ -5921,11 +5921,21 @@ def api_detect_topology(request):
         from django.http import StreamingHttpResponse
         from main.port_test_utils import PortTestManager
 
+        # 创建进度消息队列
+        progress_messages = []
+
+        def progress_callback(msg):
+            progress_messages.append(msg)
+
         def generate_progress():
             import json
             yield f"data: {json.dumps({'type': 'start', 'message': '开始拓扑检测...'})}\n\n"
 
-            result = PortTestManager.start_topology_detection_with_progress(device, agents, yield)
+            result = PortTestManager.start_topology_detection_with_progress(device, agents, progress_callback)
+
+            # 输出收集的进度消息
+            for msg in progress_messages:
+                yield msg
 
             yield f"data: {json.dumps({'type': 'complete', 'success': result['success'], 'mappings': result.get('mappings', []), 'error': result.get('error', '')})}\n\n"
 
