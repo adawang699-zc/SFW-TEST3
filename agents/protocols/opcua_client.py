@@ -149,7 +149,7 @@ class OpcUaClient:
             if node_id == "Objects":
                 node = self._client.get_objects_node()
             else:
-                node = await self._client.get_node(node_id)
+                node = self._client.get_node(node_id)
 
             children = await node.get_children()
             result = []
@@ -192,7 +192,7 @@ class OpcUaClient:
             return (False, None, "客户端未初始化")
 
         try:
-            node = await self._client.get_node(node_id)
+            node = self._client.get_node(node_id)
             value = await node.read_value()
             return (True, value, "读取成功")
         except Exception as e:
@@ -217,7 +217,7 @@ class OpcUaClient:
             return (False, "客户端未初始化")
 
         try:
-            node = await self._client.get_node(node_id)
+            node = self._client.get_node(node_id)
             await node.write_value(value)
             return (True, "写入成功")
         except Exception as e:
@@ -243,7 +243,7 @@ class OpcUaClient:
             return (False, [], "客户端未初始化")
 
         try:
-            node = await self._client.get_node(node_id)
+            node = self._client.get_node(node_id)
             history = await node.read_raw_history(start_time, end_time)
 
             result = []
@@ -279,7 +279,7 @@ class OpcUaClient:
             return (False, None, "客户端未初始化")
 
         try:
-            obj = await self._client.get_node(object_node)
+            obj = self._client.get_node(object_node)
             method = await obj.get_child(method_name)
             result = await obj.call_method(method, *(args or []))
             return (True, result, "调用成功")
