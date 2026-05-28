@@ -29,6 +29,16 @@ from .opcua_common import (
 
 logger = logging.getLogger(__name__)
 
+# 条件导入 asyncua 模块
+asyncua = None
+ua = None
+if OPCUA_AVAILABLE:
+    try:
+        import asyncua
+        from asyncua import ua
+    except ImportError:
+        OPCUA_AVAILABLE = False
+
 
 class OpcUaServer:
     """OPC UA 服务端模拟器"""
