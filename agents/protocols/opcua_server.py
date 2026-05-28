@@ -227,6 +227,7 @@ class OpcUaServer:
 
             # 注册命名空间
             self._idx = await self._server.register_namespace(self._namespace)
+            logger.info(f"命名空间注册完成: idx={self._idx}, uri={self._namespace}")
 
             # 创建地址空间
             await self._create_address_space()
