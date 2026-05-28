@@ -124,21 +124,33 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
     if not output:
         return [], "无法获取网口列表"
 
-    # 解析网口列表，过滤出物理网口
+    # 清理ANSI颜色代码
+    import re
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+    output = ansi_escape.sub('', output)
+
+    # 解析网口列表
     raw_interfaces = [iface.strip() for iface in output.split('\n') if iface.strip()]
 
-    # 过滤掉虚拟接口和特殊字符
-    # 虚拟接口列表：lo, docker, virbr, vnet, br, ifb, Virtual, agl, ext等
-    virtual_prefixes = ['lo', 'docker', 'virbr', 'vnet', 'br-', 'ifb', 'Virtual', 'agl', 'ext', 'ifb', 'bond', 'team', 'tun', 'tap', 'vlan']
+    # 处理多列格式（ls命令可能输出为多列，空格分隔）
+    all_interfaces = []
+    for line in raw_interfaces:
+        # 过滤掉命令提示符
+        if line.startswith('[') or line.startswith('#') or line.startswith('$') or line.startswith('~'):
+            continue
+        if 'root@' in line or 'admin@' in line:
+            continue
+        # 拆分空格分隔的多个网口名
+        parts = line.split()
+        for part in parts:
+            if part and len(part) >= 2:
+                all_interfaces.append(part)
+
+    # 过滤掉虚拟接口
+    virtual_prefixes = ['lo', 'docker', 'virbr', 'vnet', 'br-', 'ifb', 'Virtual', 'agl', 'ext', 'bond', 'team', 'tun', 'tap', 'vlan']
 
     interfaces = []
-    for iface in raw_interfaces:
-        # 过滤掉命令提示符、特殊字符等
-        if iface.startswith('[') or iface.startswith('#') or iface.startswith('$') or iface.startswith('~'):
-            continue
-        if iface.startswith('root@') or iface.startswith('admin@'):
-            continue
-        # 过滤掉虚拟接口
+    for iface in all_interfaces:
         is_virtual = False
         for prefix in virtual_prefixes:
             if iface.lower().startswith(prefix.lower()):
@@ -146,13 +158,11 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
                 break
         if is_virtual:
             continue
-        # 过滤掉纯数字或其他异常名称
         if iface.isdigit() or len(iface) < 2:
             continue
-        # 保留物理网口
         interfaces.append(iface)
 
-    logger.info(f"设备 {device.ip} 网口列表: 原始={raw_interfaces}, 过滤后={interfaces}")
+    logger.info(f"设备 {device.ip} 网口列表: 过滤后={interfaces}")
 
     ports_info = []
 
