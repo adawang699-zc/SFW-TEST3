@@ -88,6 +88,8 @@ class OpcUaServer:
 
     async def _create_address_space(self):
         """创建地址空间"""
+        from asyncua import ua
+
         # 获取对象节点
         objects = self._server.get_objects_node()
 
@@ -116,8 +118,9 @@ class OpcUaServer:
             else:
                 initial_value = 0
 
-            # 创建变量节点
-            node = await sim_device.add_variable(self._idx, name, initial_value)
+            # 创建变量节点（使用字符串节点 ID，便于客户端访问）
+            node_id = ua.NodeId(f"SimulationDevice.{name}", self._idx)
+            node = await sim_device.add_variable(node_id, name, initial_value)
             await node.set_writable()
 
             # 存储节点引用和配置
