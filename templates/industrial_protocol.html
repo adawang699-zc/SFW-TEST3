@@ -1412,15 +1412,17 @@ let activeConnections = {
     s7_client: false,
     s7_server: false,
     goose: false,
-    sv: false
+    sv: false,
+    opcua_server: false,
+    opcua_client: false
 };
 
 function hasActiveClientConnections() {
-    return activeConnections.modbus_client || activeConnections.s7_client;
+    return activeConnections.modbus_client || activeConnections.s7_client || activeConnections.opcua_client;
 }
 
 function hasActiveServerConnections() {
-    return activeConnections.modbus_server || activeConnections.s7_server || activeConnections.goose || activeConnections.sv;
+    return activeConnections.modbus_server || activeConnections.s7_server || activeConnections.goose || activeConnections.sv || activeConnections.opcua_server;
 }
 
 function getActiveConnectionList(type) {
@@ -1428,11 +1430,13 @@ function getActiveConnectionList(type) {
     if (type === 'client') {
         if (activeConnections.modbus_client) active.push('Modbus Client');
         if (activeConnections.s7_client) active.push('S7 Client');
+        if (activeConnections.opcua_client) active.push('OPC UA Client');
     } else {
         if (activeConnections.modbus_server) active.push('Modbus Server');
         if (activeConnections.s7_server) active.push('S7 Server');
         if (activeConnections.goose) active.push('GOOSE');
         if (activeConnections.sv) active.push('SV');
+        if (activeConnections.opcua_server) active.push('OPC UA Server');
     }
     return active.join(', ');
 }
@@ -1448,6 +1452,12 @@ async function disconnectAllClientConnections() {
         await apiRequest('/api/industrial/s7_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
         activeConnections.s7_client = false;
         document.getElementById('s7-client-status').innerHTML = '<span style="color: var(--text-muted);">未连接</span>';
+    }
+    if (activeConnections.opcua_client && selectedClientAgentId) {
+        await apiRequest('/api/industrial/opcua_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
+        activeConnections.opcua_client = false;
+        opcuaClientConnected = false;
+        updateOpcuaClientButtonState(false);
     }
     stopAutoRefresh();
 }
@@ -1474,6 +1484,12 @@ async function disconnectAllServerConnections() {
         await apiRequest('/api/industrial/goose_sv/sv/stop/', 'POST', { agent_id: selectedServerAgentId });
         activeConnections.sv = false;
         document.getElementById('sv-status').innerHTML = '<span style="color: var(--text-muted);">未启动</span>';
+    }
+    if (activeConnections.opcua_server && selectedServerAgentId) {
+        await apiRequest('/api/industrial/opcua_server/stop/', 'POST', { agent_id: selectedServerAgentId });
+        activeConnections.opcua_server = false;
+        opcuaServerRunning = false;
+        updateOpcuaServerButtonState(false);
     }
 }
 
@@ -4100,24 +4116,63 @@ async function httpFileDownload(filename) {
 let opcuaServerRunning = false;
 let opcuaClientConnected = false;
 
+// OPC UA Server 按钮状态更新函数
+function updateOpcuaServerButtonState(running) {
+    const btn = document.getElementById('opcua-server-toggle-btn');
+    const statusDiv = document.getElementById('opcua-server-status');
+    btn.disabled = false;
+    if (running) {
+        btn.textContent = '停止监听';
+        btn.classList.remove('btn-success', 'btn-secondary');
+        btn.classList.add('btn-danger');
+        statusDiv.innerHTML = '<span class="status-badge status-running">运行中</span>';
+    } else {
+        btn.textContent = '启动';
+        btn.classList.remove('btn-danger', 'btn-secondary');
+        btn.classList.add('btn-success');
+        statusDiv.innerHTML = '<span class="status-badge status-stopped">未启动</span>';
+    }
+}
+
+// OPC UA Client 按钮状态更新函数
+function updateOpcuaClientButtonState(connected) {
+    const btn = document.getElementById('opcua-client-toggle-btn');
+    const statusDiv = document.getElementById('opcua-client-status');
+    btn.disabled = false;
+    if (connected) {
+        btn.textContent = '断开连接';
+        btn.classList.remove('btn-success', 'btn-secondary');
+        btn.classList.add('btn-danger');
+        statusDiv.innerHTML = '<span class="status-badge status-running">已连接</span>';
+    } else {
+        btn.textContent = '连接';
+        btn.classList.remove('btn-danger', 'btn-secondary');
+        btn.classList.add('btn-success');
+        statusDiv.innerHTML = '<span class="status-badge status-stopped">未连接</span>';
+    }
+}
+
 async function opcuaServerToggle() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     if (opcuaServerRunning) {
+        // 停止 - 先显示停止中状态
+        setServerButtonLoading('opcua-server-toggle-btn', '停止中...');
         const result = await apiRequest('/api/industrial/opcua_server/stop/', 'POST', { agent_id: selectedServerAgentId });
         if (result.success) {
             opcuaServerRunning = false;
-            document.getElementById('opcua-server-toggle-btn').textContent = '启动';
-            document.getElementById('opcua-server-toggle-btn').classList.remove('btn-danger');
-            document.getElementById('opcua-server-toggle-btn').classList.add('btn-success');
-            document.getElementById('opcua-server-status').innerHTML = '<span class="status-badge status-stopped">未启动</span>';
+            activeConnections.opcua_server = false;
+            updateOpcuaServerButtonState(false);
             document.getElementById('opcua-variables-section').style.display = 'none';
             document.getElementById('opcua-history-section').style.display = 'none';
             showToast('OPC UA Server 已停止', 'success');
         } else {
+            updateOpcuaServerButtonState(true);  // 恢复原状态
             showToast('停止失败: ' + (result.message || result.error), 'error');
         }
     } else {
+        // 启动 - 先显示启动中状态
+        setServerButtonLoading('opcua-server-toggle-btn', '启动中...');
         const data = {
             agent_id: selectedServerAgentId,
             host: document.getElementById('opcua-server-host').value,
@@ -4126,14 +4181,13 @@ async function opcuaServerToggle() {
         const result = await apiRequest('/api/industrial/opcua_server/start/', 'POST', data);
         if (result.success) {
             opcuaServerRunning = true;
-            document.getElementById('opcua-server-toggle-btn').textContent = '停止';
-            document.getElementById('opcua-server-toggle-btn').classList.remove('btn-success');
-            document.getElementById('opcua-server-toggle-btn').classList.add('btn-danger');
-            document.getElementById('opcua-server-status').innerHTML = '<span class="status-badge status-running">运行中</span>';
+            activeConnections.opcua_server = true;
+            updateOpcuaServerButtonState(true);
             document.getElementById('opcua-variables-section').style.display = 'block';
             showToast('OPC UA Server 启动成功', 'success');
             opcuaRefreshVariables();
         } else {
+            updateOpcuaServerButtonState(false);  // 恢复原状态
             showToast('启动失败: ' + (result.message || result.error), 'error');
         }
     }
@@ -4176,20 +4230,23 @@ async function opcuaClientToggle() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     if (opcuaClientConnected) {
+        // 断开 - 先显示断开中状态
+        setClientButtonLoading('opcua-client-toggle-btn', '断开中...');
         const result = await apiRequest('/api/industrial/opcua_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
         if (result.success) {
             opcuaClientConnected = false;
-            document.getElementById('opcua-client-toggle-btn').textContent = '连接';
-            document.getElementById('opcua-client-toggle-btn').classList.remove('btn-danger');
-            document.getElementById('opcua-client-toggle-btn').classList.add('btn-success');
-            document.getElementById('opcua-client-status').innerHTML = '<span class="status-badge status-stopped">未连接</span>';
+            activeConnections.opcua_client = false;
+            updateOpcuaClientButtonState(false);
             document.getElementById('opcua-browse-section').style.display = 'none';
             document.getElementById('opcua-readwrite-section').style.display = 'none';
             showToast('已断开连接', 'success');
         } else {
+            updateOpcuaClientButtonState(true);  // 恢复原状态
             showToast('断开失败: ' + (result.message || result.error), 'error');
         }
     } else {
+        // 连接 - 先显示连接中状态
+        setClientButtonLoading('opcua-client-toggle-btn', '连接中...');
         const data = {
             agent_id: selectedClientAgentId,
             endpoint: document.getElementById('opcua-client-endpoint').value
@@ -4197,14 +4254,13 @@ async function opcuaClientToggle() {
         const result = await apiRequest('/api/industrial/opcua_client/connect/', 'POST', data);
         if (result.success) {
             opcuaClientConnected = true;
-            document.getElementById('opcua-client-toggle-btn').textContent = '断开';
-            document.getElementById('opcua-client-toggle-btn').classList.remove('btn-success');
-            document.getElementById('opcua-client-toggle-btn').classList.add('btn-danger');
-            document.getElementById('opcua-client-status').innerHTML = '<span class="status-badge status-running">已连接</span>';
+            activeConnections.opcua_client = true;
+            updateOpcuaClientButtonState(true);
             document.getElementById('opcua-browse-section').style.display = 'block';
             document.getElementById('opcua-readwrite-section').style.display = 'block';
             showToast('连接成功', 'success');
         } else {
+            updateOpcuaClientButtonState(false);  // 恢复原状态
             showToast('连接失败: ' + (result.message || result.error), 'error');
         }
     }
