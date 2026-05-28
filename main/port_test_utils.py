@@ -162,7 +162,17 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
             continue
         interfaces.append(iface)
 
-    logger.info(f"设备 {device.ip} 网口列表: 过滤后={interfaces}")
+    # 按网口名称排序（eth1, eth2, eth3... 或 s0p1, s0p2, s1p0...）
+    interfaces.sort(key=lambda x: (
+        # 提取前缀（eth, ens, enp等）
+        x.rstrip('0123456789').rstrip('p').rstrip('0123456789'),
+        # 提取第一个数字
+        int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 0,
+        # 对于s0p1格式，提取p后的数字
+        int(re.search(r'p(\d+)', x).group(1)) if re.search(r'p(\d+)', x) else 0
+    ))
+
+    logger.info(f"设备 {device.ip} 网口列表: 排序后={interfaces}")
 
     ports_info = []
 
