@@ -5851,6 +5851,12 @@ def api_detect_topology(request):
         device_id = data.get('device_id')
         agent_ids = data.get('agent_ids', [])
 
+        # 输入验证
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少device_id'})
+        if not agent_ids or len(agent_ids) < 2:
+            return JsonResponse({'success': False, 'error': '至少需要2个agent'})
+
         device = TestDevice.objects.get(id=device_id)
         agents = [LocalAgent.objects.get(agent_id=aid) for aid in agent_ids]
 
@@ -5873,6 +5879,12 @@ def api_start_port_test(request):
         speed_options = data.get('speed_options', ['100', '1000'])
         duplex_options = data.get('duplex_options', ['full'])
 
+        # 输入验证
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少device_id'})
+        if not mappings:
+            return JsonResponse({'success': False, 'error': '缺少mappings'})
+
         from main.port_test_utils import PortTestManager
         scenarios = PortTestManager.generate_test_scenarios(
             autoneg_options, speed_options, duplex_options
@@ -5885,7 +5897,7 @@ def api_start_port_test(request):
         })
 
         if result['success']:
-            result['websocket_url'] = f"ws://{settings.ALLOWED_HOSTS[0]}:{settings.PORT}/ws/port-test/{result['test_id']}/"
+            result['websocket_url'] = f"ws://{settings.ALLOWED_HOSTS[0]}/ws/port-test/{result['test_id']}/"
 
         return JsonResponse(result)
     except Exception as e:
@@ -5899,6 +5911,10 @@ def api_stop_port_test(request):
     try:
         data = json.loads(request.body)
         test_id = data.get('test_id')
+
+        # 输入验证
+        if not test_id:
+            return JsonResponse({'success': False, 'error': '缺少test_id'})
 
         from main.port_test_utils import PortTestManager
         result = PortTestManager.stop_test(test_id)
