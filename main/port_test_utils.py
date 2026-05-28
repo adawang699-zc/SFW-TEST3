@@ -13,7 +13,7 @@ from django.conf import settings
 from asgiref.sync import async_to_sync
 
 from main.models import TestDevice, LocalAgent, PortMapping, PortTestResult
-from main.device_utils import execute_ssh_command
+from main.device_utils import execute_ssh_command, execute_firewall_command
 from main.views import forward_to_agent
 
 logger = logging.getLogger('main')
@@ -68,13 +68,14 @@ def get_firewall_port_info(device: TestDevice, interface: str) -> Dict[str, Any]
 
     Args:
         device: TestDevice对象
-        interface: 口名称
+        interface: 网口名称
 
     Returns:
         dict: 网口信息, 包含 raw_output 字段存储原始输出
     """
     cmd = f"ethtool {interface}"
-    output = execute_ssh_command(
+    # 使用防火墙命令执行函数（先enter进入root）
+    output = execute_firewall_command(
         cmd,
         device.ip,
         device.user,
@@ -105,7 +106,8 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
     """
     # 获取网口列表 (包括各种命名模式: eth, ens, enp, eno, enx, etc.)
     cmd = "ls /sys/class/net/ | grep -vE 'lo|docker|virbr|vnet|br|wlan'"
-    output = execute_ssh_command(
+    # 使用防火墙命令执行函数（先enter进入root）
+    output = execute_firewall_command(
         cmd,
         device.ip,
         device.user,

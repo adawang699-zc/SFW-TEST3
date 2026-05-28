@@ -1599,17 +1599,19 @@ function loadPortTestAgents() {
     fetch('/api/agents/list/')
         .then(r => r.json())
         .then(data => {
-            if (data.success) {
-                const container = document.getElementById('agent_list_container');
-                container.innerHTML = '';
+            const container = document.getElementById('agent_list_container');
+            container.innerHTML = '';
+            if (data.agents && data.agents.length > 0) {
                 data.agents.forEach(a => {
                     container.innerHTML += `
                         <div style="display: flex; align-items: center; margin-bottom: 8px;">
                             <input type="checkbox" id="agent_${escapeHtml(a.agent_id)}" onchange="toggleAgent('${escapeHtml(a.agent_id)}')">
-                            <label for="agent_${escapeHtml(a.agent_id)}" style="margin-left: 8px;">${escapeHtml(a.agent_id)} (${escapeHtml(a.interface.name)})</label>
+                            <label for="agent_${escapeHtml(a.agent_id)}" style="margin-left: 8px;">${escapeHtml(a.agent_id)} (${escapeHtml(a.interface_name)})</label>
                         </div>
                     `;
                 });
+            } else {
+                container.innerHTML = '<div style="color: var(--text-secondary);">暂无Agent</div>';
             }
         })
         .catch(error => {

@@ -100,6 +100,99 @@ def execute_ssh_command(
         return False
 
 
+def execute_firewall_command(
+    cmd: str,
+    host: str,
+    user: str = DEFAULT_USER,
+    password: str = DEFAULT_PASSWORD,
+    port: int = 22,
+    timeout: int = 10
+) -> Union[str, bool]:
+    """
+    在防火墙root模式下执行命令（华为USG系列）
+
+    流程: SSH登录(进入vtysh) → enter进入root → 执行命令
+
+    Args:
+        cmd: 要执行的Linux命令
+        host: 主机地址
+        user: SSH用户名
+        password: SSH密码
+        port: SSH端口
+        timeout: 超时时间
+
+    Returns:
+        命令输出或 False（失败时）
+    """
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(host, port, user, password, timeout=timeout)
+
+        # 创建交互式shell
+        channel = ssh.invoke_shell()
+        time.sleep(1)  # 等待shell初始化
+
+        # 清空初始输出
+        while channel.recv_ready():
+            channel.recv(1024)
+
+        # 发送 enter 命令进入root
+        channel.send('enter\n')
+        time.sleep(1)
+
+        # 等待并读取enter后的输出
+        enter_output = ''
+        while channel.recv_ready():
+            enter_output += channel.recv(4096).decode('utf-8', errors='ignore')
+
+        # 检查是否成功进入root（通常会有提示符变化）
+        # 发送实际命令
+        channel.send(cmd + '\n')
+        time.sleep(2)
+
+        # 读取命令输出
+        output = ''
+        while channel.recv_ready():
+            output += channel.recv(4096).decode('utf-8', errors='ignore')
+
+        # 发送 exit 退出root回到vtysh
+        channel.send('exit\n')
+        time.sleep(0.5)
+
+        # 清理剩余输出
+        while channel.recv_ready():
+            channel.recv(1024)
+
+        channel.close()
+        ssh.close()
+
+        # 提取命令输出（去除命令回显和提示符）
+        lines = output.split('\n')
+        result_lines = []
+        for line in lines:
+            # 跳过命令回显和提示符行
+            if cmd in line or line.strip().startswith('~') or line.strip().startswith('#'):
+                continue
+            if line.strip():
+                result_lines.append(line.strip())
+
+        return '\n'.join(result_lines) if result_lines else False
+
+    except paramiko.AuthenticationException as err:
+        logger.error(f"防火墙 SSH 认证失败: {host}:{port}@{user}, 错误: {err}")
+        return False
+    except paramiko.SSHException as err:
+        logger.error(f"防火墙 SSH 异常: {host}:{port}, 错误: {err}")
+        return False
+    except socket.timeout:
+        logger.error(f"防火墙 SSH 连接超时: {host}:{port}")
+        return False
+    except Exception as e:
+        logger.error(f"防火墙命令执行失败: {host}:{port}, 命令: {cmd}, 错误: {e}")
+        return False
+
+
 def execute_in_vtysh(
     cmds: Union[str, List[str]],
     host: str,
