@@ -192,7 +192,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .config-label {
@@ -266,31 +266,6 @@
 .btn-stop:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 25px rgba(208, 0, 0, 0.4);
-}
-
-/* 运行状态指示 */
-.running-indicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: rgba(56, 176, 0, 0.1);
-    border-radius: 10px;
-    border: 1px solid rgba(56, 176, 0, 0.3);
-    margin-top: 12px;
-}
-
-.pulse-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #38b000;
-    animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(0.9); }
 }
 
 /* 右侧主面板 */
@@ -579,12 +554,6 @@
 
             <div class="action-buttons">
                 <button class="btn-start" id="bw-start-btn" disabled>开始测试</button>
-                <button class="btn-stop" id="bw-stop-btn" style="display: none;">停止测试</button>
-            </div>
-
-            <div class="running-indicator" id="bw-test-status" style="display: none;">
-                <span class="pulse-dot"></span>
-                <span style="color: #38b000; font-weight: 500;">测试进行中...</span>
             </div>
         </div>
     </div>
@@ -866,7 +835,17 @@ document.getElementById('bw-protocol').addEventListener('change', function() {
     currentProtocol = this.value;
 });
 
-// ========== 带宽测试控制 ==========
+// ========== 带宽测试控制（按钮切换）==========
+let isTestRunning = false;
+
+async function toggleBandwidthTest() {
+    if (isTestRunning) {
+        await stopBandwidthTest();
+    } else {
+        await startBandwidthTest();
+    }
+}
+
 async function startBandwidthTest() {
     if (!selectedServerAgent || !selectedClientAgent) {
         showToast('请选择Server端和Client端Agent', 'error');
@@ -933,11 +912,14 @@ async function startBandwidthTest() {
 
         if (result.success) {
             currentTestId = result.test_id;
+            isTestRunning = true;
             showToast('带宽测试启动成功');
 
-            document.getElementById('bw-start-btn').style.display = 'none';
-            document.getElementById('bw-stop-btn').style.display = 'block';
-            document.getElementById('bw-test-status').style.display = 'flex';
+            // 按钮切换为停止状态
+            const btn = document.getElementById('bw-start-btn');
+            btn.textContent = '停止测试';
+            btn.classList.remove('btn-start');
+            btn.classList.add('btn-stop');
 
             connectWebSocket(result.websocket_url);
             initCanvasAnimation();
@@ -1019,15 +1001,18 @@ function displayStoppedSummary() {
 
 function cleanupTest() {
     currentTestId = null;
+    isTestRunning = false;
     if (websocket) {
         websocket.close();
         websocket = null;
     }
 
-    document.getElementById('bw-start-btn').style.display = 'block';
-    document.getElementById('bw-start-btn').disabled = !(selectedServerAgent && selectedClientAgent);
-    document.getElementById('bw-stop-btn').style.display = 'none';
-    document.getElementById('bw-test-status').style.display = 'none';
+    // 按钮切换为开始状态
+    const btn = document.getElementById('bw-start-btn');
+    btn.textContent = '开始测试';
+    btn.classList.remove('btn-stop');
+    btn.classList.add('btn-start');
+    btn.disabled = !(selectedServerAgent && selectedClientAgent);
 
     stopCanvasAnimation();
 }
@@ -1166,9 +1151,9 @@ function animateFlow() {
     ctx.fillText(`${bandwidthData.instant_speed.toFixed(1)} Mbps`, width/2, height - 15);
     ctx.shadowBlur = 0;
 
-    // 更新流动时间
-    const speed = 2 + Math.min(bandwidthData.instant_speed / 30, 5);
-    flowTime += 0.02 * speed;
+    // 更新流动时间（调慢速度）
+    const speed = 1 + Math.min(bandwidthData.instant_speed / 50, 3);
+    flowTime += 0.012 * speed;
 
     animationId = requestAnimationFrame(animateFlow);
 }
@@ -1397,8 +1382,7 @@ function updateCanvasAnimationData(data) {
 }
 
 // ========== 事件绑定 ==========
-document.getElementById('bw-start-btn').addEventListener('click', startBandwidthTest);
-document.getElementById('bw-stop-btn').addEventListener('click', stopBandwidthTest);
+document.getElementById('bw-start-btn').addEventListener('click', toggleBandwidthTest);
 
 // 页面加载
 window.addEventListener('load', function() {

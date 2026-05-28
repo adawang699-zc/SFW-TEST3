@@ -97,6 +97,9 @@ class BandwidthTestManager:
 
         if test_params.get('protocol') == 'udp' and test_params.get('bandwidth'):
             client_params['bandwidth'] = test_params.get('bandwidth')
+            logger.info(f"UDP带宽测试: 设置带宽限制={client_params['bandwidth']}Mbps")
+
+        logger.info(f"iperf client参数: {client_params}")
 
         success, result, error = forward_to_agent(
             client_agent, 'POST', '/api/iperf/client/start',
