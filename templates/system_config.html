@@ -1556,7 +1556,7 @@ let selectedAgents = [];
 let topologyMappings = [];
 
 function loadPortTestDevices() {
-    fetch('/api/devices/')
+    fetch('/api/port/devices/')
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -1576,7 +1576,7 @@ function loadDevicePorts() {
     const deviceId = document.getElementById('port_device').value;
     if (!deviceId) return;
 
-    fetch(`/api/devices/${deviceId}/ports/`)
+    fetch(`/api/port/devices/${deviceId}/ports/`)
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -1594,7 +1594,7 @@ function loadDevicePorts() {
 }
 
 function loadPortTestAgents() {
-    fetch('/api/agents/')
+    fetch('/api/agents/list/')
         .then(r => r.json())
         .then(data => {
             if (data.success) {
