@@ -302,6 +302,129 @@ class OpcUaClient:
         except Exception as e:
             return (False, None, f"调用超时: {e}")
 
+    async def _find_servers_async(self, endpoint: str) -> Tuple[bool, List, str]:
+        """异步发现服务器"""
+        try:
+            from asyncua import Client
+            # 临时连接获取服务器列表
+            client = Client(endpoint)
+            await client.connect()
+            servers = await client.find_servers()
+            await client.disconnect()
+            return (True, [s.ServerName.Text if hasattr(s.ServerName, 'Text') else str(s.ServerName) for s in servers], "发现成功")
+        except Exception as e:
+            return (False, [], f"发现失败: {e}")
+
+    def find_servers(self, endpoint: str) -> Tuple[bool, List, str]:
+        """发现服务器"""
+        try:
+            loop = asyncio.new_event_loop()
+            result = loop.run_until_complete(self._find_servers_async(endpoint))
+            loop.close()
+            return result
+        except Exception as e:
+            return (False, [], f"发现失败: {e}")
+
+    async def _get_endpoints_async(self, endpoint: str) -> Tuple[bool, List, str]:
+        """异步获取端点"""
+        try:
+            from asyncua import Client
+            client = Client(endpoint)
+            await client.connect()
+            endpoints = await client.get_endpoints()
+            await client.disconnect()
+            result = []
+            for e in endpoints:
+                result.append({
+                    'endpoint_url': e.EndpointUrl if hasattr(e, 'EndpointUrl') else str(e),
+                    'security_mode': str(e.SecurityMode) if hasattr(e, 'SecurityMode') else 'None'
+                })
+            return (True, result, "获取成功")
+        except Exception as e:
+            return (False, [], f"获取失败: {e}")
+
+    def get_endpoints(self, endpoint: str) -> Tuple[bool, List, str]:
+        """获取端点"""
+        try:
+            loop = asyncio.new_event_loop()
+            result = loop.run_until_complete(self._get_endpoints_async(endpoint))
+            loop.close()
+            return result
+        except Exception as e:
+            return (False, [], f"获取失败: {e}")
+
+    # 订阅管理
+    _subscription: Optional[Any] = None
+    _monitored_items: Dict[str, Any] = {}
+
+    async def _create_subscription_async(self, interval: int) -> Tuple[bool, Any, str]:
+        """异步创建订阅"""
+        if not self._client:
+            return (False, None, "未连接")
+        try:
+            self._subscription = await self._client.create_subscription(interval)
+            return (True, str(self._subscription), "订阅创建成功")
+        except Exception as e:
+            return (False, None, f"创建失败: {e}")
+
+    def create_subscription(self, interval: int) -> Tuple[bool, Any, str]:
+        """创建订阅"""
+        if not self._connected:
+            return (False, None, "未连接")
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self._create_subscription_async(interval), self._loop
+            )
+            return future.result(timeout=10)
+        except Exception as e:
+            return (False, None, f"创建超时: {e}")
+
+    async def _create_monitored_item_async(self, node_id: str) -> Tuple[bool, Any, str]:
+        """异步创建监控项"""
+        if not self._client or not self._subscription:
+            return (False, None, "未创建订阅")
+        try:
+            node = self._client.get_node(node_id)
+            handle = await self._subscription.subscribe_data_change(node)
+            self._monitored_items[node_id] = handle
+            return (True, str(handle), "监控项创建成功")
+        except Exception as e:
+            return (False, None, f"创建失败: {e}")
+
+    def create_monitored_item(self, node_id: str) -> Tuple[bool, Any, str]:
+        """创建监控项"""
+        if not self._connected:
+            return (False, None, "未连接")
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self._create_monitored_item_async(node_id), self._loop
+            )
+            return future.result(timeout=10)
+        except Exception as e:
+            return (False, None, f"创建超时: {e}")
+
+    async def _delete_subscription_async(self) -> Tuple[bool, str]:
+        """异步删除订阅"""
+        if not self._subscription:
+            return (False, "没有订阅")
+        try:
+            await self._subscription.delete()
+            self._subscription = None
+            self._monitored_items = {}
+            return (True, "订阅已删除")
+        except Exception as e:
+            return (False, f"删除失败: {e}")
+
+    def delete_subscription(self) -> Tuple[bool, str]:
+        """删除订阅"""
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                self._delete_subscription_async(), self._loop
+            )
+            return future.result(timeout=10)
+        except Exception as e:
+            return (False, f"删除超时: {e}")
+
     def status(self) -> Dict[str, Any]:
         """获取状态"""
         with self._lock:

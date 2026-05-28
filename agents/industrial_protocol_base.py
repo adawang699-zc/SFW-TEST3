@@ -6591,6 +6591,76 @@ def opcua_client_method():
     return jsonify({'success': success, 'result': result, 'message': message})
 
 
+@app.route('/api/industrial_protocol/opcua_client/find_servers', methods=['POST', 'OPTIONS'])
+def opcua_client_find_servers():
+    """发现服务器 (FindServers)"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    endpoint = data.get('endpoint', 'opc.tcp://localhost:4840/')
+
+    success, servers, message = opcua_client.find_servers(endpoint)
+    return jsonify({'success': success, 'servers': servers, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/endpoints', methods=['POST', 'OPTIONS'])
+def opcua_client_endpoints():
+    """获取端点 (GetEndpoints)"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    endpoint = data.get('endpoint', 'opc.tcp://localhost:4840/')
+
+    success, endpoints, message = opcua_client.get_endpoints(endpoint)
+    return jsonify({'success': success, 'endpoints': endpoints, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/subscription/create', methods=['POST', 'OPTIONS'])
+def opcua_client_subscription_create():
+    """创建订阅"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    interval = data.get('interval', 1000)
+
+    success, subscription, message = opcua_client.create_subscription(interval)
+    return jsonify({'success': success, 'subscription': subscription, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/monitored_item/create', methods=['POST', 'OPTIONS'])
+def opcua_client_monitored_item_create():
+    """创建监控项"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    data = request.json or {}
+    node_id = data.get('node_id')
+
+    if not node_id:
+        return jsonify({'success': False, 'message': 'node_id required'}), 400
+
+    success, handle, message = opcua_client.create_monitored_item(node_id)
+    return jsonify({'success': success, 'handle': handle, 'message': message})
+
+
+@app.route('/api/industrial_protocol/opcua_client/subscription/delete', methods=['POST', 'OPTIONS'])
+def opcua_client_subscription_delete():
+    """删除订阅"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    success, message = opcua_client.delete_subscription()
+    return jsonify({'success': success, 'message': message})
+
+
 # ========== OPC UA Gateway API ==========
 @app.route('/api/industrial_protocol/opcua_gateway/check', methods=['POST', 'OPTIONS'])
 def opcua_gateway_check():

@@ -2,7 +2,7 @@
 URL Configuration - Ubuntu 多 Agent 一体化部署平台
 """
 
-from django.urls import path
+from django.urls import path, re_path
 from . import views
 
 app_name = 'main'
@@ -185,7 +185,8 @@ urlpatterns = [
     path('api/industrial/http_files/<str:action>/<str:filename>/', views.api_industrial_http_files, name='api_industrial_http_files_with_filename'),
     path('api/industrial/opcua_server/<str:action>/', views.api_industrial_opcua_server, name='api_industrial_opcua_server'),
     path('api/industrial/opcua_server/<str:action>/<str:variable>/', views.api_industrial_opcua_server, name='api_industrial_opcua_server_var'),
-    path('api/industrial/opcua_client/<str:action>/', views.api_industrial_opcua_client, name='api_industrial_opcua_client'),
+    # OPC UA Client - 支持嵌套路径（如 subscription/create, monitored_item/create）
+    re_path(r'api/industrial/opcua_client/(?P<action>[\w/]+)/$', views.api_industrial_opcua_client, name='api_industrial_opcua_client'),
     path('api/industrial/opcua_gateway/<str:action>/', views.api_industrial_opcua_gateway, name='api_industrial_opcua_gateway'),
 
     # ========== 带宽测试 API ==========

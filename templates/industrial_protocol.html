@@ -1309,8 +1309,61 @@
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-primary" onclick="opcuaRead()">读取</button>
                         <button class="btn btn-warning" onclick="opcuaWrite()">写入</button>
+                        <button class="btn btn-info" onclick="opcuaCallMethod()">调用方法</button>
                     </div>
                     <div id="opcua-rw-result" style="margin-top: 12px; padding: 8px; background: var(--bg-dark); border-radius: 4px;"></div>
+                </div>
+
+                <!-- 服务发现测试 -->
+                <div class="config-section" id="opcua-discovery-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">服务发现测试</h5>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                        <button class="btn btn-secondary" onclick="opcuaFindServers()">FindServers</button>
+                        <button class="btn btn-secondary" onclick="opcuaGetEndpoints()">GetEndpoints</button>
+                    </div>
+                    <div id="opcua-discovery-result" style="max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; background: var(--bg-dark); padding: 8px; border-radius: 4px;"></div>
+                </div>
+
+                <!-- 订阅测试 -->
+                <div class="config-section" id="opcua-subscription-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">订阅测试 (Subscription)</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">采样间隔 (ms)</label>
+                            <input type="number" id="opcua-sub-interval" class="form-input" value="1000">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">监控节点</label>
+                            <input type="text" id="opcua-monitor-node" class="form-input" value="ns=2;s=SimulationDevice.Temperature">
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: end;">
+                            <button class="btn btn-primary" onclick="opcuaCreateSubscription()">创建订阅</button>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                        <button class="btn btn-success" onclick="opcuaCreateMonitoredItem()">添加监控项</button>
+                        <button class="btn btn-danger" onclick="opcuaDeleteSubscription()">删除订阅</button>
+                    </div>
+                    <div id="opcua-monitor-values" style="max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; background: var(--bg-dark); padding: 8px; border-radius: 4px;">
+                        <span style="color: var(--text-muted);">暂无订阅</span>
+                    </div>
+                </div>
+
+                <!-- 历史数据读取 -->
+                <div class="config-section" id="opcua-history-read-section" style="display: none;">
+                    <h5 style="margin-bottom: 12px;">历史数据读取 (HistoryRead)</h5>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">节点 ID</label>
+                            <input type="text" id="opcua-history-node" class="form-input" value="ns=2;s=SimulationDevice.Temperature">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">数据条数</label>
+                            <input type="number" id="opcua-history-count" class="form-input" value="10">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="opcuaReadHistoryNode()">读取历史</button>
+                    <div id="opcua-history-read-result" style="margin-top: 12px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; background: var(--bg-dark); padding: 8px; border-radius: 4px;"></div>
                 </div>
             </div>
 
@@ -4123,6 +4176,9 @@ async function httpFileDownload(filename) {
 // ========== OPC UA ==========
 let opcuaServerRunning = false;
 let opcuaClientConnected = false;
+let opcuaSubscriptionCreated = false;
+let opcuaMonitoredItems = [];
+let opcuaMonitorInterval = null;
 
 // OPC UA Server 按钮状态更新函数
 function updateOpcuaServerButtonState(running) {
@@ -4247,6 +4303,10 @@ async function opcuaClientToggle() {
             updateOpcuaClientButtonState(false);
             document.getElementById('opcua-browse-section').style.display = 'none';
             document.getElementById('opcua-readwrite-section').style.display = 'none';
+            document.getElementById('opcua-discovery-section').style.display = 'none';
+            document.getElementById('opcua-subscription-section').style.display = 'none';
+            document.getElementById('opcua-history-read-section').style.display = 'none';
+            opcuaSubscriptionCreated = false;
             showToast('已断开连接', 'success');
         } else {
             updateOpcuaClientButtonState(true);  // 恢复原状态
@@ -4266,6 +4326,9 @@ async function opcuaClientToggle() {
             updateOpcuaClientButtonState(true);
             document.getElementById('opcua-browse-section').style.display = 'block';
             document.getElementById('opcua-readwrite-section').style.display = 'block';
+            document.getElementById('opcua-discovery-section').style.display = 'block';
+            document.getElementById('opcua-subscription-section').style.display = 'block';
+            document.getElementById('opcua-history-read-section').style.display = 'block';
             showToast('连接成功', 'success');
         } else {
             updateOpcuaClientButtonState(false);  // 恢复原状态
@@ -4323,6 +4386,198 @@ async function opcuaWrite() {
         div.innerHTML = `<span style="color: var(--success);">写入成功</span>`;
     } else {
         div.innerHTML = `<span style="color: red;">写入失败: ${result.message || ''}</span>`;
+    }
+}
+
+// OPC UA 方法调用
+async function opcuaCallMethod() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    const nodeId = document.getElementById('opcua-rw-node').value;
+    const value = document.getElementById('opcua-rw-value').value;
+    if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
+
+    // 提取对象节点和方法名
+    let objectNode = nodeId;
+    let methodName = '';
+    if (nodeId.includes('.')) {
+        const parts = nodeId.split('.');
+        objectNode = parts.slice(0, -1).join('.');
+        methodName = parts[parts.length - 1];
+    } else {
+        methodName = 'ResetCounter';  // 默认方法
+    }
+
+    const args = value ? [parseFloat(value)] : [];
+    const result = await apiRequest('/api/industrial/opcua_client/method/', 'POST', {
+        agent_id: selectedClientAgentId,
+        object_node: objectNode,
+        method_name: methodName,
+        args: args
+    });
+    const div = document.getElementById('opcua-rw-result');
+    if (result.success) {
+        div.innerHTML = `<span style="color: var(--success);">方法调用成功:</span> <strong>${JSON.stringify(result.result)}</strong>`;
+    } else {
+        div.innerHTML = `<span style="color: red;">方法调用失败: ${result.message || ''}</span>`;
+    }
+}
+
+// OPC UA 服务发现
+async function opcuaFindServers() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    const endpoint = document.getElementById('opcua-client-endpoint').value;
+    const result = await apiRequest('/api/industrial/opcua_client/find_servers/', 'POST', {
+        agent_id: selectedClientAgentId,
+        endpoint: endpoint
+    });
+    const div = document.getElementById('opcua-discovery-result');
+    if (result.success && result.servers) {
+        if (result.servers.length === 0) {
+            div.innerHTML = '<span style="color: var(--text-muted);">未发现服务器</span>';
+            return;
+        }
+        let html = '';
+        result.servers.forEach(s => {
+            html += `<div style="padding: 4px 0;"><strong>${s.name || s}</strong><br><span style="color: var(--text-muted);">${s.uri || s}</span></div>`;
+        });
+        div.innerHTML = html;
+    } else {
+        div.innerHTML = `<span style="color: red;">FindServers 失败: ${result.message || ''}</span>`;
+    }
+}
+
+async function opcuaGetEndpoints() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    const endpoint = document.getElementById('opcua-client-endpoint').value;
+    const result = await apiRequest('/api/industrial/opcua_client/endpoints/', 'POST', {
+        agent_id: selectedClientAgentId,
+        endpoint: endpoint
+    });
+    const div = document.getElementById('opcua-discovery-result');
+    if (result.success && result.endpoints) {
+        if (result.endpoints.length === 0) {
+            div.innerHTML = '<span style="color: var(--text-muted);">未发现端点</span>';
+            return;
+        }
+        let html = '';
+        result.endpoints.forEach(e => {
+            html += `<div style="padding: 4px 0;"><strong>${e.endpoint_url || e}</strong><br><span style="color: var(--text-muted);">安全模式: ${e.security_mode || 'None'}</span></div>`;
+        });
+        div.innerHTML = html;
+    } else {
+        div.innerHTML = `<span style="color: red;">GetEndpoints 失败: ${result.message || ''}</span>`;
+    }
+}
+
+// OPC UA 订阅管理
+let opcuaSubscriptionCreated = false;
+let opcuaMonitoredItems = [];
+
+async function opcuaCreateSubscription() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    if (opcuaSubscriptionCreated) { showToast('订阅已存在', 'info'); return; }
+
+    const interval = parseInt(document.getElementById('opcua-sub-interval').value);
+    const result = await apiRequest('/api/industrial/opcua_client/subscription/create/', 'POST', {
+        agent_id: selectedClientAgentId,
+        interval: interval
+    });
+    if (result.success) {
+        opcuaSubscriptionCreated = true;
+        opcuaMonitoredItems = [];
+        showToast('订阅创建成功', 'success');
+        document.getElementById('opcua-monitor-values').innerHTML = '<span style="color: var(--text-muted);">订阅已创建，请添加监控项</span>';
+    } else {
+        showToast('创建订阅失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function opcuaCreateMonitoredItem() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    if (!opcuaSubscriptionCreated) { showToast('请先创建订阅', 'error'); return; }
+
+    const nodeId = document.getElementById('opcua-monitor-node').value;
+    const result = await apiRequest('/api/industrial/opcua_client/monitored_item/create/', 'POST', {
+        agent_id: selectedClientAgentId,
+        node_id: nodeId
+    });
+    if (result.success) {
+        opcuaMonitoredItems.push(nodeId);
+        showToast('监控项添加成功', 'success');
+        // 开始数据刷新
+        opcuaStartMonitorRefresh();
+    } else {
+        showToast('添加监控项失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+async function opcuaDeleteSubscription() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    if (!opcuaSubscriptionCreated) { showToast('没有活跃订阅', 'info'); return; }
+
+    const result = await apiRequest('/api/industrial/opcua_client/subscription/delete/', 'POST', {
+        agent_id: selectedClientAgentId
+    });
+    if (result.success) {
+        opcuaSubscriptionCreated = false;
+        opcuaMonitoredItems = [];
+        showToast('订阅已删除', 'success');
+        document.getElementById('opcua-monitor-values').innerHTML = '<span style="color: var(--text-muted);">暂无订阅</span>';
+    } else {
+        showToast('删除订阅失败: ' + (result.message || result.error), 'error');
+    }
+}
+
+let opcuaMonitorInterval = null;
+async function opcuaStartMonitorRefresh() {
+    if (opcuaMonitorInterval) clearInterval(opcuaMonitorInterval);
+    opcuaMonitorInterval = setInterval(async () => {
+        if (!opcuaSubscriptionCreated || opcuaMonitoredItems.length === 0) return;
+        const div = document.getElementById('opcua-monitor-values');
+        let html = '';
+        for (const nodeId of opcuaMonitoredItems) {
+            const result = await apiRequest('/api/industrial/opcua_client/read/', 'POST', {
+                agent_id: selectedClientAgentId,
+                node_id: nodeId
+            });
+            if (result.success) {
+                const val = typeof result.value === 'number' ? result.value.toFixed(2) : result.value;
+                html += `<div><strong>${nodeId.split('.').pop()}</strong>: ${val}</div>`;
+            }
+        }
+        div.innerHTML = html || '<span style="color: var(--text-muted);">无数据</span>';
+    }, 1000);
+}
+
+// OPC UA 历史数据读取
+async function opcuaReadHistoryNode() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+    const nodeId = document.getElementById('opcua-history-node').value;
+    const count = parseInt(document.getElementById('opcua-history-count').value);
+
+    // 计算时间范围（最近 count 条）
+    const now = new Date();
+    const start = new Date(now.getTime() - count * 1000 * 10);  // 假设每秒一条，10秒间隔
+
+    const result = await apiRequest('/api/industrial/opcua_client/history/', 'POST', {
+        agent_id: selectedClientAgentId,
+        node_id: nodeId,
+        start_time: start.toISOString(),
+        end_time: now.toISOString()
+    });
+    const div = document.getElementById('opcua-history-read-result');
+    if (result.success && result.history) {
+        if (result.history.length === 0) {
+            div.innerHTML = '<span style="color: var(--text-muted);">无历史数据</span>';
+            return;
+        }
+        let html = '';
+        result.history.slice(0, count).forEach(r => {
+            html += `<div>${r.timestamp} | ${typeof r.value === 'number' ? r.value.toFixed(2) : r.value} | ${r.quality}</div>`;
+        });
+        div.innerHTML = html;
+    } else {
+        div.innerHTML = `<span style="color: red;">读取历史失败: ${result.message || ''}</span>`;
     }
 }
 
