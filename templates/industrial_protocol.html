@@ -4100,16 +4100,11 @@ async function httpFileDownload(filename) {
 let opcuaServerRunning = false;
 let opcuaClientConnected = false;
 
-// 获取 OPC UA 使用的 Agent API 基础路径
-function opcuaApiBase() {
-    return '/api/industrial_protocol/opcua_';
-}
-
 async function opcuaServerToggle() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
     if (opcuaServerRunning) {
-        const result = await apiRequest(opcuaApiBase() + 'server/stop', 'POST', {});
+        const result = await apiRequest('/api/industrial/opcua_server/stop/', 'POST', { agent_id: selectedServerAgentId });
         if (result.success) {
             opcuaServerRunning = false;
             document.getElementById('opcua-server-toggle-btn').textContent = '启动';
@@ -4124,10 +4119,11 @@ async function opcuaServerToggle() {
         }
     } else {
         const data = {
+            agent_id: selectedServerAgentId,
             host: document.getElementById('opcua-server-host').value,
             port: parseInt(document.getElementById('opcua-server-port').value)
         };
-        const result = await apiRequest(opcuaApiBase() + 'server/start', 'POST', data);
+        const result = await apiRequest('/api/industrial/opcua_server/start/', 'POST', data);
         if (result.success) {
             opcuaServerRunning = true;
             document.getElementById('opcua-server-toggle-btn').textContent = '停止';
@@ -4144,7 +4140,8 @@ async function opcuaServerToggle() {
 }
 
 async function opcuaRefreshVariables() {
-    const result = await apiRequest(opcuaApiBase() + 'server/variables', 'GET');
+    if (!selectedServerAgentId) return;
+    const result = await apiRequest('/api/industrial/opcua_server/variables/', 'GET', { agent_id: selectedServerAgentId });
     if (result.success && result.variables) {
         const tbody = document.getElementById('opcua-variables-tbody');
         tbody.innerHTML = '';
@@ -4157,9 +4154,10 @@ async function opcuaRefreshVariables() {
 }
 
 async function opcuaShowHistory(variable) {
+    if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
     document.getElementById('opcua-history-section').style.display = 'block';
     document.getElementById('opcua-history-var-name').textContent = variable;
-    const result = await apiRequest(opcuaApiBase() + 'server/history/' + variable + '?count=50', 'GET');
+    const result = await apiRequest('/api/industrial/opcua_server/history/' + variable + '/?count=50', 'GET', { agent_id: selectedServerAgentId });
     if (result.success && result.history) {
         const div = document.getElementById('opcua-history-content');
         if (result.history.length === 0) {
@@ -4178,7 +4176,7 @@ async function opcuaClientToggle() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
 
     if (opcuaClientConnected) {
-        const result = await apiRequest(opcuaApiBase() + 'client/disconnect', 'POST', {});
+        const result = await apiRequest('/api/industrial/opcua_client/disconnect/', 'POST', { agent_id: selectedClientAgentId });
         if (result.success) {
             opcuaClientConnected = false;
             document.getElementById('opcua-client-toggle-btn').textContent = '连接';
@@ -4193,9 +4191,10 @@ async function opcuaClientToggle() {
         }
     } else {
         const data = {
+            agent_id: selectedClientAgentId,
             endpoint: document.getElementById('opcua-client-endpoint').value
         };
-        const result = await apiRequest(opcuaApiBase() + 'client/connect', 'POST', data);
+        const result = await apiRequest('/api/industrial/opcua_client/connect/', 'POST', data);
         if (result.success) {
             opcuaClientConnected = true;
             document.getElementById('opcua-client-toggle-btn').textContent = '断开';
@@ -4212,8 +4211,9 @@ async function opcuaClientToggle() {
 }
 
 async function opcuaBrowse() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
     const nodeId = document.getElementById('opcua-browse-node').value;
-    const result = await apiRequest(opcuaApiBase() + 'client/browse', 'POST', { node_id: nodeId });
+    const result = await apiRequest('/api/industrial/opcua_client/browse/', 'POST', { agent_id: selectedClientAgentId, node_id: nodeId });
     const div = document.getElementById('opcua-browse-result');
     if (result.success && result.nodes) {
         if (result.nodes.length === 0) {
@@ -4233,9 +4233,10 @@ async function opcuaBrowse() {
 }
 
 async function opcuaRead() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
     const nodeId = document.getElementById('opcua-rw-node').value;
     if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
-    const result = await apiRequest(opcuaApiBase() + 'client/read', 'POST', { node_id: nodeId });
+    const result = await apiRequest('/api/industrial/opcua_client/read/', 'POST', { agent_id: selectedClientAgentId, node_id: nodeId });
     const div = document.getElementById('opcua-rw-result');
     if (result.success) {
         div.innerHTML = `<span style="color: var(--success);">读取成功:</span> <strong>${result.value}</strong>`;
@@ -4245,14 +4246,14 @@ async function opcuaRead() {
 }
 
 async function opcuaWrite() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
     const nodeId = document.getElementById('opcua-rw-node').value;
     const value = document.getElementById('opcua-rw-value').value;
     if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
     if (value === '') { showToast('请输入写入值', 'error'); return; }
-    // 尝试转换数字
     let writeValue = value;
     if (!isNaN(value)) writeValue = parseFloat(value);
-    const result = await apiRequest(opcuaApiBase() + 'client/write', 'POST', { node_id: nodeId, value: writeValue });
+    const result = await apiRequest('/api/industrial/opcua_client/write/', 'POST', { agent_id: selectedClientAgentId, node_id: nodeId, value: writeValue });
     const div = document.getElementById('opcua-rw-result');
     if (result.success) {
         div.innerHTML = `<span style="color: var(--success);">写入成功</span>`;
@@ -4265,7 +4266,8 @@ async function opcuaGatewayCheck() {
     const host = document.getElementById('opcua-gateway-host').value;
     const port = parseInt(document.getElementById('opcua-gateway-port').value);
     if (!host) { showToast('请输入地址', 'error'); return; }
-    const result = await apiRequest(opcuaApiBase() + 'gateway/check', 'POST', { host, port });
+    const agentId = selectedServerAgentId || selectedClientAgentId;
+    const result = await apiRequest('/api/industrial/opcua_gateway/check/', 'POST', { agent_id: agentId, host, port });
     const div = document.getElementById('opcua-gateway-result');
     div.style.display = 'block';
     if (result.success && result.result) {
@@ -4278,7 +4280,8 @@ async function opcuaGatewayCheck() {
 }
 
 async function opcuaShowGuide() {
-    const result = await apiRequest(opcuaApiBase() + 'gateway/guide', 'GET');
+    const agentId = selectedServerAgentId || selectedClientAgentId;
+    const result = await apiRequest('/api/industrial/opcua_gateway/guide/', 'GET', { agent_id: agentId });
     const div = document.getElementById('opcua-gateway-result');
     div.style.display = 'block';
     if (result.success) {
@@ -4287,7 +4290,8 @@ async function opcuaShowGuide() {
 }
 
 async function opcuaShowDcom() {
-    const result = await apiRequest(opcuaApiBase() + 'gateway/dcom', 'GET');
+    const agentId = selectedServerAgentId || selectedClientAgentId;
+    const result = await apiRequest('/api/industrial/opcua_gateway/dcom/', 'GET', { agent_id: agentId });
     const div = document.getElementById('opcua-gateway-result');
     div.style.display = 'block';
     if (result.success) {
@@ -4296,7 +4300,8 @@ async function opcuaShowDcom() {
 }
 
 async function opcuaShowDiagram() {
-    const result = await apiRequest(opcuaApiBase() + 'gateway/diagram', 'GET');
+    const agentId = selectedServerAgentId || selectedClientAgentId;
+    const result = await apiRequest('/api/industrial/opcua_gateway/diagram/', 'GET', { agent_id: agentId });
     const div = document.getElementById('opcua-gateway-result');
     div.style.display = 'block';
     if (result.success) {

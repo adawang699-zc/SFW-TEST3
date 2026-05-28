@@ -4205,6 +4205,58 @@ def api_industrial_http_server(request, action):
 
 
 @csrf_exempt
+def api_industrial_opcua_server(request, action, variable=None):
+    """OPC UA Server 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        data = _merge_get_params(request, data)
+        agent_id = data.get('agent_id')
+        if variable:
+            # history/Temperature -> opcua_server/history/Temperature
+            path = f"opcua_server/{action}/{variable}"
+            result = _proxy_industrial_request(agent_id, path, method='GET', params=data)
+        elif action in ('status', 'variables'):
+            result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='GET', data=data)
+        else:
+            result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_opcua_client(request, action):
+    """OPC UA Client 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        data = _merge_get_params(request, data)
+        agent_id = data.get('agent_id')
+        if action == 'status':
+            result = _proxy_industrial_request(agent_id, f"opcua_client/{action}", method='GET', data=data)
+        else:
+            result = _proxy_industrial_request(agent_id, f"opcua_client/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_industrial_opcua_gateway(request, action):
+    """OPC UA Gateway 代理 API"""
+    try:
+        data = json.loads(request.body) if request.body else {}
+        data = _merge_get_params(request, data)
+        agent_id = data.get('agent_id')
+        if action in ('guide', 'dcom', 'diagram'):
+            result = _proxy_industrial_request(agent_id, f"opcua_gateway/{action}", method='GET', data=data)
+        else:
+            result = _proxy_industrial_request(agent_id, f"opcua_gateway/{action}", method='POST', data=data)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
 def api_industrial_http_files(request, action, filename=None):
     """HTTP Files 代理 API"""
     try:

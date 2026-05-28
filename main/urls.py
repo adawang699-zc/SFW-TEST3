@@ -183,6 +183,10 @@ urlpatterns = [
     path('api/industrial/http_server/<str:action>/', views.api_industrial_http_server, name='api_industrial_http_server'),
     path('api/industrial/http_files/<str:action>/', views.api_industrial_http_files, name='api_industrial_http_files'),
     path('api/industrial/http_files/<str:action>/<str:filename>/', views.api_industrial_http_files, name='api_industrial_http_files_with_filename'),
+    path('api/industrial/opcua_server/<str:action>/', views.api_industrial_opcua_server, name='api_industrial_opcua_server'),
+    path('api/industrial/opcua_server/<str:action>/<str:variable>/', views.api_industrial_opcua_server, name='api_industrial_opcua_server_var'),
+    path('api/industrial/opcua_client/<str:action>/', views.api_industrial_opcua_client, name='api_industrial_opcua_client'),
+    path('api/industrial/opcua_gateway/<str:action>/', views.api_industrial_opcua_gateway, name='api_industrial_opcua_gateway'),
 
     # ========== 带宽测试 API ==========
     path('bandwidth-test/', views.bandwidth_test, name='bandwidth_test'),
