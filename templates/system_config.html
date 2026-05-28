@@ -234,11 +234,85 @@
 <!-- ==================== 网口管理 ==================== -->
 <div class="tab-content" id="tab-port_manage" style="display: none;">
     <div class="card">
-        <div class="card-header">网口管理</div>
-        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
-            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
-            <div style="font-size: 1.2rem; margin-bottom: 8px;">网口管理</div>
-            <div>功能开发中，敬请期待...</div>
+        <div class="card-header">网口管理 - 防火墙网口自协商测试</div>
+        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 24px;">
+            <!-- 左侧: 设备和Agent选择 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">防火墙设备</div>
+                    <div class="form-group">
+                        <label class="form-label">选择防火墙</label>
+                        <select class="form-input" id="port_device" onchange="loadDevicePorts()">
+                            <option value="">-- 请选择设备 --</option>
+                        </select>
+                    </div>
+                    <div id="device_ports_container" style="margin-top: 12px;"></div>
+                </div>
+
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">Agent选择</div>
+                    <div id="agent_list_container"></div>
+                    <button class="btn btn-primary" style="width: 100%; margin-top: 12px;" onclick="detectTopology()">检测拓扑</button>
+                </div>
+
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">拓扑映射</div>
+                    <div id="topology_mapping_container"></div>
+                </div>
+            </div>
+
+            <!-- 右侧: 测试配置和结果 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">测试参数配置</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label class="form-label">自协商</label>
+                            <select class="form-input" id="port_autoneg">
+                                <option value="on">开启</option>
+                                <option value="off">关闭</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">速率</label>
+                            <select class="form-input" id="port_speed">
+                                <option value="10">10M</option>
+                                <option value="100">100M</option>
+                                <option value="1000">1000M</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">双工</label>
+                            <select class="form-input" id="port_duplex">
+                                <option value="full">全双工</option>
+                                <option value="half">半双工</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px;">
+                        <button class="btn btn-success" id="start_port_test" onclick="startPortTest()">开始测试</button>
+                        <button class="btn btn-danger" id="stop_port_test" style="display: none;" onclick="stopPortTest()">停止测试</button>
+                    </div>
+                    <div id="test_progress_container" style="margin-top: 12px;"></div>
+                </div>
+
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">测试结果</div>
+                    <table class="table" id="port_test_results_table">
+                        <thead>
+                            <tr>
+                                <th>场景</th>
+                                <th>自协商</th>
+                                <th>速率</th>
+                                <th>双工</th>
+                                <th>防火墙状态</th>
+                                <th>结果</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results_body"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1474,5 +1548,219 @@ async function refreshAuthLog() {
         resultDiv.innerHTML = '<div style="color: var(--danger);">加载异常: ' + escapeHtml(e) + '</div>';
     }
 }
+
+// ========== 网口管理功能 ==========
+let portTestWebSocket = null;
+let currentPortTestId = null;
+let selectedAgents = [];
+let topologyMappings = [];
+
+function loadPortTestDevices() {
+    fetch('/api/devices/')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('port_device');
+                select.innerHTML = '<option value="">-- 请选择设备 --</option>';
+                data.devices.forEach(d => {
+                    select.innerHTML += `<option value="${d.id}">${d.name} (${d.ip})</option>`;
+                });
+            }
+        });
+}
+
+function loadDevicePorts() {
+    const deviceId = document.getElementById('port_device').value;
+    if (!deviceId) return;
+
+    fetch(`/api/devices/${deviceId}/ports/`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const container = document.getElementById('device_ports_container');
+                container.innerHTML = '<table class="table"><thead><tr><th>网口</th><th>LINK</th><th>速率</th><th>双工</th></tr></thead><tbody>';
+                data.ports.forEach(p => {
+                    container.innerHTML += `<tr><td>${p.name}</td><td>${p.link}</td><td>${p.speed}</td><td>${p.duplex}</td></tr>`;
+                });
+                container.innerHTML += '</tbody></table>';
+            }
+        });
+}
+
+function loadPortTestAgents() {
+    fetch('/api/agents/')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const container = document.getElementById('agent_list_container');
+                container.innerHTML = '';
+                data.agents.forEach(a => {
+                    container.innerHTML += `
+                        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                            <input type="checkbox" id="agent_${a.agent_id}" onchange="toggleAgent('${a.agent_id}')">
+                            <label for="agent_${a.agent_id}" style="margin-left: 8px;">${a.agent_id} (${a.interface.name})</label>
+                        </div>
+                    `;
+                });
+            }
+        });
+}
+
+function toggleAgent(agentId) {
+    if (selectedAgents.includes(agentId)) {
+        selectedAgents = selectedAgents.filter(id => id !== agentId);
+    } else {
+        selectedAgents.push(agentId);
+    }
+}
+
+function detectTopology() {
+    const deviceId = document.getElementById('port_device').value;
+    if (!deviceId || selectedAgents.length < 2) {
+        showToast('请选择设备和至少2个Agent', 'warning');
+        return;
+    }
+
+    fetch('/api/port-test/detect-topology/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            device_id: deviceId,
+            agent_ids: selectedAgents
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            topologyMappings = data.mappings;
+            const container = document.getElementById('topology_mapping_container');
+            container.innerHTML = '';
+            data.mappings.forEach(m => {
+                container.innerHTML += `<div style="margin-bottom: 8px;">${m.agent_interface} → ${m.firewall_interface}</div>`;
+            });
+            showToast('拓扑检测成功', 'success');
+        } else {
+            showToast('拓扑检测失败: ' + data.error, 'error');
+        }
+    });
+}
+
+function startPortTest() {
+    const deviceId = document.getElementById('port_device').value;
+    if (!deviceId || topologyMappings.length === 0) {
+        showToast('请先完成拓扑检测', 'warning');
+        return;
+    }
+
+    const autoneg = document.getElementById('port_autoneg').value;
+    const speed = document.getElementById('port_speed').value;
+    const duplex = document.getElementById('port_duplex').value;
+
+    // 清空结果表格
+    document.getElementById('results_body').innerHTML = '';
+    document.getElementById('test_progress_container').innerHTML = '';
+
+    fetch('/api/port-test/start/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            device_id: deviceId,
+            mappings: topologyMappings,
+            autoneg_options: autoneg === 'on' ? ['on'] : ['off'],
+            speed_options: [speed],
+            duplex_options: [duplex]
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            currentPortTestId = data.test_id;
+            connectPortTestWebSocket(data.websocket_url);
+            document.getElementById('start_port_test').style.display = 'none';
+            document.getElementById('stop_port_test').style.display = 'inline-block';
+        } else {
+            showToast('启动测试失败: ' + data.error, 'error');
+        }
+    });
+}
+
+function stopPortTest() {
+    if (!currentPortTestId) return;
+
+    fetch('/api/port-test/stop/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({test_id: currentPortTestId})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            if (portTestWebSocket) {
+                portTestWebSocket.close();
+            }
+            document.getElementById('start_port_test').style.display = 'inline-block';
+            document.getElementById('stop_port_test').style.display = 'none';
+            showToast('测试已停止', 'info');
+        }
+    });
+}
+
+function connectPortTestWebSocket(url) {
+    portTestWebSocket = new WebSocket(url);
+
+    portTestWebSocket.onopen = function() {
+        console.log('网口测试WebSocket已连接');
+    };
+
+    portTestWebSocket.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        handlePortTestMessage(data);
+    };
+
+    portTestWebSocket.onclose = function() {
+        console.log('网口测试WebSocket已关闭');
+        document.getElementById('start_port_test').style.display = 'inline-block';
+        document.getElementById('stop_port_test').style.display = 'none';
+    };
+}
+
+function handlePortTestMessage(data) {
+    if (data.type === 'progress') {
+        const container = document.getElementById('test_progress_container');
+        container.innerHTML = `测试进度: ${data.current}/${data.total} (${data.percent}%)`;
+    }
+    else if (data.type === 'scenario_result') {
+        const tbody = document.getElementById('results_body');
+        const r = data.result;
+        const resultClass = r.result === 'PASS' ? 'success' : (r.result === 'FAIL' ? 'danger' : 'warning');
+        tbody.innerHTML += `
+            <tr class="${resultClass}">
+                <td>${r.scenario_id}</td>
+                <td>${r.autoneg_config || '-'}</td>
+                <td>${r.speed_config || '-'}</td>
+                <td>${r.duplex_config || '-'}</td>
+                <td>${r.firewall_speed}/${r.firewall_duplex}</td>
+                <td><strong>${r.result}</strong></td>
+            </tr>
+        `;
+    }
+    else if (data.type === 'complete') {
+        document.getElementById('test_progress_container').innerHTML = '<span style="color: var(--success);">测试完成</span>';
+        document.getElementById('start_port_test').style.display = 'inline-block';
+        document.getElementById('stop_port_test').style.display = 'none';
+        if (portTestWebSocket) {
+            portTestWebSocket.close();
+        }
+    }
+    else if (data.type === 'error') {
+        showToast('测试错误: ' + data.message, 'error');
+    }
+}
+
+// 页面加载时初始化网口管理数据
+document.addEventListener('DOMContentLoaded', function() {
+    loadPortTestDevices();
+    loadPortTestAgents();
+});
 </script>
 {% endblock %}
