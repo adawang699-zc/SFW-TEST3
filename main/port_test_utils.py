@@ -147,7 +147,15 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
                 all_interfaces.append(part)
 
     # 过滤掉虚拟接口
-    virtual_prefixes = ['lo', 'docker', 'virbr', 'vnet', 'br-', 'ifb', 'Virtual', 'agl', 'ext', 'bond', 'team', 'tun', 'tap', 'vlan']
+    # 网桥: br, br-
+    # 隧道: tun, tap, ip6tnl, sit, teql
+    # 软交换: sw
+    # 其他虚拟: lo, docker, virbr, vnet, ifb, bond, team, vlan, Virtual, agl, ext
+    virtual_prefixes = [
+        'lo', 'docker', 'virbr', 'vnet', 'br', 'br-', 'ifb',
+        'bond', 'team', 'tun', 'tap', 'vlan', 'ip6tnl', 'sit', 'teql',
+        'sw', 'Virtual', 'agl', 'ext'
+    ]
 
     interfaces = []
     for iface in all_interfaces:
