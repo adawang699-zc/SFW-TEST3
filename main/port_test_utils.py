@@ -105,8 +105,8 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
         ports: [{'name': 'eth0', 'link': 'up', ...}, ...]
         error_message: 空字符串表示成功，否则为错误描述
     """
-    # 获取网口列表 (包括各种命名模式: eth, ens, enp, eno, enx, etc.)
-    cmd = "ls /sys/class/net/ | grep -vE 'lo|docker|virbr|vnet|br|wlan'"
+    # 获取网口列表 (只获取物理网口: eth开头 或 s数字p数字格式)
+    cmd = "ls /sys/class/net/"
     # 使用 execute_in_backend 进入后台root执行命令
     output = execute_in_backend(
         cmd,
@@ -124,7 +124,27 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
     if not output:
         return [], "无法获取网口列表"
 
-    interfaces = [iface.strip() for iface in output.split('\n') if iface.strip()]
+    # 解析网口列表，过滤出物理网口
+    raw_interfaces = [iface.strip() for iface in output.split('\n') if iface.strip()]
+
+    # 过滤规则：
+    # 1. eth开头（eth0, eth1, eth2...）
+    # 2. s数字p数字格式（s0p1, s0p2, s1p0...）- 扩展板卡
+    # 3. 排除虚拟接口、命令提示符等
+    import re
+    physical_pattern = re.compile(r'^eth\d+$|^s\d+p\d+$')
+
+    interfaces = []
+    for iface in raw_interfaces:
+        # 过滤掉命令提示符、特殊字符等
+        if iface.startswith('[') or iface.startswith('#') or iface.startswith('$'):
+            continue
+        if iface in ['lo', 'docker0', 'virbr0', 'vnet0', 'br0']:
+            continue
+        # 只保留符合物理网口命名规则的接口
+        if physical_pattern.match(iface):
+            interfaces.append(iface)
+
     ports_info = []
 
     for iface in interfaces:
