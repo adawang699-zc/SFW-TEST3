@@ -1411,9 +1411,33 @@ function drawStaticCanvas() {
     ctx.fillStyle = '#0a0a1e';
     ctx.fillRect(0, 0, width, height);
 
-    drawAgentNode(ctx, 40, height/2 - 30, 50, 60, 'CLIENT', '#3a3a5a');
+    // 静态时使用简单样式
+    ctx.fillStyle = '#1a1a3a';
+    ctx.strokeStyle = '#3a3a5a';
+    ctx.lineWidth = 2;
+
+    // Client节点
+    ctx.beginPath();
+    ctx.roundRect(40, height/2 - 30, 50, 60, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#3a3a5a';
+    ctx.font = 'bold 10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CLIENT', 65, height/2 + 4);
+
+    // Firewall节点
     drawFirewallNode(ctx, width/2 - 25, height/2 - 35, 50, 70, 'FW');
-    drawAgentNode(ctx, width - 90, height/2 - 30, 50, 60, 'SERVER', '#3a3a5a');
+
+    // Server节点
+    ctx.fillStyle = '#1a1a3a';
+    ctx.strokeStyle = '#3a3a5a';
+    ctx.beginPath();
+    ctx.roundRect(width - 90, height/2 - 30, 50, 60, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#3a3a5a';
+    ctx.fillText('SERVER', width - 65, height/2 + 4);
 
     ctx.strokeStyle = '#2a2a4a';
     ctx.lineWidth = 1;
