@@ -127,23 +127,32 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
     # 解析网口列表，过滤出物理网口
     raw_interfaces = [iface.strip() for iface in output.split('\n') if iface.strip()]
 
-    # 过滤规则：
-    # 1. eth开头（eth0, eth1, eth2...）
-    # 2. s数字p数字格式（s0p1, s0p2, s1p0...）- 扩展板卡
-    # 3. 排除虚拟接口、命令提示符等
-    import re
-    physical_pattern = re.compile(r'^eth\d+$|^s\d+p\d+$')
+    # 过滤掉虚拟接口和特殊字符
+    # 虚拟接口列表：lo, docker, virbr, vnet, br, ifb, Virtual, agl, ext等
+    virtual_prefixes = ['lo', 'docker', 'virbr', 'vnet', 'br-', 'ifb', 'Virtual', 'agl', 'ext', 'ifb', 'bond', 'team', 'tun', 'tap', 'vlan']
 
     interfaces = []
     for iface in raw_interfaces:
         # 过滤掉命令提示符、特殊字符等
-        if iface.startswith('[') or iface.startswith('#') or iface.startswith('$'):
+        if iface.startswith('[') or iface.startswith('#') or iface.startswith('$') or iface.startswith('~'):
             continue
-        if iface in ['lo', 'docker0', 'virbr0', 'vnet0', 'br0']:
+        if iface.startswith('root@') or iface.startswith('admin@'):
             continue
-        # 只保留符合物理网口命名规则的接口
-        if physical_pattern.match(iface):
-            interfaces.append(iface)
+        # 过滤掉虚拟接口
+        is_virtual = False
+        for prefix in virtual_prefixes:
+            if iface.lower().startswith(prefix.lower()):
+                is_virtual = True
+                break
+        if is_virtual:
+            continue
+        # 过滤掉纯数字或其他异常名称
+        if iface.isdigit() or len(iface) < 2:
+            continue
+        # 保留物理网口
+        interfaces.append(iface)
+
+    logger.info(f"设备 {device.ip} 网口列表: 原始={raw_interfaces}, 过滤后={interfaces}")
 
     ports_info = []
 
