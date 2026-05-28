@@ -86,3 +86,70 @@ class BandwidthTestConsumer(AsyncWebsocketConsumer):
     async def error_message(self, event: Dict[str, Any]) -> None:
         """推送错误消息"""
         await self.send(text_data=json.dumps(event['data']))
+
+
+class PortTestConsumer(AsyncWebsocketConsumer):
+    """网口测试WebSocket消费者"""
+
+    async def connect(self) -> None:
+        """WebSocket连接"""
+        test_id = self.scope['url_route']['kwargs']['test_id']
+        self.test_id = test_id
+        self.group_name = f'port_test_{test_id}'
+
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+        logger.info(f"网口测试WebSocket连接: test_id={test_id}")
+
+        # 启动测试监控线程
+        from main.port_test_utils import PortTestMonitor
+        self.monitor = PortTestMonitor(test_id, self)
+        self.monitor.start()
+
+    async def disconnect(self, close_code: int) -> None:
+        """WebSocket断开"""
+        if hasattr(self, 'monitor'):
+            self.monitor.stop()
+
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+            logger.info(f"网口测试WebSocket断开: test_id={self.test_id}")
+
+    async def receive(self, text_data: str) -> None:
+        """接收客户端消息"""
+        try:
+            data = json.loads(text_data)
+            action = data.get('action')
+
+            if action == 'stop':
+                from main.port_test_utils import PortTestManager
+                PortTestManager.stop_test(self.test_id)
+            else:
+                await self.send(text_data=json.dumps({
+                    'type': 'error',
+                    'message': f'未知操作: {action}'
+                }))
+        except json.JSONDecodeError:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': '无效JSON格式'
+            }))
+
+    async def scenario_result_message(self, event: Dict[str, Any]) -> None:
+        """推送场景结果"""
+        await self.send(text_data=json.dumps(event['data']))
+
+    async def test_progress_message(self, event: Dict[str, Any]) -> None:
+        """推送测试进度"""
+        await self.send(text_data=json.dumps(event['data']))
+
+    async def test_complete_message(self, event: Dict[str, Any]) -> None:
+        """推送测试完成"""
+        await self.send(text_data=json.dumps(event['data']))
