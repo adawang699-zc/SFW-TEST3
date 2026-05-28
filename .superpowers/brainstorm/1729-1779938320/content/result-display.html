@@ -1,0 +1,102 @@
+<h2>测试结果展示方式</h2>
+<p class="subtitle">选择您偏好的结果展示格式</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>列表式(逐条记录)</h3>
+      <p>每个场景一条记录,显示配置和结果状态</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body">
+          <div style="border:1px solid #ddd;padding:8px;margin-bottom:8px;border-radius:4px">
+            <strong>场景1:</strong> 自协商开+1000M+全双工<br>
+            <span style="color:green">PASS</span> | 防火墙eth0: Link Up,1000Mbps,Full
+          </div>
+          <div style="border:1px solid #ddd;padding:8px;margin-bottom:8px;border-radius:4px">
+            <strong>场景2:</strong> 自协商关+100M+半双工<br>
+            <span style="color:red">FAIL</span> | 防火墙eth0: Link Up,1000Mbps,Full(期望100M半双工)
+          </div>
+          <div style="border:1px solid #ddd;padding:8px;border-radius:4px">
+            <strong>场景3:</strong> 自协商关+100M+全双工<br>
+            <span style="color:green">PASS</span> | 防火墙eth0: Link Up,100Mbps,Full
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>表格对比式</h3>
+      <p>所有场景汇总成表格,一目了然对比结果</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <tr style="background:#4a90d9;color:white">
+              <th style="padding:6px;border:1px solid #ddd">场景</th>
+              <th style="padding:6px;border:1px solid #ddd">自协商</th>
+              <th style="padding:6px;border:1px solid #ddd">速率</th>
+              <th style="padding:6px;border:1px solid #ddd">双工</th>
+              <th style="padding:6px;border:1px solid #ddd">防火墙状态</th>
+              <th style="padding:6px;border:1px solid #ddd">结果</th>
+            </tr>
+            <tr>
+              <td style="padding:6px;border:1px solid #ddd">1</td>
+              <td style="padding:6px;border:1px solid #ddd">开</td>
+              <td style="padding:6px;border:1px solid #ddd">1000M</td>
+              <td style="padding:6px;border:1px solid #ddd">全</td>
+              <td style="padding:6px;border:1px solid #ddd">1000M/Full</td>
+              <td style="padding:6px;border:1px solid #ddd;color:green">PASS</td>
+            </tr>
+            <tr style="background:#ffebee">
+              <td style="padding:6px;border:1px solid #ddd">2</td>
+              <td style="padding:6px;border:1px solid #ddd">关</td>
+              <td style="padding:6px;border:1px solid #ddd">100M</td>
+              <td style="padding:6px;border:1px solid #ddd">半</td>
+              <td style="padding:6px;border:1px solid #ddd">1000M/Full</td>
+              <td style="padding:6px;border:1px solid #ddd;color:red">FAIL</td>
+            </tr>
+            <tr>
+              <td style="padding:6px;border:1px solid #ddd">3</td>
+              <td style="padding:6px;border:1px solid #ddd">关</td>
+              <td style="padding:6px;border:1px solid #ddd">100M</td>
+              <td style="padding:6px;border:1px solid #ddd">全</td>
+              <td style="padding:6px;border:1px solid #ddd">100M/Full</td>
+              <td style="padding:6px;border:1px solid #ddd;color:green">PASS</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>卡片详情式</h3>
+      <p>每个场景展开详细卡片,包含Ubuntu配置、防火墙状态、对比分析</p>
+      <div class="mockup" style="margin-top:12px">
+        <div class="mockup-body">
+          <div style="background:#e8f5e9;padding:12px;border-radius:8px;border-left:4px solid green;margin-bottom:8px">
+            <strong style="color:green">PASS - 场景1</strong><br>
+            <div style="display:flex;gap:12px;margin-top:8px;font-size:12px">
+              <div><strong>Ubuntu配置:</strong><br>自协商:开<br>速率:1000M<br>双工:全</div>
+              <div><strong>防火墙状态:</strong><br>Link:Up<br>速率:1000Mbps<br>双工:Full</div>
+              <div><strong>分析:</strong><br>协商结果与配置一致<br>符合预期</div>
+            </div>
+          </div>
+          <div style="background:#ffebee;padding:12px;border-radius:8px;border-left:4px solid red">
+            <strong style="color:red">FAIL - 场景2</strong><br>
+            <div style="display:flex;gap:12px;margin-top:8px;font-size:12px">
+              <div><strong>Ubuntu配置:</strong><br>自协商:关<br>速率:100M<br>双工:半</div>
+              <div><strong>防火墙状态:</strong><br>Link:Up<br>速率:1000Mbps<br>双工:Full</div>
+              <div><strong>分析:</strong><br>协商结果不一致<br>防火墙未响应强制配置</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
