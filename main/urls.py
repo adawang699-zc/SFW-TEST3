@@ -190,4 +190,12 @@ urlpatterns = [
     path('api/bandwidth/start/', views.api_bandwidth_start, name='api_bandwidth_start'),
     path('api/bandwidth/stop/', views.api_bandwidth_stop, name='api_bandwidth_stop'),
     path('api/bandwidth/status/', views.api_bandwidth_status, name='api_bandwidth_status'),
+
+    # ========== 网口管理 API ==========
+    path('api/port/devices/', views.api_get_devices, name='api_get_devices'),
+    path('api/port/devices/<int:device_id>/ports/', views.api_get_device_ports, name='api_get_device_ports'),
+    path('api/port-test/detect-topology/', views.api_detect_topology, name='api_detect_topology'),
+    path('api/port-test/start/', views.api_start_port_test, name='api_start_port_test'),
+    path('api/port-test/stop/', views.api_stop_port_test, name='api_stop_port_test'),
+    path('api/port-test/results/<str:test_id>/', views.api_get_port_test_results, name='api_get_port_test_results'),
 ]

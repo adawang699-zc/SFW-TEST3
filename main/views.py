@@ -24,7 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
 
-from main.models import NetworkInterface, LocalAgent, TestDevice, AgentStatistics, DeviceAlertStatus
+from main.models import NetworkInterface, LocalAgent, TestDevice, AgentStatistics, DeviceAlertStatus, PortTestResult
 from main.syslog_server import (
     start_syslog_server, stop_syslog_server, get_syslog_status,
     get_syslog_logs, clear_syslog_logs, set_syslog_filter_ip
@@ -5817,3 +5817,103 @@ def api_bandwidth_status(request):
 def bandwidth_test(request):
     """带宽测试页面"""
     return render(request, 'bandwidth_test.html')
+
+
+# ========== 网口管理 API ==========
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_get_devices(request):
+    """获取防火墙设备列表"""
+    devices = TestDevice.objects.all().values('id', 'name', 'ip', 'type')
+    return JsonResponse({'success': True, 'devices': list(devices)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_get_device_ports(request, device_id):
+    """获取防火墙设备网口信息"""
+    try:
+        device = TestDevice.objects.get(id=device_id)
+        from main.port_test_utils import get_all_firewall_ports
+        ports = get_all_firewall_ports(device)
+        return JsonResponse({'success': True, 'ports': ports})
+    except TestDevice.DoesNotExist:
+        return JsonResponse({'success': False, 'error': '设备不存在'})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_detect_topology(request):
+    """拓扑检测"""
+    try:
+        data = json.loads(request.body)
+        device_id = data.get('device_id')
+        agent_ids = data.get('agent_ids', [])
+
+        device = TestDevice.objects.get(id=device_id)
+        agents = [LocalAgent.objects.get(agent_id=aid) for aid in agent_ids]
+
+        from main.port_test_utils import PortTestManager
+        result = PortTestManager.start_topology_detection(device, agents)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_start_port_test(request):
+    """开始网口测试"""
+    try:
+        data = json.loads(request.body)
+        device_id = data.get('device_id')
+        mappings = data.get('mappings', [])
+        autoneg_options = data.get('autoneg_options', ['on', 'off'])
+        speed_options = data.get('speed_options', ['100', '1000'])
+        duplex_options = data.get('duplex_options', ['full'])
+
+        from main.port_test_utils import PortTestManager
+        scenarios = PortTestManager.generate_test_scenarios(
+            autoneg_options, speed_options, duplex_options
+        )
+
+        result = PortTestManager.start_test({
+            'device_id': device_id,
+            'mappings': mappings,
+            'scenarios': scenarios
+        })
+
+        if result['success']:
+            result['websocket_url'] = f"ws://{settings.ALLOWED_HOSTS[0]}:{settings.PORT}/ws/port-test/{result['test_id']}/"
+
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_stop_port_test(request):
+    """停止网口测试"""
+    try:
+        data = json.loads(request.body)
+        test_id = data.get('test_id')
+
+        from main.port_test_utils import PortTestManager
+        result = PortTestManager.stop_test(test_id)
+        return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_get_port_test_results(request, test_id):
+    """获取测试结果"""
+    results = PortTestResult.objects.filter(test_session_id=test_id).values(
+        'scenario_id', 'autoneg_config', 'speed_config', 'duplex_config',
+        'firewall_speed', 'firewall_duplex', 'firewall_link', 'result',
+        'tested_at'
+    )
+    return JsonResponse({'success': True, 'results': list(results)})
