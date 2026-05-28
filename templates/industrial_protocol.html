@@ -4470,9 +4470,6 @@ async function opcuaGetEndpoints() {
 }
 
 // OPC UA 订阅管理
-let opcuaSubscriptionCreated = false;
-let opcuaMonitoredItems = [];
-
 async function opcuaCreateSubscription() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
     if (opcuaSubscriptionCreated) { showToast('订阅已存在', 'info'); return; }
@@ -4528,7 +4525,6 @@ async function opcuaDeleteSubscription() {
     }
 }
 
-let opcuaMonitorInterval = null;
 async function opcuaStartMonitorRefresh() {
     if (opcuaMonitorInterval) clearInterval(opcuaMonitorInterval);
     opcuaMonitorInterval = setInterval(async () => {
