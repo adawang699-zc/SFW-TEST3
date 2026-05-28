@@ -385,3 +385,46 @@ class DeviceMonitorData(models.Model):
 
     def __str__(self):
         return f"{self.device_name} 监控数据"
+
+
+class PortMapping(models.Model):
+    """网口映射模型 - Agent网口与防火墙网口的对应关系"""
+    device = models.ForeignKey(TestDevice, on_delete=models.CASCADE, verbose_name="防火墙设备")
+    agent_id = models.CharField(max_length=50, verbose_name="Agent ID")
+    agent_interface = models.CharField(max_length=50, verbose_name="Agent网口名")
+    firewall_interface = models.CharField(max_length=50, verbose_name="防火墙网口名")
+    detected_at = models.DateTimeField(auto_now_add=True, verbose_name="检测时间")
+
+    class Meta:
+        verbose_name = "网口映射"
+        verbose_name_plural = "网口映射"
+        ordering = ['-detected_at']
+
+    def __str__(self):
+        return f"{self.agent_interface} -> {self.firewall_interface}"
+
+
+class PortTestResult(models.Model):
+    """网口测试结果模型"""
+    device = models.ForeignKey(TestDevice, on_delete=models.CASCADE, verbose_name="防火墙设备")
+    mapping = models.ForeignKey(PortMapping, on_delete=models.CASCADE, verbose_name="网口映射")
+    test_session_id = models.CharField(max_length=50, verbose_name="测试会话ID")
+    scenario_id = models.IntegerField(verbose_name="场景编号")
+    autoneg_config = models.CharField(max_length=10, verbose_name="配置-自协商", help_text="on/off")
+    speed_config = models.CharField(max_length=20, verbose_name="配置-速率")
+    duplex_config = models.CharField(max_length=20, verbose_name="配置-双工")
+    firewall_speed = models.CharField(max_length=20, verbose_name="防火墙-速率")
+    firewall_duplex = models.CharField(max_length=20, verbose_name="防火墙-双工")
+    firewall_link = models.CharField(max_length=10, verbose_name="防火墙-LINK状态")
+    result = models.CharField(max_length=10, verbose_name="测试结果", help_text="PASS/FAIL/ERROR")
+    ethtool_output = models.TextField(blank=True, verbose_name="ethtool完整输出")
+    error_message = models.TextField(blank=True, verbose_name="错误信息")
+    tested_at = models.DateTimeField(auto_now_add=True, verbose_name="测试时间")
+
+    class Meta:
+        verbose_name = "网口测试结果"
+        verbose_name_plural = "网口测试结果"
+        ordering = ['test_session_id', 'scenario_id']
+
+    def __str__(self):
+        return f"{self.test_session_id} - 场景{self.scenario_id}: {self.result}"

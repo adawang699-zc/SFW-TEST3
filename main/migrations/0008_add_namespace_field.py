@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('main', '0007_agentlock_last_activity_at_alter_agentlock_expire_at'),
+        ('main', '0005_add_device_hardware_info'),
     ]
 
     operations = [
