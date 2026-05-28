@@ -116,33 +116,33 @@ def step2_ubuntu_git_pull(ssh: paramiko.SSHClient) -> bool:
 
 
 def step3_restart_django(ssh: paramiko.SSHClient) -> bool:
-    """步骤3: 重启 Django"""
-    print("\n[步骤3] 重启 Django...")
+    """步骤3: 重启 Django (使用 daphne 支持 WebSocket)"""
+    print("\n[步骤3] 重启 Django (daphne)...")
 
     # 停止现有进程
-    cmd = "pkill -f 'manage.py runserver'"
+    cmd = "pkill -f 'daphne' ; pkill -f 'manage.py runserver'"
     ssh_exec(ssh, cmd, timeout=10)
     time.sleep(2)
 
-    # 启动 Django (后台运行)
-    cmd = f"cd {UBUNTU_PROJECT_PATH} && nohup sfw/bin/python manage.py runserver 0.0.0.0:8000 > logs/django.log 2>&1 &"
+    # 启动 daphne (后台运行，支持 WebSocket)
+    cmd = f"cd {UBUNTU_PROJECT_PATH} && nohup sfw/bin/daphne -b 0.0.0.0 -p 8000 djangoProject.asgi:application > logs/django.log 2>&1 &"
     code, out, err = ssh_exec(ssh, cmd, background=True)
 
     if code != 0:
-        print(f"  启动 Django 失败: {err}")
+        print(f"  启动 daphne 失败: {err}")
         return False
 
     # 等待启动
     time.sleep(3)
 
     # 验证是否启动
-    cmd = "pgrep -f 'manage.py runserver'"
+    cmd = "pgrep -f 'daphne'"
     code, out, err = ssh_exec(ssh, cmd)
     if out.strip():
-        print(f"  Django 启动成功 (PID: {out.strip()})")
+        print(f"  daphne 启动成功 (PID: {out.strip()})")
         return True
     else:
-        print("  Django 启动失败，未找到进程")
+        print("  daphne 启动失败，未找到进程")
         return False
 
 
