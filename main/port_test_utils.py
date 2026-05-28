@@ -101,8 +101,8 @@ def get_all_firewall_ports(device: TestDevice) -> List[Dict[str, Any]]:
     Returns:
         list: [{'name': 'eth0', 'link': 'up', ...}, ...]
     """
-    # 获取网口列表
-    cmd = "ls /sys/class/net/ | grep -E 'eth|ens|enp'"
+    # 获取网口列表 (包括各种命名模式: eth, ens, enp, eno, enx, etc.)
+    cmd = "ls /sys/class/net/ | grep -vE 'lo|docker|virbr|vnet|br|wlan'"
     output = execute_ssh_command(
         cmd,
         device.ip,
