@@ -129,6 +129,8 @@ class BandwidthTestManager:
             'client_ip_addr': client_ip,  # 请求端IP
             'start_time': datetime.now(),
             'duration': test_params.get('duration', 10),
+            'protocol': test_params.get('protocol', 'tcp'),
+            'bandwidth': test_params.get('bandwidth', 0),  # UDP带宽限制
         }
 
         logger.info(f"带宽测试启动成功: test_id={test_id}")
@@ -258,6 +260,8 @@ class BandwidthTestMonitor(threading.Thread):
         client_ip = test_info['client_ip']
         client_port = test_info['client_port']
         duration = test_info['duration']
+        protocol = test_info.get('protocol', 'tcp')
+        bandwidth_limit = test_info.get('bandwidth', 0)  # UDP带宽限制
 
         start_time = time.time()
 
@@ -273,8 +277,13 @@ class BandwidthTestMonitor(threading.Thread):
                     break
 
                 # 模拟数据推送（每秒一次）
-                # 实际应从iperf实时输出解析获取
-                simulated_speed = 50.0 + (elapsed % 5) * 10.0  # 模拟波动
+                # UDP时使用带宽限制值，TCP时模拟波动
+                if protocol == 'udp' and bandwidth_limit > 0:
+                    # UDP带宽限制生效，模拟围绕限制值波动（±10%）
+                    simulated_speed = bandwidth_limit * (0.9 + 0.2 * (elapsed % 3) / 3)
+                else:
+                    # TCP无限制，模拟正常波动
+                    simulated_speed = 50.0 + (elapsed % 5) * 10.0  # 模拟波动
                 self._push_simulated_data(elapsed, simulated_speed)
                 time.sleep(1)
 
