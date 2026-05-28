@@ -1,0 +1,130 @@
+- generic [ref=e1]:
+  - navigation [ref=e2]:
+    - link "防火墙测试平台" [ref=e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=e4]: "系统时间: 13:34:52"
+  - generic [ref=e5]:
+    - link "🏠 首页" [ref=e7] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e8]: 🏠
+      - text: 首页
+    - link "🔌 Agent 管理" [ref=e10] [cursor=pointer]:
+      - /url: /agent-manage/
+      - generic [ref=e11]: 🔌
+      - text: Agent 管理
+    - link "🖥️ 测试设备" [ref=e13] [cursor=pointer]:
+      - /url: /device-monitor/
+      - generic [ref=e14]: 🖥️
+      - text: 测试设备
+    - link "📡 报文发送" [ref=e16] [cursor=pointer]:
+      - /url: /packet-send/
+      - generic [ref=e17]: 📡
+      - text: 报文发送
+    - link "🔧 服务下发" [ref=e19] [cursor=pointer]:
+      - /url: /service-deploy/
+      - generic [ref=e20]: 🔧
+      - text: 服务下发
+    - link "⚙️ 工控协议" [ref=e22] [cursor=pointer]:
+      - /url: /industrial-protocol/
+      - generic [ref=e23]: ⚙️
+      - text: 工控协议
+    - link "🔍 端口扫描" [ref=e25] [cursor=pointer]:
+      - /url: /port-scan/
+      - generic [ref=e26]: 🔍
+      - text: 端口扫描
+    - link "🔄 报文回放" [ref=e28] [cursor=pointer]:
+      - /url: /packet-replay/
+      - generic [ref=e29]: 🔄
+      - text: 报文回放
+    - link "📋 Syslog 接收" [ref=e31] [cursor=pointer]:
+      - /url: /syslog-receiver/
+      - generic [ref=e32]: 📋
+      - text: Syslog 接收
+    - link "📊 SNMP 管理" [ref=e34] [cursor=pointer]:
+      - /url: /snmp/
+      - generic [ref=e35]: 📊
+      - text: SNMP 管理
+    - link "🖥️ DHCP 客户端" [ref=e37] [cursor=pointer]:
+      - /url: /dhcp-client/
+      - generic [ref=e38]: 🖥️
+      - text: DHCP 客户端
+    - link "⚡ 带宽测试" [ref=e40] [cursor=pointer]:
+      - /url: /bandwidth-test/
+      - generic [ref=e41]: ⚡
+      - text: 带宽测试
+    - link "📚 知识库管理" [ref=e43] [cursor=pointer]:
+      - /url: /knowledge-base/
+      - generic [ref=e44]: 📚
+      - text: 知识库管理
+    - link "🔑 授权管理" [ref=e46] [cursor=pointer]:
+      - /url: /license-management/
+      - generic [ref=e47]: 🔑
+      - text: 授权管理
+    - link "⚙️ 其他配置" [ref=e49] [cursor=pointer]:
+      - /url: /system-config/
+      - generic [ref=e50]: ⚙️
+      - text: 其他配置
+  - generic [ref=e51]:
+    - generic [ref=e52]:
+      - generic [ref=e53]: 其他配置
+      - paragraph [ref=e54]: 系统扩展功能配置管理
+    - generic [ref=e56]:
+      - button "日志管理" [ref=e57] [cursor=pointer]
+      - button "网口管理" [active] [ref=e58] [cursor=pointer]
+      - button "认证服务器配置" [ref=e59] [cursor=pointer]
+      - button "HA监测" [ref=e60] [cursor=pointer]
+      - button "IPSec" [ref=e61] [cursor=pointer]
+      - button "带宽测试" [ref=e62] [cursor=pointer]
+      - button "协议分析" [ref=e63] [cursor=pointer]
+      - button "自定义协议生成" [ref=e64] [cursor=pointer]
+      - button "安全测试" [ref=e65] [cursor=pointer]
+      - button "系统管理" [ref=e66] [cursor=pointer]
+    - text:      
+    - generic [ref=e186]:
+      - generic [ref=e187]: 网口管理 - 防火墙网口自协商测试
+      - generic [ref=e188]:
+        - generic [ref=e189]:
+          - generic [ref=e190]:
+            - generic [ref=e191]: 防火墙设备
+            - generic [ref=e192]:
+              - generic [ref=e193]: 选择防火墙
+              - combobox [ref=e194]:
+                - option "-- 请选择设备 --" [selected]
+          - generic [ref=e195]:
+            - generic [ref=e196]: Agent选择
+            - button "检测拓扑" [ref=e197] [cursor=pointer]
+          - generic [ref=e199]: 拓扑映射
+        - generic [ref=e200]:
+          - generic [ref=e201]:
+            - generic [ref=e202]: 测试参数配置
+            - generic [ref=e203]:
+              - generic [ref=e204]:
+                - generic [ref=e205]: 自协商
+                - combobox [ref=e206]:
+                  - option "开启" [selected]
+                  - option "关闭"
+              - generic [ref=e207]:
+                - generic [ref=e208]: 速率
+                - combobox [ref=e209]:
+                  - option "10M" [selected]
+                  - option "100M"
+                  - option "1000M"
+              - generic [ref=e210]:
+                - generic [ref=e211]: 双工
+                - combobox [ref=e212]:
+                  - option "全双工" [selected]
+                  - option "半双工"
+            - button "开始测试" [ref=e214] [cursor=pointer]
+          - generic [ref=e215]:
+            - generic [ref=e216]: 测试结果
+            - table [ref=e217]:
+              - rowgroup [ref=e218]:
+                - row "场景 自协商 速率 双工 防火墙状态 结果" [ref=e219]:
+                  - columnheader "场景" [ref=e220]
+                  - columnheader "自协商" [ref=e221]
+                  - columnheader "速率" [ref=e222]
+                  - columnheader "双工" [ref=e223]
+                  - columnheader "防火墙状态" [ref=e224]
+                  - columnheader "结果" [ref=e225]
+              - rowgroup
+    - text:     +   
