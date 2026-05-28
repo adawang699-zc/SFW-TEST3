@@ -13,7 +13,7 @@ from django.conf import settings
 from asgiref.sync import async_to_sync
 
 from main.models import TestDevice, LocalAgent, PortMapping, PortTestResult
-from main.device_utils import execute_ssh_command, execute_firewall_command
+from main.device_utils import execute_in_backend
 from main.views import forward_to_agent
 
 logger = logging.getLogger('main')
@@ -74,14 +74,15 @@ def get_firewall_port_info(device: TestDevice, interface: str) -> Dict[str, Any]
         dict: 网口信息, 包含 raw_output 字段存储原始输出
     """
     cmd = f"ethtool {interface}"
-    # 使用防火墙命令执行函数（先enter进入root）
-    output = execute_firewall_command(
+    # 使用 execute_in_backend 进入后台root执行命令
+    output = execute_in_backend(
         cmd,
         device.ip,
         device.user,
         device.password,
-        device.port,
-        timeout=10
+        backend_password=device.backend_password,
+        device_type=device.type,
+        port=device.port
     )
 
     if output:
@@ -106,14 +107,15 @@ def get_all_firewall_ports(device: TestDevice) -> Tuple[List[Dict[str, Any]], st
     """
     # 获取网口列表 (包括各种命名模式: eth, ens, enp, eno, enx, etc.)
     cmd = "ls /sys/class/net/ | grep -vE 'lo|docker|virbr|vnet|br|wlan'"
-    # 使用防火墙命令执行函数（先enter进入root）
-    output = execute_firewall_command(
+    # 使用 execute_in_backend 进入后台root执行命令
+    output = execute_in_backend(
         cmd,
         device.ip,
         device.user,
         device.password,
-        device.port,
-        timeout=10
+        backend_password=device.backend_password,
+        device_type=device.type,
+        port=device.port
     )
 
     if output is False:

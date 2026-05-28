@@ -1596,12 +1596,12 @@ function loadDevicePorts() {
 }
 
 function loadPortTestAgents() {
-    fetch('/api/agents/list/')
+    fetch('/api/agents/my-rented/')
         .then(r => r.json())
         .then(data => {
             const container = document.getElementById('agent_list_container');
             container.innerHTML = '';
-            if (data.agents && data.agents.length > 0) {
+            if (data.has_rental && data.agents && data.agents.length > 0) {
                 data.agents.forEach(a => {
                     container.innerHTML += `
                         <div style="display: flex; align-items: center; margin-bottom: 8px;">
@@ -1610,8 +1610,10 @@ function loadPortTestAgents() {
                         </div>
                     `;
                 });
+            } else if (!data.has_rental) {
+                container.innerHTML = `<div style="color: var(--text-secondary); padding: 8px;">⚠️ ${escapeHtml(data.message || '请先在Agent管理页面租用Agent')}</div>`;
             } else {
-                container.innerHTML = '<div style="color: var(--text-secondary);">暂无Agent</div>';
+                container.innerHTML = '<div style="color: var(--text-secondary);">暂无租用的Agent</div>';
             }
         })
         .catch(error => {
