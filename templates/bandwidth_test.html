@@ -571,7 +571,7 @@
                 <label class="config-label">端口</label>
                 <input type="number" id="bw-port" class="config-input" value="5201" min="1" max="65535">
             </div>
-            <div class="config-row" id="bw-bandwidth-group" style="visibility: hidden; height: 0; overflow: hidden;">
+            <div class="config-row" id="bw-bandwidth-group" style="visibility: hidden; height: 0; overflow: hidden; margin-bottom: 0; padding: 0;">
                 <label class="config-label">带宽目标</label>
                 <input type="number" id="bw-bandwidth" class="config-input" value="100" min="1" max="10000">
                 <span style="color: #6c6c8c; font-size: 0.8rem;">Mbps</span>
@@ -698,10 +698,11 @@ let gaugeCanvas, gaugeCtx;
 let animationRunning = false;
 let animationId = null;
 let gaugeAnimationId = null;
-let particles = [];
 let currentProtocol = 'tcp';
 let gaugeAngle = -135;
 let gaugeTargetAngle = -135;
+let flowTime = 0;
+let flowSegments = [];
 
 // ========== Agent加载（参考服务下发）==========
 async function loadMyAgents() {
@@ -847,6 +848,8 @@ document.getElementById('bw-protocol').addEventListener('change', function() {
     if (this.value === 'udp') {
         bandwidthGroup.style.visibility = 'visible';
         bandwidthGroup.style.height = 'auto';
+        bandwidthGroup.style.marginBottom = '12px';
+        bandwidthGroup.style.padding = '';
         protocolBadge.style.background = 'rgba(255, 107, 53, 0.2)';
         protocolBadge.style.color = '#ff6b35';
         protocolBadge.textContent = 'UDP';
@@ -854,6 +857,8 @@ document.getElementById('bw-protocol').addEventListener('change', function() {
     } else {
         bandwidthGroup.style.visibility = 'hidden';
         bandwidthGroup.style.height = '0';
+        bandwidthGroup.style.marginBottom = '0';
+        bandwidthGroup.style.padding = '0';
         protocolBadge.style.background = 'rgba(0, 201, 177, 0.2)';
         protocolBadge.style.color = '#00c9b1';
         protocolBadge.textContent = 'TCP';
@@ -1089,47 +1094,9 @@ function displayTestSummary(summary) {
     `;
 }
 
-// ========== Canvas数据流动动画 ==========
-class DataParticle {
-    constructor(canvasWidth, canvasHeight) {
-        this.canvasWidth = canvasWidth;
-        this.canvasHeight = canvasHeight;
-        this.reset();
-    }
-
-    reset() {
-        this.x = this.canvasWidth - 90;
-        this.y = this.canvasHeight / 2 + (Math.random() - 0.5) * 30;
-        this.speed = 3 + Math.random() * 2;
-        this.size = 4 + Math.random() * 2;
-        this.color = currentProtocol === 'tcp' ? '#00c9b1' : '#ff6b35';
-        this.alpha = 1;
-        this.passedFirewall = false;
-    }
-
-    update(bandwidthMbps) {
-        this.speed = 2 + Math.min(bandwidthMbps / 50, 4);
-        this.x -= this.speed;
-
-        const firewallX = this.canvasWidth / 2;
-        if (this.x < firewallX + 30 && this.x > firewallX - 30 && !this.passedFirewall) {
-            this.speed *= 0.7;
-            this.passedFirewall = true;
-        }
-
-        if (this.x < 90) this.reset();
-        this.alpha = 0.3 + 0.7 * (this.x / this.canvasWidth);
-    }
-
-    draw(ctx) {
-        ctx.beginPath();
-        ctx.fillStyle = this.color;
-        ctx.globalAlpha = this.alpha;
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-    }
-}
+// ========== Canvas数据流动动画（流动光带效果）==========
+let flowTime = 0;  // 流动时间偏移
+let flowSegments = [];  // 光带片段
 
 function initCanvasAnimation() {
     flowCanvas = document.getElementById('bw-flow-canvas');
@@ -1145,10 +1112,15 @@ function initCanvasAnimation() {
     gaugeCtx = gaugeCanvas.getContext('2d');
 
     currentProtocol = document.getElementById('bw-protocol').value;
+    flowTime = 0;
+    flowSegments = [];
 
-    particles = [];
-    for (let i = 0; i < 12; i++) {
-        particles.push(new DataParticle(flowCanvas.width, flowCanvas.height));
+    // 初始化光带片段（3条光带）
+    for (let i = 0; i < 3; i++) {
+        flowSegments.push({
+            offset: i * 0.33,  // 偏移量，让光带错开
+            width: 8,  // 光带宽度
+        });
     }
 
     animationRunning = true;
@@ -1164,46 +1136,134 @@ function animateFlow() {
     const height = flowCanvas.height;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = '#0a0a1e';
+
+    // 深色背景带渐变
+    const bgGrad = ctx.createLinearGradient(0, 0, width, 0);
+    bgGrad.addColorStop(0, '#0a0a1e');
+    bgGrad.addColorStop(0.5, '#0d0d25');
+    bgGrad.addColorStop(1, '#0a0a1e');
+    ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
-    // Client端（左边）
-    drawAgentNode(ctx, 40, height/2 - 30, 50, 60, 'CLIENT', '#ff6b35');
+    // Client端（左边）- 增加发光效果
+    drawAgentNodeGlow(ctx, 40, height/2 - 30, 50, 60, 'CLIENT', '#ff6b35');
     // 防火墙
     drawFirewallNode(ctx, width/2 - 25, height/2 - 35, 50, 70, 'FW');
     // Server端（右边）
-    drawAgentNode(ctx, width - 90, height/2 - 30, 50, 60, 'SERVER', '#00c9b1');
+    drawAgentNodeGlow(ctx, width - 90, height/2 - 30, 50, 60, 'SERVER', '#00c9b1');
 
-    // 连接线
-    ctx.strokeStyle = '#f9c74f';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath();
-    ctx.moveTo(90, height/2);
-    ctx.lineTo(width/2 - 25, height/2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(width/2 + 25, height/2);
-    ctx.lineTo(width - 90, height/2);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // 绘制连接线（发光虚线）
+    drawGlowingLine(ctx, 90, height/2, width/2 - 25, height/2);
+    drawGlowingLine(ctx, width/2 + 25, height/2, width - 90, height/2);
 
-    // 粒子（从Client流向Server）
-    particles.forEach(p => {
-        p.update(bandwidthData.instant_speed);
-        p.draw(ctx);
-    });
+    // 绘制流动光带（从Client流向Server）
+    drawFlowingLight(ctx, width, height);
 
-    // 带宽显示
+    // 带宽显示（发光文字）
+    ctx.shadowColor = '#00c9b1';
+    ctx.shadowBlur = 10;
     ctx.fillStyle = '#00c9b1';
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${bandwidthData.instant_speed.toFixed(1)} Mbps`, width/2, height - 10);
+    ctx.fillText(`${bandwidthData.instant_speed.toFixed(1)} Mbps`, width/2, height - 15);
+    ctx.shadowBlur = 0;
+
+    // 更新流动时间
+    const speed = 2 + Math.min(bandwidthData.instant_speed / 30, 5);
+    flowTime += 0.02 * speed;
 
     animationId = requestAnimationFrame(animateFlow);
 }
 
-function drawAgentNode(ctx, x, y, w, h, label, color) {
+function drawGlowingLine(ctx, x1, y1, x2, y2) {
+    // 发光虚线
+    ctx.strokeStyle = '#f9c74f';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#f9c74f';
+    ctx.shadowBlur = 8;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
+}
+
+function drawFlowingLight(ctx, width, height) {
+    const baseColor = currentProtocol === 'tcp' ? '#00c9b1' : '#ff6b35';
+    const firewallX = width / 2;
+    const startX = 90;  // Client端开始
+    const endX = width - 90;  // Server端结束
+    const centerY = height / 2;
+
+    // 根据带宽计算光带宽度
+    const lightWidth = 6 + Math.min(bandwidthData.instant_speed / 20, 10);
+
+    // 绘制多条流动光带
+    flowSegments.forEach((seg, idx) => {
+        const phase = (flowTime + seg.offset) % 1;  // 0-1 的相位
+
+        // 光带位置（从左向右流动）
+        const progress = phase;  // 0=左边，1=右边
+
+        // 计算光带中心位置
+        let lightX;
+        if (progress < 0.45) {
+            // Client到防火墙前
+            lightX = startX + (firewallX - startX - 25) * (progress / 0.45);
+        } else if (progress < 0.55) {
+            // 在防火墙内部（稍慢）
+            lightX = firewallX - 25 + 50 * ((progress - 0.45) / 0.1);
+        } else {
+            // 防火墙后到Server
+            lightX = firewallX + 25 + (endX - firewallX - 25) * ((progress - 0.55) / 0.45);
+        }
+
+        // 绘制光带（渐变亮度）
+        const gradient = ctx.createLinearGradient(lightX - 40, centerY, lightX + 20, centerY);
+
+        // 头部亮，尾部淡
+        const alpha = 0.9;
+        if (progress > 0.45 && progress < 0.55) {
+            // 经过防火墙时颜色变暗
+            gradient.addColorStop(0, 'rgba(150, 150, 150, 0)');
+            gradient.addColorStop(0.3, `rgba(200, 200, 100, ${alpha * 0.5})`);
+            gradient.addColorStop(0.5, `rgba(249, 199, 79, ${alpha * 0.7})`);
+            gradient.addColorStop(0.7, `rgba(200, 200, 100, ${alpha * 0.5})`);
+            gradient.addColorStop(1, 'rgba(150, 150, 150, 0)');
+        } else {
+            // 正常流动
+            gradient.addColorStop(0, 'rgba(0, 200, 180, 0)');
+            gradient.addColorStop(0.3, `rgba(${currentProtocol === 'tcp' ? '0, 200, 180' : '255, 107, 53'}, ${alpha * 0.3})`);
+            gradient.addColorStop(0.5, `rgba(${currentProtocol === 'tcp' ? '0, 255, 200' : '255, 150, 80'}, ${alpha})`);
+            gradient.addColorStop(0.7, `rgba(${currentProtocol === 'tcp' ? '0, 200, 180' : '255, 107, 53'}, ${alpha * 0.3})`);
+            gradient.addColorStop(1, 'rgba(0, 200, 180, 0)');
+        }
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+
+        // 绘制椭圆形光带
+        ctx.ellipse(lightX, centerY, 30, lightWidth, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 添加核心发光点
+        ctx.shadowColor = currentProtocol === 'tcp' ? '#00ffcc' : '#ff8855';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.fillStyle = currentProtocol === 'tcp' ? '#00ffcc' : '#ff8855';
+        ctx.arc(lightX, centerY, 3 + lightWidth / 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    });
+}
+
+function drawAgentNodeGlow(ctx, x, y, w, h, label, color) {
+    // 发光背景
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 15;
+
     ctx.fillStyle = '#1a1a3a';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
@@ -1211,6 +1271,8 @@ function drawAgentNode(ctx, x, y, w, h, label, color) {
     ctx.roundRect(x, y, w, h, 8);
     ctx.fill();
     ctx.stroke();
+
+    ctx.shadowBlur = 0;
 
     ctx.fillStyle = color;
     ctx.font = 'bold 10px sans-serif';
@@ -1334,7 +1396,6 @@ function stopCanvasAnimation() {
 function updateCanvasAnimationData(data) {
     bandwidthData = data;
     currentProtocol = document.getElementById('bw-protocol').value;
-    particles.forEach(p => p.color = currentProtocol === 'tcp' ? '#00c9b1' : '#ff6b35');
 }
 
 // ========== 事件绑定 ==========
