@@ -1787,6 +1787,8 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
         showToast(`已选择 ${agentId} (${ip}) 作为 Client Agent`, 'success');
+        // 同步 Client 状态
+        syncClientStatus();
     } else if (type === 'server') {
         selectedServerAgentId = agentId;
         selectedServerAgentIp = ip;
@@ -1807,6 +1809,75 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
         showToast(`已选择 ${agentId} (${ip}) 作为 Server Agent`, 'success');
+        // 同步 Server 状态
+        syncServerStatus();
+    }
+}
+
+// 同步 Server 状态（页面刷新或切换 Agent 后恢复状态）
+async function syncServerStatus() {
+    if (!selectedServerAgentId) return;
+
+    // Modbus Server 状态
+    try {
+        const result = await apiRequest('/api/industrial/modbus_server/status/', 'GET', { agent_id: selectedServerAgentId });
+        if (result.success && result.status && result.status.running) {
+            modbusServerRunning = true;
+            activeConnections.modbus_server = true;
+            updateServerButtonState(true);
+        }
+    } catch (e) {
+        console.log('Modbus Server 状态检查失败:', e);
+    }
+
+    // OPC UA Server 状态
+    try {
+        const result = await apiRequest('/api/industrial/opcua_server/status/', 'GET', { agent_id: selectedServerAgentId });
+        if (result.success && result.status && result.status.running) {
+            opcuaServerRunning = true;
+            activeConnections.opcua_server = true;
+            updateOpcuaServerButtonState(true);
+            document.getElementById('opcua-variables-section').style.display = 'block';
+            opcuaRefreshVariables();
+        }
+    } catch (e) {
+        console.log('OPC UA Server 状态检查失败:', e);
+    }
+}
+
+// 同步 Client 状态（页面刷新或切换 Agent 后恢复状态）
+async function syncClientStatus() {
+    if (!selectedClientAgentId) return;
+
+    // Modbus Client 状态
+    try {
+        const result = await apiRequest('/api/industrial/modbus_client/status/', 'GET', { agent_id: selectedClientAgentId });
+        if (result.success && result.status && result.status.connected) {
+            modbusClientConnected = true;
+            activeConnections.modbus_client = true;
+            updateClientButtonState(true);
+        }
+    } catch (e) {
+        console.log('Modbus Client 状态检查失败:', e);
+    }
+
+    // OPC UA Client 状态
+    try {
+        const result = await apiRequest('/api/industrial/opcua_client/status/', 'GET', { agent_id: selectedClientAgentId });
+        if (result.success && result.status && result.status.connected) {
+            opcuaClientConnected = true;
+            activeConnections.opcua_client = true;
+            updateOpcuaClientButtonState(true);
+            document.getElementById('opcua-browse-section').style.display = 'block';
+            document.getElementById('opcua-readwrite-section').style.display = 'block';
+            document.getElementById('opcua-discovery-section').style.display = 'block';
+            document.getElementById('opcua-subscription-section').style.display = 'block';
+            document.getElementById('opcua-history-read-section').style.display = 'block';
+        }
+    } catch (e) {
+        console.log('OPC UA Client 状态检查失败:', e);
+    }
+}
     }
 }
 
