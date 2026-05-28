@@ -6,7 +6,6 @@ import re
 import logging
 import threading
 import time
-import requests
 from datetime import datetime
 from typing import Any
 from django.conf import settings
@@ -31,6 +30,7 @@ class BandwidthTestManager:
             dict: {success, test_id, error}
         """
         from main.models import LocalAgent, AgentLock
+        from main.views import forward_to_agent
 
         server_agent_id = test_params.get('server_agent_id')
         client_agent_id = test_params.get('client_agent_id')
@@ -57,9 +57,9 @@ class BandwidthTestManager:
             return {'success': False, 'error': 'Agent不存在'}
 
         server_ip = server_agent.interface.ip_address
-        client_ip = client_agent.interface.ip_address
+        client_ip_addr = client_agent.interface.ip_address
 
-        if not server_ip or not client_ip:
+        if not server_ip or not client_ip_addr:
             return {'success': False, 'error': 'Agent IP未配置，请先在Agent管理页面配置IP'}
 
         # 3. 检查Agent是否运行
@@ -73,63 +73,51 @@ class BandwidthTestManager:
         server_port = server_agent.port
         client_port = client_agent.port
 
-        # 6. 启动iperf server (通过Agent API)
+        # 6. 启动iperf server (通过Agent API，使用forward_to_agent支持namespace)
         iperf_port = test_params.get('port', 5201)
 
-        try:
-            resp = requests.post(
-                f"http://{server_ip}:{server_port}/api/iperf/server/start",
-                json={'port': iperf_port},
-                timeout=10
-            )
-            result = resp.json()
+        success, result, error = forward_to_agent(
+            server_agent, 'POST', '/api/iperf/server/start',
+            data={'port': iperf_port}, timeout=10
+        )
 
-            if not result.get('success'):
-                return {'success': False, 'error': f"iperf server启动失败: {result.get('error')}"}
+        if not success:
+            return {'success': False, 'error': f'iperf server启动失败: {error}'}
 
-            server_pid = result.get('pid')
+        server_pid = result.get('pid')
 
-        except Exception as e:
-            return {'success': False, 'error': f"iperf server启动失败: {str(e)}"}
+        # 7. 启动iperf client (通过Agent API，使用forward_to_agent支持namespace)
+        client_params = {
+            'server_ip': server_ip,
+            'port': iperf_port,
+            'duration': test_params.get('duration', 10),
+            'protocol': test_params.get('protocol', 'tcp'),
+            'mtu': test_params.get('mtu', 1400),
+        }
 
-        # 7. 启动iperf client (通过Agent API)
-        try:
-            client_params = {
-                'server_ip': server_ip,
-                'port': iperf_port,
-                'duration': test_params.get('duration', 10),
-                'protocol': test_params.get('protocol', 'tcp'),
-                'mtu': test_params.get('mtu', 1400),
-            }
+        if test_params.get('protocol') == 'udp' and test_params.get('bandwidth'):
+            client_params['bandwidth'] = test_params.get('bandwidth')
 
-            if test_params.get('protocol') == 'udp' and test_params.get('bandwidth'):
-                client_params['bandwidth'] = test_params.get('bandwidth')
+        success, result, error = forward_to_agent(
+            client_agent, 'POST', '/api/iperf/client/start',
+            data=client_params, timeout=10
+        )
 
-            resp = requests.post(
-                f"http://{client_ip}:{client_port}/api/iperf/client/start",
-                json=client_params,
-                timeout=10
-            )
-            result = resp.json()
-
-            if not result.get('success'):
-                # 清理server
-                cls._stop_iperf_server(server_ip, server_port)
-                return {'success': False, 'error': f"iperf client启动失败: {result.get('error')}"}
-
-            client_pid = result.get('pid')
-
-        except Exception as e:
+        if not success:
             # 清理server
-            cls._stop_iperf_server(server_ip, server_port)
-            return {'success': False, 'error': f"iperf client启动失败: {str(e)}"}
+            cls._stop_iperf_server(server_agent)
+            return {'success': False, 'error': f'iperf client启动失败: {error}'}
+
+        client_pid = result.get('pid')
 
         # 8. 记录活跃测试
         cls.active_tests[test_id] = {
+            'server_agent': server_agent,
+            'client_agent': client_agent,
             'server_agent_id': server_agent_id,
             'client_agent_id': client_agent_id,
             'server_ip': server_ip,
-            'client_ip': client_ip,
+            'client_ip': client_ip_addr,
             'server_port': server_port,
             'client_port': client_port,
             'server_pid': server_pid,
@@ -149,35 +137,41 @@ class BandwidthTestManager:
         }
 
     @classmethod
-    def _stop_iperf_server(cls, server_ip, server_port):
+    def _stop_iperf_server(cls, server_agent):
         """停止iperf server"""
-        try:
-            requests.post(
-                f"http://{server_ip}:{server_port}/api/iperf/server/stop",
-                timeout=5
-            )
-        except Exception as e:
-            logger.warning(f"停止iperf server失败: {e}")
+        from main.views import forward_to_agent
+
+        success, _, _ = forward_to_agent(
+            server_agent, 'POST', '/api/iperf/server/stop',
+            data={}, timeout=5
+        )
+        if not success:
+            logger.warning(f"停止iperf server失败")
 
     @classmethod
     def stop_test(cls, test_id):
         """停止带宽测试"""
+        from main.views import forward_to_agent
+
         if test_id not in cls.active_tests:
             return {'success': False, 'error': '测试不存在'}
 
         test_info = cls.active_tests[test_id]
 
         # 停止client
-        try:
-            requests.post(
-                f"http://{test_info['client_ip']}:{test_info['client_port']}/api/iperf/client/stop",
-                timeout=5
+        client_agent = test_info.get('client_agent')
+        if client_agent:
+            success, _, _ = forward_to_agent(
+                client_agent, 'POST', '/api/iperf/client/stop',
+                data={}, timeout=5
             )
-        except Exception as e:
-            logger.warning(f"停止iperf client失败: {e}")
+            if not success:
+                logger.warning(f"停止iperf client失败")
 
         # 停止server
-        cls._stop_iperf_server(test_info['server_ip'], test_info['server_port'])
+        server_agent = test_info.get('server_agent')
+        if server_agent:
+            cls._stop_iperf_server(server_agent)
 
         # 移除记录
         del cls.active_tests[test_id]
