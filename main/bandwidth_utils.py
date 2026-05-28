@@ -20,12 +20,12 @@ class BandwidthTestManager:
     active_tests = {}  # {test_id: {server_pid, client_pid, ...}}
 
     @classmethod
-    def start_test(cls, test_params, user_identifier):
+    def start_test(cls, test_params, client_ip):
         """启动带宽测试
 
         Args:
             test_params: dict包含server_agent_id, client_agent_id等参数
-            user_identifier: 用户标识符
+            client_ip: 客户端IP地址
 
         Returns:
             dict: {success, test_id, error}
@@ -35,14 +35,14 @@ class BandwidthTestManager:
         server_agent_id = test_params.get('server_agent_id')
         client_agent_id = test_params.get('client_agent_id')
 
-        # 1. 验证用户租用了两个Agent
+        # 1. 验证用户租用了两个Agent（使用客户端IP）
         lock = AgentLock.objects.filter(
-            user_identifier=user_identifier,
+            client_ip=client_ip,
             status='active'
         ).first()
 
         if not lock:
-            return {'success': False, 'error': '请先租用Agent后再进行带宽测试'}
+            return {'success': False, 'error': f'当前IP ({client_ip}) 无租用记录，请先租用Agent'}
 
         locked_agent_ids = [a.agent_id for a in lock.agents.all()]
 
@@ -135,7 +135,7 @@ class BandwidthTestManager:
             'server_pid': server_pid,
             'client_pid': client_pid,
             'iperf_port': iperf_port,
-            'user_identifier': user_identifier,
+            'client_ip_addr': client_ip,  # 请求端IP
             'start_time': datetime.now(),
             'duration': test_params.get('duration', 10),
         }

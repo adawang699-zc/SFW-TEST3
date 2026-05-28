@@ -5720,24 +5720,36 @@ def api_bandwidth_my_agents(request):
 def api_bandwidth_start(request):
     """启动带宽测试"""
     from .bandwidth_utils import BandwidthTestManager
+    from .models import AgentLock
 
     try:
         data = json.loads(request.body)
-        user_identifier = data.get('user_identifier', '').strip()
 
-        if not user_identifier:
-            return JsonResponse({'success': False, 'error': '请输入用户标识符'})
+        # 使用客户端IP获取租用信息（和服务下发一致）
+        client_ip = request.META.get('REMOTE_ADDR', '')
 
-        # 检查是否已有活跃测试
+        # 检查是否已有活跃测试（按IP检查）
         if BandwidthTestManager.active_tests:
             for test_id, test_info in BandwidthTestManager.active_tests.items():
-                if test_info.get('user_identifier') == user_identifier:
+                if test_info.get('client_ip_addr') == client_ip:
                     return JsonResponse({
                         'success': False,
                         'error': '您已有正在进行的带宽测试'
                     })
 
-        result = BandwidthTestManager.start_test(data, user_identifier)
+        # 验证用户租用了Agent
+        lock = AgentLock.objects.filter(
+            client_ip=client_ip,
+            status='active'
+        ).first()
+
+        if not lock:
+            return JsonResponse({
+                'success': False,
+                'error': f'当前IP ({client_ip}) 无租用记录，请先在Agent管理页面租用Agent'
+            })
+
+        result = BandwidthTestManager.start_test(data, client_ip)
 
         return JsonResponse(result)
 
