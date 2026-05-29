@@ -339,14 +339,14 @@ class OpcUaClient:
             from asyncua import ua
             obj = self._client.get_node(object_node)
 
-            # 使用 BrowsePath 获取方法节点
-            # 方法名格式: "2:ResetCounter" 表示命名空间 2 下的方法
-            browse_path = [ua.QualifiedName(method_name, 2)]
-            method = await obj.get_child(browse_path)
+            # 方法节点通过 BrowsePath 获取: ["2:方法名"]
+            browse_names = [ua.QualifiedName(method_name, 2)]
+            method_node = await obj.get_child(browse_names)
 
-            result = await obj.call_method(method, *(args or []))
+            result = await obj.call_method(method_node, *(args or []))
             return (True, result, "调用成功")
         except Exception as e:
+            logger.error(f"方法调用失败: {e}", exc_info=True)
             return (False, None, f"调用失败: {e}")
 
     def call_method(self, object_node: str, method_name: str,

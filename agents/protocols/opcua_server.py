@@ -109,8 +109,9 @@ class OpcUaServer:
         # 获取对象节点
         objects = self._server.get_objects_node()
 
-        # 创建模拟设备对象
-        sim_device = await objects.add_object(self._idx, "SimulationDevice")
+        # 创建模拟设备对象（使用字符串 NodeId，便于客户端访问）
+        sim_device_node_id = ua.NodeId("SimulationDevice", self._idx)
+        sim_device = await objects.add_object(sim_device_node_id, "SimulationDevice")
 
         # 初始化数据存储
         self._datastore = {}
