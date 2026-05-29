@@ -241,7 +241,40 @@ class OpcUaClient:
             return (False, "客户端未初始化")
 
         try:
+            from asyncua import ua
             node = self._client.get_node(node_id)
+
+            # 获取节点的数据类型
+            try:
+                data_type = await node.read_data_type()
+                data_type_value = data_type.Value if hasattr(data_type, 'Value') else data_type
+
+                # 根据数据类型转换值
+                if data_type_value == ua.VariantType.Float or data_type_value == ua.VariantType.Double:
+                    value = float(value)
+                elif data_type_value == ua.VariantType.Int32 or data_type_value == ua.VariantType.Int16 or data_type_value == ua.VariantType.Int64:
+                    value = int(float(value))  # 先转 float 再转 int，处理字符串数字
+                elif data_type_value == ua.VariantType.Boolean:
+                    if isinstance(value, str):
+                        value = value.lower() in ('true', '1', 'yes')
+                    else:
+                        value = bool(value)
+                elif data_type_value == ua.VariantType.String:
+                    value = str(value)
+
+            except Exception:
+                # 如果读取类型失败，尝试智能转换
+                if isinstance(value, str):
+                    if value.lower() in ('true', 'false'):
+                        value = value.lower() == 'true'
+                    elif '.' in value:
+                        value = float(value)
+                    else:
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            pass  # 保持字符串
+
             await node.write_value(value)
             return (True, "写入成功")
         except Exception as e:
