@@ -344,6 +344,88 @@ def api_interface_config():
         }), 500
 
 
+@app.route('/api/interface/status', methods=['GET'])
+def api_interface_status():
+    """获取网口状态"""
+    try:
+        interface = request.args.get('interface')
+
+        if not interface:
+            return jsonify({
+                'success': False,
+                'error': '缺少网口参数'
+            }), 400
+
+        import subprocess
+
+        # 获取网口状态
+        result = subprocess.run(
+            ['ip', 'link', 'show', interface],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode != 0:
+            return jsonify({
+                'success': False,
+                'error': f'网口 {interface} 不存在'
+            }), 404
+
+        # 解析状态
+        output = result.stdout
+        state = 'UNKNOWN'
+        if 'state DOWN' in output:
+            state = 'DOWN'
+        elif 'state UP' in output or 'LOWER_UP' in output:
+            state = 'UP'
+
+        # 获取 ethtool 信息
+        ethtool_result = subprocess.run(
+            ['ethtool', interface],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        link_detected = 'unknown'
+        speed = 'unknown'
+        duplex = 'unknown'
+
+        if ethtool_result.returncode == 0:
+            import re
+            link_match = re.search(r'Link detected:\s*(\w+)', ethtool_result.stdout)
+            if link_match:
+                link_detected = link_match.group(1).lower()
+
+            speed_match = re.search(r'Speed:\s*(\S+)', ethtool_result.stdout)
+            if speed_match:
+                speed = speed_match.group(1)
+
+            duplex_match = re.search(r'Duplex:\s*(\w+)', ethtool_result.stdout)
+            if duplex_match:
+                duplex = duplex_match.group(1)
+
+        logger.info(f"[API] 网口 {interface} 状态: state={state}, link={link_detected}")
+
+        return jsonify({
+            'success': True,
+            'interface': interface,
+            'state': state,
+            'operstate': state,
+            'link': link_detected,
+            'speed': speed,
+            'duplex': duplex
+        })
+
+    except Exception as e:
+        logger.exception(f"[API] 获取网口状态异常: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/api/shutdown', methods=['POST'])
 def shutdown():
     """优雅关闭"""
