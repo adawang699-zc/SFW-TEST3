@@ -5977,7 +5977,9 @@ def api_start_port_test(request):
         })
 
         if result['success']:
-            result['websocket_url'] = f"ws://{settings.ALLOWED_HOSTS[0]}/ws/port-test/{result['test_id']}/"
+            # 使用 request.get_host() 获取正确的 host 和端口
+            host = request.get_host()
+            result['websocket_url'] = f"ws://{host}/ws/port-test/{result['test_id']}/"
 
         return JsonResponse(result)
     except Exception as e:

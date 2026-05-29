@@ -1636,12 +1636,74 @@ function toggleAgent(agentId) {
     }
 }
 
+// 渲染拓扑图
+function renderTopologyDiagram(mappings, container, firewallName) {
+    let html = `
+        <div style="margin-bottom: 16px; color: var(--success-color); font-weight: 600; font-size: 1.1rem;">
+            ✓ 拓扑检测结果
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px; background: var(--bg-dark); padding: 16px; border-radius: 12px;">
+    `;
+
+    // Agent 节点
+    html += `<div style="display: flex; align-items: center; gap: 8px;">
+        <div style="font-weight: 600; color: var(--accent-color); min-width: 80px;">Agent</div>
+        <div style="flex: 1;"></div>
+    </div>`;
+
+    mappings.forEach((m, idx) => {
+        const agentColor = idx === 0 ? '#3498db' : '#9b59b6';
+        const fwColor = '#e74c3c';
+
+        html += `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+            <div style="min-width: 80px; padding: 8px 12px; background: ${agentColor}; color: white; border-radius: 6px; font-weight: 600; text-align: center; font-size: 0.9rem;">
+                ${escapeHtml(m.agent_interface)}
+            </div>
+            <div style="flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+                <svg width="60" height="20" viewBox="0 0 60 20">
+                    <line x1="0" y1="10" x2="50" y2="10" stroke="var(--success-color)" stroke-width="3" stroke-dasharray="5,3"/>
+                    <polygon points="55,10 45,5 45,15" fill="var(--success-color)"/>
+                </svg>
+                <span style="margin-left: 4px; font-size: 0.75rem; color: var(--success-color);">已连接</span>
+            </div>
+            <div style="min-width: 100px; padding: 8px 12px; background: ${fwColor}; color: white; border-radius: 6px; font-weight: 600; text-align: center; font-size: 0.9rem;">
+                ${escapeHtml(m.firewall_interface)}
+            </div>
+            <div style="min-width: 60px; padding: 4px 8px; background: rgba(231,76,60,0.2); color: ${fwColor}; border-radius: 4px; font-size: 0.75rem; text-align: center;">
+                SFW
+            </div>
+        </div>
+        `;
+    });
+
+    // 防火墙节点
+    html += `<div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+        <div style="font-weight: 600; color: #e74c3c; min-width: 80px;">防火墙</div>
+        <div style="flex: 1;"></div>
+        <div style="color: var(--text-secondary); font-size: 0.85rem;">${escapeHtml(firewallName || '防火墙设备')}</div>
+    </div>`;
+
+    html += '</div>';
+
+    // 添加统计信息
+    html += `<div style="margin-top: 12px; color: var(--text-secondary); font-size: 0.85rem;">
+        共发现 ${mappings.length} 条连接链路
+    </div>`;
+
+    container.innerHTML = html;
+}
+
 function detectTopology() {
     const deviceId = document.getElementById('port_device').value;
     if (!deviceId || selectedAgents.length < 2) {
         showToast('请选择设备和至少2个Agent', 'warning');
         return;
     }
+
+    // 获取设备名称
+    const deviceSelect = document.getElementById('port_device');
+    const deviceName = deviceSelect.options[deviceSelect.selectedIndex].text;
 
     // 显示检测过程容器
     const container = document.getElementById('topology_mapping_container');
@@ -1695,16 +1757,16 @@ function detectTopology() {
                             }
                             else if (data.type === 'mapping_found') {
                                 mappings.push(data.mapping);
-                                let html = '<div style="margin-bottom: 8px; color: var(--success-color);">✓ 发现映射:</div>';
-                                mappings.forEach(m => {
-                                    html += `<div style="margin-bottom: 4px; padding: 4px 8px; background: var(--bg-dark); border-radius: 4px;">${escapeHtml(m.agent_interface)} → ${escapeHtml(m.firewall_interface)}</div>`;
-                                });
-                                container.innerHTML = html;
+                                // 实时更新拓扑图
+                                renderTopologyDiagram(mappings, container, deviceName);
                             }
                             else if (data.type === 'complete') {
                                 topologyMappings = data.mappings || mappings;
                                 if (topologyMappings.length === 0) {
-                                    container.innerHTML = '<div style="color: var(--warning-color);">⚠ 未发现拓扑映射，请检查Agent网口是否连接到防火墙已连接网口</div>';
+                                    container.innerHTML = '<div style="color: var(--warning-color); padding: 12px; background: rgba(255,193,7,0.1); border-radius: 8px;">⚠️ 未发现拓扑映射，请检查Agent网口是否连接到防火墙已连接网口</div>';
+                                } else {
+                                    // 最终渲染拓扑图
+                                    renderTopologyDiagram(topologyMappings, container, deviceName);
                                 }
                                 showToast(data.success ? '拓扑检测完成' : '拓扑检测失败: ' + escapeHtml(data.error), data.success ? 'success' : 'error');
                             }
