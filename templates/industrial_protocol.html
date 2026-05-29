@@ -1811,6 +1811,8 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
         showToast(`已选择 ${agentId} (${ip}) 作为 Server Agent`, 'success');
+        // 同步后端状态
+        syncServerStatus();
     }
 }
 
@@ -1839,6 +1841,7 @@ async function syncServerStatus() {
             updateOpcuaServerButtonState(true);
             document.getElementById('opcua-variables-section').style.display = 'block';
             opcuaRefreshVariables();
+            opcuaStartValuesRefresh();
         }
     } catch (e) {
         console.log('OPC UA Server 状态检查失败:', e);

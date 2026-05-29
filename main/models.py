@@ -407,7 +407,7 @@ class PortMapping(models.Model):
 class PortTestResult(models.Model):
     """网口测试结果模型"""
     device = models.ForeignKey(TestDevice, on_delete=models.CASCADE, verbose_name="防火墙设备")
-    mapping = models.ForeignKey(PortMapping, on_delete=models.CASCADE, verbose_name="网口映射")
+    mapping = models.ForeignKey(PortMapping, on_delete=models.CASCADE, verbose_name="网口映射", null=True, blank=True)
     test_session_id = models.CharField(max_length=50, verbose_name="测试会话ID")
     scenario_id = models.IntegerField(verbose_name="场景编号")
     autoneg_config = models.CharField(max_length=10, verbose_name="配置-自协商", help_text="on/off")
