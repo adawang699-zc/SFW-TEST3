@@ -1815,14 +1815,15 @@ function doSelectAgent(agentId, type, ip) {
         // 自动填充目标 IP（使用另一个 agent 的 IP）
         if (agentsData && agentsData.length >= 2) {
             // 从 agentsData 中找到不同的 agent
-            const otherAgent = agentsData.find(a => a.agent_id !== agentId || a.id !== agentId);
+            const otherAgent = agentsData.find(a => a.agent_id !== agentId);
             if (otherAgent) {
-                // 优先使用业务网 IP，其次管理网 IP
-                const targetIp = otherAgent.business_ip || otherAgent.management_ip || otherAgent.ip || otherAgent.agent_ip;
+                // 使用另一个 agent 的 IP
+                const targetIp = otherAgent.ip_address || otherAgent.business_ip || otherAgent.management_ip || otherAgent.ip;
                 if (targetIp) {
                     document.getElementById('opcua-client-ip').value = targetIp;
                     document.getElementById('modbus-client-ip').value = targetIp;
                     document.getElementById('s7-client-ip').value = targetIp;
+                    console.log('自动填充目标 IP:', targetIp, '来自 agent:', otherAgent.agent_id);
                 }
             }
         } else if (selectedServerAgentIp) {
@@ -1882,7 +1883,7 @@ async function syncServerStatus() {
             updateOpcuaServerButtonState(true);
             document.getElementById('opcua-variables-section').style.display = 'block';
             opcuaRefreshVariables();
-            opcuaStartValuesRefresh();
+            // 不自动开启动态更新，用户手动控制
         }
     } catch (e) {
         console.log('OPC UA Server 状态检查失败:', e);
