@@ -122,7 +122,11 @@ class OpcUaServer:
             name = var_config['name']
             var_type = var_config['type']
             mode = var_config['mode']
-            params = var_config['params']
+            params = var_config['params'].copy()  # 复制参数，避免修改原数据
+
+            # 添加 chinese_name 和 description 到 params
+            params['chinese_name'] = var_config.get('chinese_name', name)
+            params['description'] = var_config.get('description', name)
 
             # 根据类型确定初始值
             if var_type == 'Float':
@@ -385,11 +389,13 @@ class OpcUaServer:
         """获取变量列表"""
         result = []
         for name, config in self._datastore.items():
+            params = config.get('params', {})
             result.append({
                 "name": name,
                 "type": config.get('type'),
                 "mode": config.get('mode'),
-                "description": config.get('params', {}).get('description', name)
+                "chinese_name": params.get('chinese_name', name),
+                "description": params.get('description', name)
             })
         return result
 

@@ -38,6 +38,7 @@ DEFAULT_VARIABLES = [
         'type': 'Float',
         'mode': 'sine',
         'params': {'base': 25.0, 'amplitude': 5.0, 'period': 60.0},
+        'chinese_name': '温度',
         'description': '温度 (正弦波)'
     },
     {
@@ -45,6 +46,7 @@ DEFAULT_VARIABLES = [
         'type': 'Float',
         'mode': 'random',
         'params': {'base': 100.0, 'range': 10.0},
+        'chinese_name': '压力',
         'description': '压力 (随机波动)'
     },
     {
@@ -52,6 +54,7 @@ DEFAULT_VARIABLES = [
         'type': 'Float',
         'mode': 'step',
         'params': {'steps': [40.0, 50.0, 60.0, 70.0], 'step_interval': 30.0},
+        'chinese_name': '流量',
         'description': '流量 (阶梯波)'
     },
     {
@@ -59,6 +62,7 @@ DEFAULT_VARIABLES = [
         'type': 'Float',
         'mode': 'sine',
         'params': {'base': 1500.0, 'amplitude': 200.0, 'period': 30.0},
+        'chinese_name': '转速',
         'description': '转速 (正弦波)'
     },
     {
@@ -66,6 +70,7 @@ DEFAULT_VARIABLES = [
         'type': 'Float',
         'mode': 'random',
         'params': {'base': 50.0, 'range': 15.0},
+        'chinese_name': '液位',
         'description': '液位 (随机波动)'
     },
     {
@@ -73,6 +78,7 @@ DEFAULT_VARIABLES = [
         'type': 'Boolean',
         'mode': 'toggle',
         'params': {'interval': 120.0},
+        'chinese_name': '开关状态',
         'description': '开关状态'
     },
     {
@@ -80,6 +86,7 @@ DEFAULT_VARIABLES = [
         'type': 'Boolean',
         'mode': 'alarm',
         'params': {'trigger_threshold': 30.0, 'clear_threshold': 28.0},
+        'chinese_name': '报警状态',
         'description': '报警状态'
     },
     {
@@ -87,6 +94,7 @@ DEFAULT_VARIABLES = [
         'type': 'Int32',
         'mode': 'counter',
         'params': {'max': 1000},
+        'chinese_name': '计数器',
         'description': '计数器'
     },
     {
@@ -94,6 +102,7 @@ DEFAULT_VARIABLES = [
         'type': 'Int32',
         'mode': 'constant',
         'params': {'value': 1},
+        'chinese_name': '运行模式',
         'description': '运行模式'
     }
 ]
