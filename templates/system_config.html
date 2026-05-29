@@ -2057,21 +2057,29 @@ function startTestProgressStream(testId) {
 // 处理测试进度消息
 function handleTestProgress(data, container) {
     if (data.type === 'progress') {
+        console.log(`[网口测试] ${data.message}`);
         container.innerHTML = `<div style="color: var(--accent-color);">
             测试进度: ${escapeHtml(data.current)}/${escapeHtml(data.total)} (${escapeHtml(data.percent)}%)
             <br><span style="font-size: 0.85rem;">${escapeHtml(data.message)}</span>
         </div>`;
     }
     else if (data.type === 'scenario_result') {
-        // 添加结果到表格
+        const r = data.result;
+        const s = data.scenario;
+        const cfg = s.autoneg === 'on' ? '自协商开启' : `自协商关闭 (${s.speed}M, ${s.duplex === 'full' ? '全双工' : '半双工'})`;
+        console.log(`[网口测试] 场景结果 - 配置: ${cfg}`);
+        console.log(`[网口测试]   防火墙状态: link=${r.link}, speed=${r.speed}, duplex=${r.duplex}`);
+        console.log(`[网口测试]   判定: ${r.result}${r.error ? ', 错误: ' + r.error : ''}`);
         addTestResult(data.scenario, data.result);
     }
     else if (data.type === 'complete') {
+        console.log('[网口测试] ✓ 所有测试场景完成');
         container.innerHTML = `<div style="color: var(--success-color);">✓ 测试完成</div>`;
         showToast('测试完成', 'success');
         resetTestState();
     }
     else if (data.type === 'error') {
+        console.error('[网口测试] ✗ 测试失败:', data.message);
         container.innerHTML = `<div style="color: var(--error-color);">✗ 测试失败: ${escapeHtml(data.message)}</div>`;
         showToast('测试失败: ' + data.message, 'error');
         resetTestState();

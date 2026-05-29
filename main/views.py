@@ -231,6 +231,10 @@ def namespace_http_request(namespace, ip_address, port, method='GET', endpoint='
         cmd.extend(['-X', 'POST', '-H', 'Content-Type: application/json'])
         if data:
             cmd.extend(['-d', json.dumps(data)])
+    elif method == 'GET' and data:
+        # GET 请求时，data 作为 query params
+        param_str = '&'.join(f'{k}={v}' for k, v in data.items())
+        url = f'{url}?{param_str}'
 
     cmd.append(url)
 
@@ -272,7 +276,8 @@ def forward_to_agent(agent, method='GET', endpoint='', data=None, timeout=10):
         try:
             url = f'http://{ip}:{port}{endpoint}'
             if method == 'GET':
-                resp = requests.get(url, timeout=timeout)
+                # GET 请求时，data 作为 query params
+                resp = requests.get(url, params=data, timeout=timeout)
             else:
                 resp = requests.post(url, json=data, timeout=timeout)
 
@@ -4218,7 +4223,13 @@ def api_industrial_opcua_server(request, action, variable=None):
             # history/Temperature -> opcua_server/history/Temperature
             path = f"opcua_server/{action}/{variable}"
             result = _proxy_industrial_request(agent_id, path, method='GET', params=data)
-        elif action in ('status', 'variables', 'values'):
+        elif action == 'status':
+            # 状态 API 需要包装返回格式
+            result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='GET', data=data)
+            if result.get('running') is not None:
+                # 包装成前端期望的格式 {success: true, status: {...}}
+                result = {'success': True, 'status': result}
+        elif action in ('variables', 'values'):
             result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='GET', data=data)
         else:
             result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='POST', data=data)
@@ -4236,6 +4247,9 @@ def api_industrial_opcua_client(request, action):
         agent_id = data.get('agent_id')
         if action == 'status':
             result = _proxy_industrial_request(agent_id, f"opcua_client/{action}", method='GET', data=data)
+            if result.get('connected') is not None:
+                # 包装成前端期望的格式 {success: true, status: {...}}
+                result = {'success': True, 'status': result}
         else:
             result = _proxy_industrial_request(agent_id, f"opcua_client/{action}", method='POST', data=data)
         return JsonResponse(result)
@@ -6103,10 +6117,11 @@ def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interfac
         device = TestDevice.objects.get(id=device_id)
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
-        push_progress(0, len(scenarios), f'开始测试 {firewall_port}...')
+        push_progress(0, len(scenarios), f'开始测试 {firewall_port}，Agent网口: {agent_interface}...')
 
         for idx, scenario in enumerate(scenarios):
-            push_progress(idx + 1, len(scenarios), f'执行场景 {idx + 1}: 自协商={scenario["autoneg"]}')
+            scenario_label = '开启自协商' if scenario['autoneg'] == 'on' else f'关闭自协商 ({scenario["speed"]}M, {"全双工" if scenario["duplex"] == "full" else "半双工"})'
+            push_progress(idx + 1, len(scenarios), f'场景 {idx + 1}/{len(scenarios)}: 配置Agent {agent_interface} -> {scenario_label}')
 
             result = {
                 'scenario_id': scenario['id'],
@@ -6121,6 +6136,7 @@ def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interfac
 
             try:
                 # 1. 配置 Agent 网口
+                push_progress(idx + 1, len(scenarios), f'正在配置 Agent {agent_interface}: autoneg={scenario["autoneg"]}, speed={scenario["speed"]}, duplex={scenario["duplex"]}')
                 success, error = configure_agent_port(
                     agent, agent_interface,
                     scenario['autoneg'], scenario['speed'], scenario['duplex']
@@ -6137,17 +6153,20 @@ def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interfac
                     continue
 
                 # 2. 等待协商生效
+                push_progress(idx + 1, len(scenarios), f'Agent {agent_interface} 配置完成，等待协商生效...')
                 time.sleep(3)
 
                 # 3. 检查防火墙网口状态
+                push_progress(idx + 1, len(scenarios), f'正在检查防火墙 {firewall_port} 状态...')
                 firewall_info = get_firewall_port_info(device, firewall_port)
                 result['link'] = firewall_info['link']
                 result['speed'] = firewall_info['speed']
                 result['duplex'] = firewall_info['duplex']
 
+                fw_status = f'link={firewall_info["link"]}, speed={firewall_info["speed"]}, duplex={firewall_info["duplex"]}'
+
                 # 4. 判断结果
                 if scenario['autoneg'] == 'on':
-                    # 自协商开，应协商到最高速率全双工
                     if firewall_info['link'] == 'yes' and \
                        '1000' in firewall_info['speed'] and \
                        firewall_info['duplex'] == 'Full':
@@ -6155,7 +6174,6 @@ def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interfac
                     else:
                         result['result'] = 'FAIL'
                 else:
-                    # 自协商关，应匹配强制配置
                     expected_speed = f"{scenario['speed']}Mb/s"
                     expected_duplex = scenario['duplex'].capitalize()
                     if firewall_info['link'] == 'yes' and \
@@ -6164,6 +6182,9 @@ def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interfac
                         result['result'] = 'PASS'
                     else:
                         result['result'] = 'FAIL'
+
+                result_emoji = 'PASS' if result['result'] == 'PASS' else 'FAIL'
+                push_progress(idx + 1, len(scenarios), f'验证结果: {result_emoji} | 防火墙 {firewall_port} 状态: {fw_status}')
 
                 # 保存结果
                 PortTestResult.objects.create(
@@ -6198,11 +6219,13 @@ def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interfac
                 })
 
             finally:
-                # 每个场景完成后都恢复网口（确保后续场景正常）
+                push_progress(idx + 1, len(scenarios), f'恢复 Agent {agent_interface} 为自协商模式...')
                 restore_agent_port(agent, agent_interface)
+                push_progress(idx + 1, len(scenarios), f'Agent {agent_interface} 已恢复自协商')
                 time.sleep(1)
 
         # 所有场景完成，最终恢复自协商
+        push_progress(len(scenarios), len(scenarios), f'所有场景完成，最终恢复 Agent {agent_interface}...')
         restore_agent_port(agent, agent_interface)
 
         _test_progress_store[test_id].append({

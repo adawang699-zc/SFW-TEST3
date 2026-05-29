@@ -4368,9 +4368,16 @@ async function opcuaRefreshVariables() {
     if (result.success && result.variables) {
         const tbody = document.getElementById('opcua-variables-tbody');
         tbody.innerHTML = '';
+        // 保存变量类型信息用于写入验证
+        window.opcuaVariableTypes = {};
         result.variables.forEach(v => {
+            window.opcuaVariableTypes[v.name] = v.type;
+            const modeNames = {
+                'sine': '正弦波', 'random': '随机', 'step': '阶梯波',
+                'toggle': '切换', 'alarm': '报警', 'counter': '计数器', 'constant': '常量'
+            };
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${v.name}</td><td>${v.type}</td><td>${v.mode}</td><td id="opcua-var-${v.name}">-</td>`;
+            tr.innerHTML = `<td title="${v.description || v.name}">${v.name}<br><small style="color:var(--text-muted)">${v.description || ''}</small></td><td>${v.type}</td><td>${modeNames[v.mode] || v.mode}</td><td id="opcua-var-${v.name}">-</td>`;
             tbody.appendChild(tr);
         });
         // 立即获取当前值
@@ -4392,13 +4399,17 @@ async function opcuaRefreshValues() {
             console.log('No values returned');
             return;
         }
+        const varTypes = window.opcuaVariableTypes || {};
         for (const [name, data] of Object.entries(result.values)) {
             const td = document.getElementById(`opcua-var-${name}`);
             if (td) {
+                const varType = varTypes[name] || '';
                 let displayValue = data.value;
-                if (typeof data.value === 'number') {
-                    displayValue = data.value.toFixed(2);
-                } else if (typeof data.value === 'boolean') {
+                if (varType === 'Int32' || varType === 'Int16' || varType === 'UInt32' || varType === 'UInt16') {
+                    displayValue = Math.round(data.value);
+                } else if (varType === 'Float' || varType === 'Double') {
+                    displayValue = typeof data.value === 'number' ? data.value.toFixed(2) : data.value;
+                } else if (varType === 'Boolean') {
                     displayValue = data.value ? 'true' : 'false';
                 }
                 td.textContent = displayValue;
@@ -4548,13 +4559,48 @@ async function opcuaWrite() {
 
     // 根据节点类型转换值
     let writeValue = value;
-    // 尝试解析为数字
-    if (!isNaN(value) && value.trim() !== '') {
+
+    // 根据变量类型进行验证和转换
+    const varTypes = window.opcuaVariableTypes || {};
+    // 尝试从节点ID提取变量名（如 ns=2;s=Temperature -> Temperature）
+    const varNameMatch = nodeId.match(/s=(\w+)/);
+    const varName = varNameMatch ? varNameMatch[1] : '';
+    const varType = varTypes[varName] || '';
+
+    if (varType === 'Int32' || varType === 'Int16' || varType === 'UInt32' || varType === 'UInt16') {
+        if (isNaN(value) || value.trim() === '') {
+            showToast('请输入整数值', 'error');
+            return;
+        }
+        writeValue = Math.round(parseFloat(value));
+        if (!isFinite(writeValue)) {
+            showToast('数值无效', 'error');
+            return;
+        }
+    } else if (varType === 'Float' || varType === 'Double') {
+        if (isNaN(value) || value.trim() === '') {
+            showToast('请输入数值', 'error');
+            return;
+        }
         writeValue = parseFloat(value);
+        if (!isFinite(writeValue)) {
+            showToast('数值无效', 'error');
+            return;
+        }
+    } else if (varType === 'Boolean') {
+        if (value.toLowerCase() !== 'true' && value.toLowerCase() !== 'false') {
+            showToast('布尔类型请输入 true 或 false', 'error');
+            return;
+        }
+        writeValue = value.toLowerCase() === 'true';
+    } else {
+        // 未知类型，尝试自动识别
+        if (!isNaN(value) && value.trim() !== '') {
+            writeValue = parseFloat(value);
+        }
+        if (value.toLowerCase() === 'true') writeValue = true;
+        if (value.toLowerCase() === 'false') writeValue = false;
     }
-    // 尝试解析为布尔值
-    if (value.toLowerCase() === 'true') writeValue = true;
-    if (value.toLowerCase() === 'false') writeValue = false;
 
     const result = await apiRequest('/api/industrial/opcua_client/write/', 'POST', { agent_id: selectedClientAgentId, node_id: nodeId, value: writeValue });
     const div = document.getElementById('opcua-rw-result');
