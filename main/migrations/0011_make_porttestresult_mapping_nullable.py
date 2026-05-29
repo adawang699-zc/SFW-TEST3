@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('main', '0009_agentlock_portmapping_porttestresult'),
+        ('main', '0010_merge_20260528_2216'),
     ]
 
     operations = [
