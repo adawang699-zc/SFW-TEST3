@@ -372,7 +372,13 @@ class OpcUaClient:
             await client.connect()
             servers = await client.find_servers()
             await client.disconnect()
-            return (True, [s.ServerName.Text if hasattr(s.ServerName, 'Text') else str(s.ServerName) for s in servers], "发现成功")
+            result_list = []
+            for s in servers:
+                # ApplicationDescription 有 ApplicationName 属性 (LocalizedText)
+                name = s.ApplicationName.Text if hasattr(s.ApplicationName, 'Text') else str(s.ApplicationName)
+                uri = s.ApplicationUri if hasattr(s, 'ApplicationUri') else ''
+                result_list.append({'name': name, 'uri': uri})
+            return (True, result_list, "发现成功")
         except Exception as e:
             return (False, [], f"发现失败: {e}")
 
