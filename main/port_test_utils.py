@@ -341,6 +341,42 @@ class PortTestManager:
         try:
             import json
 
+            # 0. 检查并恢复 Agent 网口状态（确保所有网口都是 UP）
+            if progress_callback:
+                progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'prepare', 'message': '检查 Agent 网口状态...'})}\n\n")
+
+            for agent in agents:
+                agent_iface = agent.interface.name if agent.interface else None
+                if not agent_iface:
+                    continue
+
+                # 获取 Agent 网口状态
+                success, result, error = forward_to_agent(
+                    agent, 'GET', f'/api/interface/status?interface={agent_iface}',
+                    timeout=5
+                )
+
+                if success and result:
+                    # 如果网口是 DOWN，先 UP
+                    if result.get('state') == 'DOWN' or result.get('operstate') == 'DOWN':
+                        logger.info(f"Agent {agent.agent_id} 网口 {agent_iface} 是 DOWN，正在恢复...")
+                        if progress_callback:
+                            progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'restore', 'agent': agent.agent_id, 'message': f'恢复 {agent_iface} 为 UP 状态...'})}\n\n")
+
+                        # UP 网口
+                        success, result, error = forward_to_agent(
+                            agent, 'POST', '/api/interface/up',
+                            data={'interface': agent_iface},
+                            timeout=5
+                        )
+                        if success:
+                            logger.info(f"Agent {agent.agent_id} 网口 {agent_iface} 已恢复为 UP")
+                        else:
+                            logger.warning(f"恢复 Agent 网口失败: {error}")
+
+            # 等待网口状态稳定
+            time.sleep(2)
+
             # 1. 获取防火墙初始状态
             if progress_callback:
                 progress_callback(f"data: {json.dumps({'type': 'progress', 'step': 'init', 'message': '获取防火墙初始网口状态...'})}\n\n")
