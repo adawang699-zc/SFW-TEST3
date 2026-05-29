@@ -336,8 +336,14 @@ class OpcUaClient:
             return (False, None, "客户端未初始化")
 
         try:
+            from asyncua import ua
             obj = self._client.get_node(object_node)
-            method = await obj.get_child(method_name)
+
+            # 使用 BrowsePath 获取方法节点
+            # 方法名格式: "2:ResetCounter" 表示命名空间 2 下的方法
+            browse_path = [ua.QualifiedName(method_name, 2)]
+            method = await obj.get_child(browse_path)
+
             result = await obj.call_method(method, *(args or []))
             return (True, result, "调用成功")
         except Exception as e:
@@ -411,13 +417,22 @@ class OpcUaClient:
     # 订阅管理
     _subscription: Optional[Any] = None
     _monitored_items: Dict[str, Any] = {}
+    _subscription_handler: Optional[Any] = None  # 订阅数据处理器
 
     async def _create_subscription_async(self, interval: int) -> Tuple[bool, Any, str]:
         """异步创建订阅"""
         if not self._client:
             return (False, None, "未连接")
         try:
-            self._subscription = await self._client.create_subscription(interval)
+            # 创建简单的订阅处理器
+            class SubHandler:
+                """订阅数据变化处理器"""
+                def datachange_notification(self, node, val, data):
+                    logger.info(f"数据变化: {node} -> {val}")
+
+            handler = SubHandler()
+            self._subscription_handler = handler
+            self._subscription = await self._client.create_subscription(interval, handler)
             return (True, str(self._subscription), "订阅创建成功")
         except Exception as e:
             return (False, None, f"创建失败: {e}")

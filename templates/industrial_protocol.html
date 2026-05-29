@@ -4744,7 +4744,10 @@ async function opcuaExecuteMethod() {
 // OPC UA 服务发现
 async function opcuaFindServers() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-    const endpoint = document.getElementById('opcua-client-endpoint').value;
+    // 从 IP 和端口构造 endpoint
+    const ip = document.getElementById('opcua-client-ip').value;
+    const port = document.getElementById('opcua-client-port').value;
+    const endpoint = `opc.tcp://${ip}:${port}/`;
     const result = await apiRequest('/api/industrial/opcua_client/find_servers/', 'POST', {
         agent_id: selectedClientAgentId,
         endpoint: endpoint
@@ -4767,7 +4770,10 @@ async function opcuaFindServers() {
 
 async function opcuaGetEndpoints() {
     if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-    const endpoint = document.getElementById('opcua-client-endpoint').value;
+    // 从 IP 和端口构造 endpoint
+    const ip = document.getElementById('opcua-client-ip').value;
+    const port = document.getElementById('opcua-client-port').value;
+    const endpoint = `opc.tcp://${ip}:${port}/`;
     const result = await apiRequest('/api/industrial/opcua_client/endpoints/', 'POST', {
         agent_id: selectedClientAgentId,
         endpoint: endpoint
