@@ -2128,37 +2128,6 @@ function stopPortTest() {
         showToast('停止测试请求失败: ' + error.message, 'error');
     });
 }
-    if (data.type === 'progress') {
-        const container = document.getElementById('test_progress_container');
-        container.innerHTML = `测试进度: ${escapeHtml(data.current)}/${escapeHtml(data.total)} (${escapeHtml(data.percent)}%)`;
-    }
-    else if (data.type === 'scenario_result') {
-        const tbody = document.getElementById('results_body');
-        const r = data.result;
-        const resultClass = r.result === 'PASS' ? 'success' : (r.result === 'FAIL' ? 'danger' : 'warning');
-        tbody.innerHTML += `
-            <tr class="${resultClass}">
-                <td>${escapeHtml(r.scenario_id)}</td>
-                <td>${escapeHtml(r.autoneg_config) || '-'}</td>
-                <td>${escapeHtml(r.speed_config) || '-'}</td>
-                <td>${escapeHtml(r.duplex_config) || '-'}</td>
-                <td>${escapeHtml(r.firewall_speed)}/${escapeHtml(r.firewall_duplex)}</td>
-                <td><strong>${escapeHtml(r.result)}</strong></td>
-            </tr>
-        `;
-    }
-    else if (data.type === 'complete') {
-        document.getElementById('test_progress_container').innerHTML = '<span style="color: var(--success);">测试完成</span>';
-        document.getElementById('start_port_test').style.display = 'inline-block';
-        document.getElementById('stop_port_test').style.display = 'none';
-        if (portTestWebSocket) {
-            portTestWebSocket.close();
-        }
-    }
-    else if (data.type === 'error') {
-        showToast('测试错误: ' + escapeHtml(data.message), 'error');
-    }
-}
 
 // 页面加载时初始化网口管理数据
 document.addEventListener('DOMContentLoaded', function() {
