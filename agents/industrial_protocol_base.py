@@ -6444,6 +6444,17 @@ def opcua_server_variables():
     return jsonify({'success': True, 'variables': variables})
 
 
+@app.route('/api/industrial_protocol/opcua_server/values', methods=['GET', 'OPTIONS'])
+def opcua_server_values():
+    """获取所有变量的当前值"""
+    if request.method == 'OPTIONS':
+        from flask import make_response
+        return make_response('', 200)
+
+    values = opcua_server.get_values()
+    return jsonify({'success': True, 'values': values})
+
+
 @app.route('/api/industrial_protocol/opcua_server/history/<variable>', methods=['GET', 'OPTIONS'])
 def opcua_server_history(variable):
     """获取历史数据"""

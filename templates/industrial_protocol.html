@@ -4305,6 +4305,7 @@ async function opcuaServerToggle() {
     if (opcuaServerRunning) {
         // 停止 - 先显示停止中状态
         setServerButtonLoading('opcua-server-toggle-btn', '停止中...');
+        opcuaStopValuesRefresh();
         const result = await apiRequest('/api/industrial/opcua_server/stop/', 'POST', { agent_id: selectedServerAgentId });
         if (result.success) {
             opcuaServerRunning = false;
@@ -4333,6 +4334,7 @@ async function opcuaServerToggle() {
             document.getElementById('opcua-variables-section').style.display = 'block';
             showToast('OPC UA Server 启动成功', 'success');
             opcuaRefreshVariables();
+            opcuaStartValuesRefresh();
         } else {
             updateOpcuaServerButtonState(false);  // 恢复原状态
             showToast('启动失败: ' + (result.message || result.error), 'error');
@@ -4351,6 +4353,41 @@ async function opcuaRefreshVariables() {
             tr.innerHTML = `<td>${v.name}</td><td>${v.type}</td><td>${v.mode}</td><td id="opcua-var-${v.name}">-</td>`;
             tbody.appendChild(tr);
         });
+        // 立即获取当前值
+        opcuaRefreshValues();
+    }
+}
+
+// 获取并刷新变量当前值
+async function opcuaRefreshValues() {
+    if (!selectedServerAgentId || !opcuaServerRunning) return;
+    const result = await apiRequest('/api/industrial/opcua_server/values/', 'GET', { agent_id: selectedServerAgentId });
+    if (result.success && result.values) {
+        for (const [name, data] of Object.entries(result.values)) {
+            const td = document.getElementById(`opcua-var-${name}`);
+            if (td) {
+                let displayValue = data.value;
+                if (typeof data.value === 'number') {
+                    displayValue = data.value.toFixed(2);
+                } else if (typeof data.value === 'boolean') {
+                    displayValue = data.value ? 'true' : 'false';
+                }
+                td.textContent = displayValue;
+            }
+        }
+    }
+}
+
+// OPC UA 变量值自动刷新定时器
+let opcuaValuesInterval = null;
+function opcuaStartValuesRefresh() {
+    if (opcuaValuesInterval) clearInterval(opcuaValuesInterval);
+    opcuaValuesInterval = setInterval(opcuaRefreshValues, 1000);
+}
+function opcuaStopValuesRefresh() {
+    if (opcuaValuesInterval) {
+        clearInterval(opcuaValuesInterval);
+        opcuaValuesInterval = null;
     }
 }
 
@@ -4475,14 +4512,36 @@ async function opcuaWrite() {
     const value = document.getElementById('opcua-rw-value').value;
     if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
     if (value === '') { showToast('请输入写入值', 'error'); return; }
+
+    // 根据节点类型转换值
     let writeValue = value;
-    if (!isNaN(value)) writeValue = parseFloat(value);
+    // 尝试解析为数字
+    if (!isNaN(value) && value.trim() !== '') {
+        writeValue = parseFloat(value);
+    }
+    // 尝试解析为布尔值
+    if (value.toLowerCase() === 'true') writeValue = true;
+    if (value.toLowerCase() === 'false') writeValue = false;
+
     const result = await apiRequest('/api/industrial/opcua_client/write/', 'POST', { agent_id: selectedClientAgentId, node_id: nodeId, value: writeValue });
     const div = document.getElementById('opcua-rw-result');
     if (result.success) {
         div.innerHTML = `<span style="color: var(--success);">写入成功</span>`;
     } else {
         div.innerHTML = `<span style="color: red;">写入失败: ${result.message || ''}</span>`;
+        // 检查是否连接断开
+        const errorMsg = result.message || result.error || '';
+        if (errorMsg.includes('断开') || errorMsg.includes('未连接') || errorMsg.includes('Connection') || errorMsg.includes('Session')) {
+            opcuaClientConnected = false;
+            activeConnections.opcua_client = false;
+            updateOpcuaClientButtonState(false);
+            document.getElementById('opcua-browse-section').style.display = 'none';
+            document.getElementById('opcua-readwrite-section').style.display = 'none';
+            document.getElementById('opcua-discovery-section').style.display = 'none';
+            document.getElementById('opcua-subscription-section').style.display = 'none';
+            document.getElementById('opcua-history-read-section').style.display = 'none';
+            showToast('连接已断开', 'warning');
+        }
     }
 }
 

@@ -393,6 +393,33 @@ class OpcUaServer:
             })
         return result
 
+    def get_values(self) -> Dict[str, Any]:
+        """获取所有变量的当前值（同步方式，从线程读取）"""
+        result = {}
+        if not self._running:
+            return result
+
+        # 由于 asyncua 是异步的，我们需要通过事件循环读取
+        # 这里使用一个简单的同步方式：从 _datastore 获取配置，计算当前值
+        elapsed = time.time() - self._start_timestamp if self._start_timestamp > 0 else 0
+
+        for name, config in self._datastore.items():
+            mode = config.get('mode', 'constant')
+            params = config.get('params', {})
+            value = generate_simulated_value({'mode': mode, 'params': params}, elapsed)
+
+            # 特殊处理：报警状态
+            if mode == 'alarm':
+                value = self._alarm_active
+
+            result[name] = {
+                'value': value,
+                'type': config.get('type'),
+                'mode': mode
+            }
+
+        return result
+
     def get_history(self, variable: str, count: int = 100) -> List[Dict]:
         """获取历史数据"""
         if variable in self._history_buffers:

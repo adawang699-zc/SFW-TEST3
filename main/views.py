@@ -4218,7 +4218,7 @@ def api_industrial_opcua_server(request, action, variable=None):
             # history/Temperature -> opcua_server/history/Temperature
             path = f"opcua_server/{action}/{variable}"
             result = _proxy_industrial_request(agent_id, path, method='GET', params=data)
-        elif action in ('status', 'variables'):
+        elif action in ('status', 'variables', 'values'):
             result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='GET', data=data)
         else:
             result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='POST', data=data)
