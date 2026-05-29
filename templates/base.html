@@ -643,7 +643,17 @@
                     'X-CSRFToken': getCookie('csrftoken') || ''
                 }
             };
-            if (data) options.body = JSON.stringify(data);
+
+            // GET/HEAD 请求不能有 body，data 作为 query params
+            if (method === 'GET' || method === 'HEAD') {
+                if (data && Object.keys(data).length > 0) {
+                    const params = new URLSearchParams(data);
+                    url = url + (url.includes('?') ? '&' : '?') + params.toString();
+                }
+            } else {
+                // POST/PUT/PATCH 等请求使用 body
+                if (data) options.body = JSON.stringify(data);
+            }
 
             try {
                 const response = await fetch(url, options);

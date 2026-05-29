@@ -6015,3 +6015,254 @@ def api_get_port_test_results(request, test_id):
         'tested_at'
     )
     return JsonResponse({'success': True, 'results': list(results)})
+
+
+# 全局测试进度存储
+_test_progress_store = {}
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_start_port_test_v2(request):
+    """开始网口测试 V2 - 单网口多场景测试"""
+    try:
+        import json
+        import threading
+        import time
+        from datetime import datetime
+
+        data = json.loads(request.body)
+        device_id = data.get('device_id')
+        firewall_port = data.get('firewall_port')  # 要测试的防火墙网口
+        agent_id = data.get('agent_id')  # 对应的 Agent ID
+        agent_interface = data.get('agent_interface')  # Agent 网口
+        scenarios = data.get('scenarios', [])  # 测试场景列表
+
+        # 输入验证
+        if not device_id:
+            return JsonResponse({'success': False, 'error': '缺少device_id'})
+        if not firewall_port:
+            return JsonResponse({'success': False, 'error': '缺少firewall_port'})
+        if not agent_id:
+            return JsonResponse({'success': False, 'error': '缺少agent_id'})
+        if not agent_interface:
+            return JsonResponse({'success': False, 'error': '缺少agent_interface'})
+        if not scenarios:
+            return JsonResponse({'success': False, 'error': '请添加测试场景'})
+
+        # 生成测试 ID
+        test_id = f"port_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # 初始化进度存储
+        _test_progress_store[test_id] = []
+
+        # 创建测试线程
+        test_thread = threading.Thread(
+            target=run_port_test_v2,
+            args=(test_id, device_id, firewall_port, agent_id, agent_interface, scenarios),
+            daemon=True
+        )
+        test_thread.start()
+
+        return JsonResponse({
+            'success': True,
+            'test_id': test_id,
+            'total_scenarios': len(scenarios)
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def run_port_test_v2(test_id, device_id, firewall_port, agent_id, agent_interface, scenarios):
+    """执行网口测试 V2 - 后台线程"""
+    import json
+    import time
+    import logging
+    from main.models import TestDevice, LocalAgent, PortTestResult
+    from main.port_test_utils import (
+        get_firewall_port_info, configure_agent_port, restore_agent_port,
+        forward_to_agent
+    )
+
+    logger = logging.getLogger('main')
+
+    def push_progress(current, total, message):
+        """推送进度消息到存储"""
+        percent = int(current / total * 100) if total > 0 else 0
+        _test_progress_store[test_id].append({
+            'type': 'progress',
+            'test_id': test_id,
+            'current': current,
+            'total': total,
+            'percent': percent,
+            'message': message
+        })
+
+    try:
+        device = TestDevice.objects.get(id=device_id)
+        agent = LocalAgent.objects.get(agent_id=agent_id)
+
+        push_progress(0, len(scenarios), f'开始测试 {firewall_port}...')
+
+        for idx, scenario in enumerate(scenarios):
+            push_progress(idx + 1, len(scenarios), f'执行场景 {idx + 1}: 自协商={scenario["autoneg"]}')
+
+            result = {
+                'scenario_id': scenario['id'],
+                'autoneg': scenario['autoneg'],
+                'speed': scenario['speed'],
+                'duplex': scenario['duplex'],
+                'link': 'unknown',
+                'speed': 'unknown',
+                'duplex': 'unknown',
+                'result': 'ERROR'
+            }
+
+            try:
+                # 1. 配置 Agent 网口
+                success, error = configure_agent_port(
+                    agent, agent_interface,
+                    scenario['autoneg'], scenario['speed'], scenario['duplex']
+                )
+
+                if not success:
+                    result['result'] = 'ERROR'
+                    result['error'] = f'配置Agent网口失败: {error}'
+                    _test_progress_store[test_id].append({
+                        'type': 'scenario_result',
+                        'scenario': scenario,
+                        'result': result
+                    })
+                    continue
+
+                # 2. 等待协商生效
+                time.sleep(3)
+
+                # 3. 检查防火墙网口状态
+                firewall_info = get_firewall_port_info(device, firewall_port)
+                result['link'] = firewall_info['link']
+                result['speed'] = firewall_info['speed']
+                result['duplex'] = firewall_info['duplex']
+
+                # 4. 判断结果
+                if scenario['autoneg'] == 'on':
+                    # 自协商开，应协商到最高速率全双工
+                    if firewall_info['link'] == 'yes' and \
+                       '1000' in firewall_info['speed'] and \
+                       firewall_info['duplex'] == 'Full':
+                        result['result'] = 'PASS'
+                    else:
+                        result['result'] = 'FAIL'
+                else:
+                    # 自协商关，应匹配强制配置
+                    expected_speed = f"{scenario['speed']}Mb/s"
+                    expected_duplex = scenario['duplex'].capitalize()
+                    if firewall_info['link'] == 'yes' and \
+                       firewall_info['speed'] == expected_speed and \
+                       firewall_info['duplex'] == expected_duplex:
+                        result['result'] = 'PASS'
+                    else:
+                        result['result'] = 'FAIL'
+
+                # 保存结果
+                PortTestResult.objects.create(
+                    device=device,
+                    test_session_id=test_id,
+                    scenario_id=scenario['id'],
+                    autoneg_config=scenario['autoneg'],
+                    speed_config=scenario['speed'],
+                    duplex_config=scenario['duplex'],
+                    firewall_speed=firewall_info['speed'],
+                    firewall_duplex=firewall_info['duplex'],
+                    firewall_link=firewall_info['link'],
+                    result=result['result'],
+                    ethtool_output=firewall_info.get('raw_output', ''),
+                    error_message=result.get('error', '')
+                )
+
+                _test_progress_store[test_id].append({
+                    'type': 'scenario_result',
+                    'scenario': scenario,
+                    'result': result
+                })
+
+            except Exception as e:
+                logger.exception(f'场景 {idx + 1} 测试异常: {e}')
+                result['result'] = 'ERROR'
+                result['error'] = str(e)
+                _test_progress_store[test_id].append({
+                    'type': 'scenario_result',
+                    'scenario': scenario,
+                    'result': result
+                })
+
+            finally:
+                # 每个场景完成后都恢复网口（确保后续场景正常）
+                restore_agent_port(agent, agent_interface)
+                time.sleep(1)
+
+        # 所有场景完成，最终恢复自协商
+        restore_agent_port(agent, agent_interface)
+
+        _test_progress_store[test_id].append({
+            'type': 'complete',
+            'test_id': test_id,
+            'total': len(scenarios)
+        })
+
+        logger.info(f'测试 {test_id} 完成')
+
+    except Exception as e:
+        logger.exception(f'测试 {test_id} 异常: {e}')
+        # 异常时也要恢复网口
+        try:
+            agent = LocalAgent.objects.get(agent_id=agent_id)
+            restore_agent_port(agent, agent_interface)
+        except:
+            pass
+
+        _test_progress_store[test_id].append({
+            'type': 'error',
+            'test_id': test_id,
+            'message': str(e)
+        })
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def api_port_test_progress(request, test_id):
+    """获取测试进度 - SSE 流式响应"""
+    import json
+    import time
+
+    def generate_progress():
+        max_wait = 300  # 最大等待 5 分钟
+        start_time = time.time()
+        last_index = 0
+
+        while time.time() - start_time < max_wait:
+            # 获取当前进度消息
+            messages = _test_progress_store.get(test_id, [])
+            current_len = len(messages)
+
+            # 发送新的消息
+            for i in range(last_index, current_len):
+                yield f"data: {json.dumps(messages[i])}\n\n"
+                last_index = current_len
+
+            # 检查是否完成
+            if current_len > 0:
+                last_msg = messages[-1] if messages else None
+                if last_msg and last_msg.get('type') in ['complete', 'error']:
+                    # 清理存储
+                    if test_id in _test_progress_store:
+                        del _test_progress_store[test_id]
+                    break
+
+            time.sleep(0.5)
+
+    response = StreamingHttpResponse(generate_progress(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response

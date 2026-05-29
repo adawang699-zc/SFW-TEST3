@@ -4302,6 +4302,26 @@ function updateOpcuaClientButtonState(connected) {
 async function opcuaServerToggle() {
     if (!selectedServerAgentId) { showToast('请先选择 Server Agent', 'error'); return; }
 
+    // 先检查后端实际状态
+    const statusResult = await apiRequest('/api/industrial/opcua_server/status/', 'GET', { agent_id: selectedServerAgentId });
+    const backendRunning = statusResult.success && statusResult.status && statusResult.status.running;
+
+    // 同步前端状态
+    if (backendRunning !== opcuaServerRunning) {
+        opcuaServerRunning = backendRunning;
+        activeConnections.opcua_server = backendRunning;
+        updateOpcuaServerButtonState(backendRunning);
+        if (backendRunning) {
+            document.getElementById('opcua-variables-section').style.display = 'block';
+            opcuaRefreshVariables();
+            opcuaStartValuesRefresh();
+        } else {
+            document.getElementById('opcua-variables-section').style.display = 'none';
+            document.getElementById('opcua-history-section').style.display = 'none';
+            opcuaStopValuesRefresh();
+        }
+    }
+
     if (opcuaServerRunning) {
         // 停止 - 先显示停止中状态
         setServerButtonLoading('opcua-server-toggle-btn', '停止中...');

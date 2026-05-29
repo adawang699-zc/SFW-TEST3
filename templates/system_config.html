@@ -264,36 +264,64 @@
             <!-- 右侧: 测试配置和结果 -->
             <div>
                 <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">测试参数配置</div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
-                        <div class="form-group">
-                            <label class="form-label">自协商</label>
-                            <select class="form-input" id="port_autoneg">
-                                <option value="on">开启</option>
-                                <option value="off">关闭</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">速率</label>
-                            <select class="form-input" id="port_speed">
-                                <option value="10">10M</option>
-                                <option value="100">100M</option>
-                                <option value="1000">1000M</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">双工</label>
-                            <select class="form-input" id="port_duplex">
-                                <option value="full">全双工</option>
-                                <option value="half">半双工</option>
-                            </select>
-                        </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">测试配置</div>
+
+                    <!-- 选择防火墙网口 -->
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label">选择防火墙网口（仅显示链路中的网口）</label>
+                        <select class="form-input" id="test_firewall_port" onchange="onTestPortChange()">
+                            <option value="">-- 请先检测拓扑 --</option>
+                        </select>
+                        <div id="test_port_info" style="margin-top: 8px; color: var(--text-muted); font-size: 0.85rem;"></div>
                     </div>
-                    <div style="margin-top: 12px;">
-                        <button class="btn btn-success" id="start_port_test" onclick="startPortTest()">开始测试</button>
-                        <button class="btn btn-danger" id="stop_port_test" style="display: none;" onclick="stopPortTest()">停止测试</button>
+
+                    <!-- 添加测试场景 -->
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">添加测试场景</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label class="form-label">自协商</label>
+                                <select class="form-input" id="scene_autoneg" onchange="toggleSpeedDuplex()">
+                                    <option value="on">开启</option>
+                                    <option value="off">关闭</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">速率</label>
+                                <select class="form-input" id="scene_speed">
+                                    <option value="10">10M</option>
+                                    <option value="100">100M</option>
+                                    <option value="1000">1000M</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">双工</label>
+                                <select class="form-input" id="scene_duplex">
+                                    <option value="full">全双工</option>
+                                    <option value="half">半双工</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" style="margin-top: 12px;" onclick="addTestScenario()">
+                            <i class="fas fa-plus"></i> 添加场景
+                        </button>
                     </div>
-                    <div id="test_progress_container" style="margin-top: 12px;"></div>
+
+                    <!-- 测试场景列表 -->
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">
+                            测试场景列表
+                            <button class="btn btn-sm btn-secondary" style="margin-left: 12px; padding: 2px 10px; font-size: 0.8rem;" onclick="clearTestScenarios()">清空</button>
+                        </div>
+                        <div id="scenario_list_container" style="min-height: 60px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px;">
+                            <div style="color: var(--text-muted); font-size: 0.85rem;">暂无测试场景</div>
+                        </div>
+                        <div style="margin-top: 16px;">
+                            <button class="btn btn-success" id="start_port_test" onclick="startPortTest()">开始测试</button>
+                            <button class="btn btn-danger" id="stop_port_test" style="display: none;" onclick="stopPortTest()">停止测试</button>
+                        </div>
+                        <div id="test_progress_container" style="margin-top: 12px;"></div>
+                    </div>
                 </div>
 
                 <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px;">
@@ -302,9 +330,7 @@
                         <thead>
                             <tr>
                                 <th>场景</th>
-                                <th>自协商</th>
-                                <th>速率</th>
-                                <th>双工</th>
+                                <th>配置</th>
                                 <th>防火墙状态</th>
                                 <th>结果</th>
                             </tr>
@@ -1764,9 +1790,13 @@ function detectTopology() {
                                 topologyMappings = data.mappings || mappings;
                                 if (topologyMappings.length === 0) {
                                     container.innerHTML = '<div style="color: var(--warning-color); padding: 12px; background: rgba(255,193,7,0.1); border-radius: 8px;">⚠️ 未发现拓扑映射，请检查Agent网口是否连接到防火墙已连接网口</div>';
+                                    // 清空防火墙网口选择
+                                    document.getElementById('test_firewall_port').innerHTML = '<option value="">-- 请先检测拓扑 --</option>';
                                 } else {
                                     // 最终渲染拓扑图
                                     renderTopologyDiagram(topologyMappings, container, deviceName);
+                                    // 更新防火墙网口下拉选择（只显示链路中的网口）
+                                    updateFirewallPortSelect(topologyMappings);
                                 }
                                 showToast(data.success ? '拓扑检测完成' : '拓扑检测失败: ' + escapeHtml(data.error), data.success ? 'success' : 'error');
                             }
@@ -1788,22 +1818,169 @@ function detectTopology() {
     });
 }
 
+// ========== 测试场景管理 ==========
+
+let testScenarios = [];  // 测试场景列表
+let currentTestIndex = 0;  // 当前测试场景索引
+let isTestRunning = false;  // 测试是否正在运行
+
+// 更新防火墙网口下拉选择（只显示链路中的网口）
+function updateFirewallPortSelect(mappings) {
+    const select = document.getElementById('test_firewall_port');
+    select.innerHTML = '<option value="">-- 请选择网口 --</option>';
+
+    mappings.forEach(m => {
+        select.innerHTML += `<option value="${escapeHtml(m.firewall_interface)}">${escapeHtml(m.firewall_interface)} (Agent: ${escapeHtml(m.agent_interface)})</option>`;
+    });
+}
+
+// 选择防火墙网口时显示对应的 Agent 网口信息
+function onTestPortChange() {
+    const firewallPort = document.getElementById('test_firewall_port').value;
+    const infoDiv = document.getElementById('test_port_info');
+
+    if (!firewallPort) {
+        infoDiv.innerHTML = '';
+        return;
+    }
+
+    // 找到对应的 Agent 网口
+    const mapping = topologyMappings.find(m => m.firewall_interface === firewallPort);
+    if (mapping) {
+        infoDiv.innerHTML = `对应的 Agent 网口: <strong style="color: var(--accent-color);">${escapeHtml(mapping.agent_interface)}</strong>`;
+    } else {
+        infoDiv.innerHTML = '<span style="color: var(--warning-color);">未找到对应的 Agent 网口</span>';
+    }
+}
+
+// 自协商开关时禁用/启用速率和双工选择
+function toggleSpeedDuplex() {
+    const autoneg = document.getElementById('scene_autoneg').value;
+    const speedSelect = document.getElementById('scene_speed');
+    const duplexSelect = document.getElementById('scene_duplex');
+
+    if (autoneg === 'on') {
+        // 自协商开启时，速率和双工自动协商，禁用选择
+        speedSelect.disabled = true;
+        duplexSelect.disabled = true;
+        speedSelect.value = '1000';
+        duplexSelect.value = 'full';
+    } else {
+        // 自协商关闭时，启用速率和双工选择
+        speedSelect.disabled = false;
+        duplexSelect.disabled = false;
+    }
+}
+
+// 初始化时调用
+toggleSpeedDuplex();
+
+// 添加测试场景
+function addTestScenario() {
+    const autoneg = document.getElementById('scene_autoneg').value;
+    const speed = document.getElementById('scene_speed').value;
+    const duplex = document.getElementById('scene_duplex').value;
+
+    const scenario = {
+        id: testScenarios.length + 1,
+        autoneg: autoneg,
+        speed: autoneg === 'on' ? '1000' : speed,
+        duplex: autoneg === 'on' ? 'full' : duplex
+    };
+
+    testScenarios.push(scenario);
+    renderScenarioList();
+    showToast('添加测试场景成功', 'success');
+}
+
+// 渲染场景列表
+function renderScenarioList() {
+    const container = document.getElementById('scenario_list_container');
+
+    if (testScenarios.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem;">暂无测试场景</div>';
+        return;
+    }
+
+    let html = '';
+    testScenarios.forEach((s, idx) => {
+        const autonegText = s.autoneg === 'on' ? '开启自协商' : `关闭自协商, ${s.speed}M, ${s.duplex === 'full' ? '全双工' : '半双工'}`;
+        const bgColor = s.autoneg === 'on' ? 'rgba(0, 168, 150, 0.1)' : 'rgba(231, 76, 60, 0.1)';
+        const borderColor = s.autoneg === 'on' ? 'rgba(0, 168, 150, 0.3)' : 'rgba(231, 76, 60, 0.3)';
+
+        html += `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 6px; margin-bottom: 8px;">
+            <div>
+                <span style="color: var(--text-secondary); font-size: 0.85rem;">场景 ${idx + 1}:</span>
+                <span style="color: var(--text-primary); font-size: 0.9rem; margin-left: 8px;">${autonegText}</span>
+            </div>
+            <button class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="removeScenario(${idx})">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+// 移除场景
+function removeScenario(index) {
+    testScenarios.splice(index, 1);
+    // 重新编号
+    testScenarios.forEach((s, idx) => s.id = idx + 1);
+    renderScenarioList();
+}
+
+// 清空场景
+function clearTestScenarios() {
+    testScenarios = [];
+    renderScenarioList();
+}
+
+// ========== 开始测试 ==========
+
 function startPortTest() {
-    const deviceId = document.getElementById('port_device').value;
-    if (!deviceId || topologyMappings.length === 0) {
+    // 1. 检查是否完成拓扑检测
+    if (topologyMappings.length === 0) {
         showToast('请先完成拓扑检测', 'warning');
         return;
     }
 
-    const autoneg = document.getElementById('port_autoneg').value;
-    const speed = document.getElementById('port_speed').value;
-    const duplex = document.getElementById('port_duplex').value;
+    // 2. 检查是否选择了防火墙网口
+    const firewallPort = document.getElementById('test_firewall_port').value;
+    if (!firewallPort) {
+        showToast('请选择要测试的防火墙网口', 'warning');
+        return;
+    }
+
+    // 3. 检查是否有测试场景
+    if (testScenarios.length === 0) {
+        showToast('请添加至少一个测试场景', 'warning');
+        return;
+    }
+
+    // 4. 获取对应的 Agent 信息
+    const mapping = topologyMappings.find(m => m.firewall_interface === firewallPort);
+    if (!mapping) {
+        showToast('选择的防火墙网口不在链路中', 'error');
+        return;
+    }
 
     // 清空结果表格
     document.getElementById('results_body').innerHTML = '';
-    document.getElementById('test_progress_container').innerHTML = '';
+    document.getElementById('test_progress_container').innerHTML = '<div style="color: var(--accent-color);">⏳ 正在初始化测试...</div>';
 
-    fetch('/api/port-test/start/', {
+    // 设置测试状态
+    isTestRunning = true;
+    currentTestIndex = 0;
+    document.getElementById('start_port_test').style.display = 'none';
+    document.getElementById('stop_port_test').style.display = 'inline-block';
+
+    // 发送测试请求
+    const deviceId = document.getElementById('port_device').value;
+
+    fetch('/api/port-test/start-v2/', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1811,26 +1988,123 @@ function startPortTest() {
         },
         body: JSON.stringify({
             device_id: deviceId,
-            mappings: topologyMappings,
-            autoneg_options: autoneg === 'on' ? ['on'] : ['off'],
-            speed_options: [speed],
-            duplex_options: [duplex]
+            firewall_port: firewallPort,
+            agent_id: mapping.agent_id,
+            agent_interface: mapping.agent_interface,
+            scenarios: testScenarios
         })
     })
     .then(r => r.json())
     .then(data => {
         if (data.success) {
             currentPortTestId = data.test_id;
-            connectPortTestWebSocket(data.websocket_url);
-            document.getElementById('start_port_test').style.display = 'none';
-            document.getElementById('stop_port_test').style.display = 'inline-block';
+            // 使用 SSE 流式接收结果
+            startTestProgressStream(data.test_id);
         } else {
             showToast('启动测试失败: ' + escapeHtml(data.error), 'error');
+            resetTestState();
         }
     })
     .catch(error => {
         showToast('启动测试请求失败: ' + error.message, 'error');
+        resetTestState();
     });
+}
+
+// 使用 SSE 流式接收测试进度
+function startTestProgressStream(testId) {
+    const progressContainer = document.getElementById('test_progress_container');
+
+    fetch(`/api/port-test/progress/${testId}/`)
+    .then(response => {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        function readStream() {
+            return reader.read().then(({ done, value }) => {
+                if (done) {
+                    return;
+                }
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.substring(6));
+                            handleTestProgress(data, progressContainer);
+                        } catch (e) {
+                            console.error('解析 SSE 数据失败:', e);
+                        }
+                    }
+                }
+
+                return readStream();
+            });
+        }
+
+        return readStream();
+    })
+    .catch(error => {
+        showToast('接收测试进度失败: ' + error.message, 'error');
+        resetTestState();
+    });
+}
+
+// 处理测试进度消息
+function handleTestProgress(data, container) {
+    if (data.type === 'progress') {
+        container.innerHTML = `<div style="color: var(--accent-color);">
+            测试进度: ${escapeHtml(data.current)}/${escapeHtml(data.total)} (${escapeHtml(data.percent)}%)
+            <br><span style="font-size: 0.85rem;">${escapeHtml(data.message)}</span>
+        </div>`;
+    }
+    else if (data.type === 'scenario_result') {
+        // 添加结果到表格
+        addTestResult(data.scenario, data.result);
+    }
+    else if (data.type === 'complete') {
+        container.innerHTML = `<div style="color: var(--success-color);">✓ 测试完成</div>`;
+        showToast('测试完成', 'success');
+        resetTestState();
+    }
+    else if (data.type === 'error') {
+        container.innerHTML = `<div style="color: var(--error-color);">✗ 测试失败: ${escapeHtml(data.message)}</div>`;
+        showToast('测试失败: ' + data.message, 'error');
+        resetTestState();
+    }
+}
+
+// 添加测试结果到表格
+function addTestResult(scenario, result) {
+    const tbody = document.getElementById('results_body');
+
+    const configText = scenario.autoneg === 'on'
+        ? '开启自协商'
+        : `关闭 (${scenario.speed}M, ${scenario.duplex === 'full' ? '全双工' : '半双工'})`;
+
+    const statusText = `${result.link === 'yes' ? '已连接' : '未连接'}, ${result.speed}, ${result.duplex}`;
+
+    const resultClass = result.result === 'PASS' ? 'success-color' : (result.result === 'FAIL' ? 'warning-color' : 'error-color');
+
+    tbody.innerHTML += `
+    <tr>
+        <td>${escapeHtml(scenario.id)}</td>
+        <td>${escapeHtml(configText)}</td>
+        <td>${escapeHtml(statusText)}</td>
+        <td style="color: var(--${resultClass}); font-weight: 600;">${escapeHtml(result.result)}</td>
+    </tr>
+    `;
+}
+
+// 重置测试状态
+function resetTestState() {
+    isTestRunning = false;
+    document.getElementById('start_port_test').style.display = 'inline-block';
+    document.getElementById('stop_port_test').style.display = 'none';
 }
 
 function stopPortTest() {
@@ -1847,43 +2121,13 @@ function stopPortTest() {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            if (portTestWebSocket) {
-                portTestWebSocket.close();
-            }
-            document.getElementById('start_port_test').style.display = 'inline-block';
-            document.getElementById('stop_port_test').style.display = 'none';
-            showToast('测试已停止', 'info');
+            showToast('测试已停止，正在恢复网口...', 'info');
         }
     })
     .catch(error => {
         showToast('停止测试请求失败: ' + error.message, 'error');
     });
 }
-
-function connectPortTestWebSocket(url) {
-    portTestWebSocket = new WebSocket(url);
-
-    portTestWebSocket.onopen = function() {
-        console.log('网口测试WebSocket已连接');
-    };
-
-    portTestWebSocket.onmessage = function(event) {
-        const data = JSON.parse(event.data);
-        handlePortTestMessage(data);
-    };
-
-    portTestWebSocket.onclose = function() {
-        console.log('网口测试WebSocket已关闭');
-        document.getElementById('start_port_test').style.display = 'inline-block';
-        document.getElementById('stop_port_test').style.display = 'none';
-    };
-
-    portTestWebSocket.onerror = function(e) {
-        showToast('WebSocket连接错误', 'error');
-    };
-}
-
-function handlePortTestMessage(data) {
     if (data.type === 'progress') {
         const container = document.getElementById('test_progress_container');
         container.innerHTML = `测试进度: ${escapeHtml(data.current)}/${escapeHtml(data.total)} (${escapeHtml(data.percent)}%)`;
