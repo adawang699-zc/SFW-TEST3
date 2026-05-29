@@ -1327,9 +1327,30 @@
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                         <button class="btn btn-primary" onclick="opcuaRead()">读取</button>
                         <button class="btn btn-warning" onclick="opcuaWrite()">写入</button>
-                        <button class="btn btn-info" onclick="opcuaCallMethod()">调用方法</button>
                     </div>
                     <div id="opcua-rw-result" style="margin-top: 12px; padding: 8px; background: var(--bg-dark); border-radius: 4px;"></div>
+
+                    <!-- 方法调用区域 -->
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+                        <h5 style="margin-bottom: 12px;">方法调用</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
+                            <div class="form-group">
+                                <label class="form-label">选择方法</label>
+                                <select id="opcua-method-select" class="form-input" onchange="onOpcuaMethodSelectChange()">
+                                    <option value="ResetCounter">ResetCounter - 重置计数器</option>
+                                    <option value="SetMode">SetMode - 设置运行模式</option>
+                                </select>
+                            </div>
+                            <div class="form-group" id="opcua-method-param-group" style="display: none;">
+                                <label class="form-label">参数值</label>
+                                <input type="number" id="opcua-method-param" class="form-input" value="1" min="0" max="10">
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: end;">
+                                <button class="btn btn-info" onclick="opcuaExecuteMethod()">执行方法</button>
+                            </div>
+                        </div>
+                        <div id="opcua-method-result" style="margin-top: 12px; padding: 8px; background: var(--bg-dark); border-radius: 4px;"></div>
+                    </div>
                 </div>
 
                 <!-- 服务发现测试 -->
@@ -1415,6 +1436,11 @@
 
                 <div class="config-section" id="opcua-variables-section" style="display: none;">
                     <h5 style="margin-bottom: 12px;">模拟变量列表</h5>
+                    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+                        <button class="btn btn-primary" onclick="opcuaRefreshVariables()">刷新变量</button>
+                        <button class="btn btn-secondary" id="opcua-dynamic-update-btn" onclick="opcuaToggleDynamicUpdate()">动态更新: 关闭</button>
+                        <button class="btn btn-secondary" onclick="opcuaShowHistory('Temperature')">查看温度历史</button>
+                    </div>
                     <div style="overflow-x: auto;">
                         <table class="data-table" id="opcua-variables-table">
                             <thead>
@@ -1422,10 +1448,6 @@
                             </thead>
                             <tbody id="opcua-variables-tbody"></tbody>
                         </table>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button class="btn btn-primary" onclick="opcuaRefreshVariables()">刷新变量</button>
-                        <button class="btn btn-secondary" onclick="opcuaShowHistory('Temperature')">查看温度历史</button>
                     </div>
                 </div>
 
@@ -1790,6 +1812,25 @@ function doSelectAgent(agentId, type, ip) {
             btn.style.borderColor = btn.dataset.agentId === agentId ? 'var(--primary)' : 'var(--border)';
             btn.style.background = btn.dataset.agentId === agentId ? 'rgba(255, 107, 53, 0.1)' : '';
         });
+        // 自动填充目标 IP（使用另一个 agent 的 IP）
+        if (agentsData && agentsData.length >= 2) {
+            // 从 agentsData 中找到不同的 agent
+            const otherAgent = agentsData.find(a => a.agent_id !== agentId || a.id !== agentId);
+            if (otherAgent) {
+                // 优先使用业务网 IP，其次管理网 IP
+                const targetIp = otherAgent.business_ip || otherAgent.management_ip || otherAgent.ip || otherAgent.agent_ip;
+                if (targetIp) {
+                    document.getElementById('opcua-client-ip').value = targetIp;
+                    document.getElementById('modbus-client-ip').value = targetIp;
+                    document.getElementById('s7-client-ip').value = targetIp;
+                }
+            }
+        } else if (selectedServerAgentIp) {
+            // 兜底：如果已选择服务端 agent，使用其 IP
+            document.getElementById('opcua-client-ip').value = selectedServerAgentIp;
+            document.getElementById('modbus-client-ip').value = selectedServerAgentIp;
+            document.getElementById('s7-client-ip').value = selectedServerAgentIp;
+        }
         showToast(`已选择 ${agentId} (${ip}) 作为 Client Agent`, 'success');
     } else if (type === 'server') {
         selectedServerAgentId = agentId;
@@ -4265,6 +4306,24 @@ let opcuaClientConnected = false;
 let opcuaSubscriptionCreated = false;
 let opcuaMonitoredItems = [];
 let opcuaMonitorInterval = null;
+let opcuaDynamicUpdateEnabled = false;  // 动态更新状态
+
+// OPC UA 动态更新控制
+function opcuaToggleDynamicUpdate() {
+    opcuaDynamicUpdateEnabled = !opcuaDynamicUpdateEnabled;
+    const btn = document.getElementById('opcua-dynamic-update-btn');
+    if (opcuaDynamicUpdateEnabled) {
+        btn.textContent = '动态更新: 开启';
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-success');
+        opcuaStartValuesRefresh();
+    } else {
+        btn.textContent = '动态更新: 关闭';
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-secondary');
+        opcuaStopValuesRefresh();
+    }
+}
 
 // OPC UA Server 按钮状态更新函数
 function updateOpcuaServerButtonState(running) {
@@ -4357,7 +4416,7 @@ async function opcuaServerToggle() {
             document.getElementById('opcua-variables-section').style.display = 'block';
             showToast('OPC UA Server 启动成功', 'success');
             opcuaRefreshVariables();
-            opcuaStartValuesRefresh();
+            // 不自动开启动态更新，用户手动控制
         } else {
             updateOpcuaServerButtonState(false);  // 恢复原状态
             showToast('启动失败: ' + (result.message || result.error), 'error');
@@ -4379,8 +4438,10 @@ async function opcuaRefreshVariables() {
                 'sine': '正弦波', 'random': '随机', 'step': '阶梯波',
                 'toggle': '切换', 'alarm': '报警', 'counter': '计数器', 'constant': '常量'
             };
+            // 变量名格式：英文（中文）
+            const displayName = v.chinese_name ? `${v.name}（${v.chinese_name}）` : v.name;
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td title="${v.description || v.name}">${v.name}<br><small style="color:var(--text-muted)">${v.description || ''}</small></td><td>${v.type}</td><td>${modeNames[v.mode] || v.mode}</td><td id="opcua-var-${v.name}">-</td>`;
+            tr.innerHTML = `<td>${displayName}</td><td>${v.type}</td><td>${modeNames[v.mode] || v.mode}</td><td id="opcua-var-${v.name}">-</td>`;
             tbody.appendChild(tr);
         });
         // 立即获取当前值
@@ -4547,7 +4608,12 @@ async function opcuaRead() {
     const result = await apiRequest('/api/industrial/opcua_client/read/', 'POST', { agent_id: selectedClientAgentId, node_id: nodeId });
     const div = document.getElementById('opcua-rw-result');
     if (result.success) {
-        div.innerHTML = `<span style="color: var(--success);">读取成功:</span> <strong>${result.value}</strong>`;
+        // 格式化数值显示
+        let displayValue = result.value;
+        if (typeof result.value === 'number') {
+            displayValue = result.value.toFixed(2);
+        }
+        div.innerHTML = `<span style="color: var(--success);">读取成功:</span> <strong>${displayValue}</strong>`;
     } else {
         div.innerHTML = `<span style="color: red;">读取失败: ${result.message || ''}</span>`;
     }
@@ -4627,34 +4693,48 @@ async function opcuaWrite() {
     }
 }
 
-// OPC UA 方法调用
-async function opcuaCallMethod() {
-    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
-    const nodeId = document.getElementById('opcua-rw-node').value;
-    const value = document.getElementById('opcua-rw-value').value;
-    if (!nodeId) { showToast('请输入节点 ID', 'error'); return; }
-
-    // 提取对象节点和方法名
-    let objectNode = nodeId;
-    let methodName = '';
-    if (nodeId.includes('.')) {
-        const parts = nodeId.split('.');
-        objectNode = parts.slice(0, -1).join('.');
-        methodName = parts[parts.length - 1];
+// OPC UA 方法选择变化处理
+function onOpcuaMethodSelectChange() {
+    const methodSelect = document.getElementById('opcua-method-select');
+    const paramGroup = document.getElementById('opcua-method-param-group');
+    if (methodSelect.value === 'SetMode') {
+        paramGroup.style.display = 'block';
     } else {
-        methodName = 'ResetCounter';  // 默认方法
+        paramGroup.style.display = 'none';
+    }
+}
+
+// OPC UA 方法执行（使用下拉选择）
+async function opcuaExecuteMethod() {
+    if (!selectedClientAgentId) { showToast('请先选择 Client Agent', 'error'); return; }
+
+    const methodSelect = document.getElementById('opcua-method-select');
+    const methodName = methodSelect.value;
+
+    // 准备参数
+    let args = [];
+    if (methodName === 'SetMode') {
+        const paramValue = parseInt(document.getElementById('opcua-method-param').value);
+        args = [paramValue];
     }
 
-    const args = value ? [parseFloat(value)] : [];
+    // 服务端对象节点（使用正确的节点 ID 格式）
+    const objectNode = 'ns=2;s=SimulationDevice';
+
     const result = await apiRequest('/api/industrial/opcua_client/method/', 'POST', {
         agent_id: selectedClientAgentId,
         object_node: objectNode,
         method_name: methodName,
         args: args
     });
-    const div = document.getElementById('opcua-rw-result');
+
+    const div = document.getElementById('opcua-method-result');
     if (result.success) {
         div.innerHTML = `<span style="color: var(--success);">方法调用成功:</span> <strong>${JSON.stringify(result.result)}</strong>`;
+        // 刷新变量值
+        if (opcuaServerRunning) {
+            opcuaRefreshValues();
+        }
     } else {
         div.innerHTML = `<span style="color: red;">方法调用失败: ${result.message || ''}</span>`;
     }
