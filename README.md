@@ -6,6 +6,7 @@
 - **多网卡 Agent 绑定**：每个 Agent 绑定特定网卡，使用 Network Namespace 隔离
 - **全功能 Agent**：报文发送、工控协议、端口扫描、报文回放
 - **systemd 服务管理**：稳定可靠的服务管理，支持 namespace 模式
+- **开机自启动**：系统重启后服务自动恢复
 - **深色工业风 UI**：专业美观的用户界面
 
 ## 系统架构
@@ -18,26 +19,72 @@
 │  IP: 192.168.81.140                                  │
 │  Django Web 服务 (8000)                              │
 ├─────────────────────────────────────────────────────┤
-│  eth1 → ns-eth1 → Agent_eth1 (11.11.11.11:8888)      │
-│  eth2 → ns-eth2 → Agent_eth2 (11.11.11.12:8889)      │
-│  eth3 → ns-eth3 → Agent_eth3 (11.11.11.13:8890)      │
-│  eth4 → ns-eth4 → Agent_eth4 (11.11.11.14:8891)      │
-│  eth5 → ns-eth5 → Agent_eth5 (11.11.11.15:8892)      │
-│  eth6 → ns-eth6 → Agent_eth6 (11.11.11.16:8893)      │
-│  eth7 → ns-eth7 → Agent_eth7 (11.11.11.17:8894)      │
+│  eth1 → ns-eth1 → Agent_eth1 (192.168.11.100:8888)   │
+│  eth2 → ns-eth2 → Agent_eth2 (192.168.11.200:8889)   │
+│  eth3 → ns-eth3 → Agent_eth3 (192.168.13.100:8892)   │
+│  eth5 → ns-eth5 → Agent_eth5                         │
+│  eth6 → ns-eth6 → Agent_eth6                         │
+│  eth7 → ns-eth7 → Agent_eth7                         │
 └─────────────────────────────────────────────────────┘
 ```
 
 ## 网络架构
 
 - **管理网络**: 192.168.81.140（SSH、Django、Windows 可访问）
-- **业务网络**: 11.11.11.x 网段（Agent 监听，通过 Network Namespace 隔离）
+- **业务网络**: 192.168.11.x / 192.168.13.x 网段（Agent 监听，通过 Network Namespace 隔离）
 
 | 服务 | 地址 | 说明 |
 |------|------|------|
 | SSH | 192.168.81.140:22 | 管理网络 SSH |
 | Django | 192.168.81.140:8000 | 管理网络 Web 服务 |
-| Agent | 11.11.11.x:port | 业务网络，通过 Django 代理访问 |
+| Agent | 各业务网 IP:port | 业务网络，通过 Django 代理访问 |
+
+## systemd 服务管理
+
+### 开机自启动服务
+
+系统重启后，以下服务会自动启动：
+
+| 服务 | 说明 | 启动顺序 |
+|------|------|----------|
+| `network-namespace.service` | 创建所有 Network Namespace | 第一个 |
+| `agent-eth*-ns.service` | 各 Agent 服务 | 依赖 namespace |
+| `daphne.service` | Django Web 服务 | 网络就绪后 |
+
+### 启动顺序
+
+```
+系统启动
+    ↓
+network-online.target (网络就绪)
+    ↓
+network-namespace.service (创建 namespace)
+    │  运行 setup-all 命令
+    │  创建 ns-eth1 ~ ns-eth7
+    ↓
+agent-eth*-ns.service (启动 Agent)
+    │  检测 namespace 存在
+    │  在 namespace 内启动 gunicorn
+    ↓
+daphne.service (启动 Django)
+```
+
+### 手动管理服务
+
+```bash
+# 查看所有服务状态
+systemctl status daphne network-namespace agent-eth1-ns
+
+# 启动/停止单个 Agent
+sudo systemctl start agent-eth1-ns
+sudo systemctl stop agent-eth1-ns
+
+# 重建所有 namespace
+sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh setup-all
+
+# 查看 namespace 列表
+sudo ip netns list
+```
 
 ## 快速开始
 
@@ -51,14 +98,13 @@ sudo python3 setup.py
 
 此脚本会自动完成:
 1. 安装系统依赖（Python、pip、git、nmap 等）
-2. 创建 Python 虚拟环境 `/opt/venv`
+2. 创建 Python 虚拟环境 `/opt/SFW-TEST3/sfw`
 3. 安装 Python 包依赖
 4. 创建必要的工作目录
-5. 交互式部署授权工具（从 10.40.24.17 SCP 拷贝）
-6. 配置 sudo 权限
-7. 安装 Django systemd 服务
-8. 执行数据库迁移
-9. 验证环境
+5. 配置 systemd 服务
+6. 执行数据库迁移
+7. 配置开机自启动
+8. 验证环境
 
 ### 同步代码到 Ubuntu
 
@@ -69,8 +115,9 @@ python sync_to_ubuntu.py
 此脚本会自动完成：
 1. 本地 git push
 2. Ubuntu git pull
-3. 重启 Django 服务
-4. 重启所有 Agent 服务
+3. 重建 Network Namespace（如果不存在）
+4. 重启 Django 服务
+5. 重启所有 Agent 服务
 
 ### 重启 Ubuntu 服务
 
@@ -89,6 +136,7 @@ python restart_ubuntu.py
 - Agent ID 格式: `agent_eth{网卡号}`
 - 使用 Network Namespace 隔离各 Agent 网络
 - 支持 systemd 服务管理（启动、停止、日志）
+- 系统重启后自动恢复
 
 ### 报文发送
 
@@ -99,13 +147,26 @@ python restart_ubuntu.py
 ### 工控协议
 
 支持协议:
-- Modbus TCP (端口 502)
-- Siemens S7 (端口 102)
-- IEC61850 GOOSE/SV
-- DNP3 (端口 20000)
-- BACnet (端口 47808)
-- Ethernet/IP (端口 44818)
-- MMS (端口 102)
+- **Modbus TCP** (端口 502) - 客户端和服务端模拟
+- **Siemens S7** (端口 102) - 客户端和服务端模拟
+- **OPC UA** (端口 4840) - 客户端和服务端模拟，支持：
+  - 变量读写
+  - 方法调用
+  - 节点浏览
+  - 订阅监控
+  - 服务发现
+- **IEC61850 GOOSE/SV**
+- **DNP3** (端口 20000)
+- **BACnet** (端口 47808)
+- **Ethernet/IP** (端口 44818)
+- **MMS** (端口 102)
+
+### OPC UA 功能详解
+
+- **服务端模拟器**：创建模拟设备对象，自动生成变量值（正弦波、随机等模式）
+- **客户端测试**：连接远程 OPC UA 服务器，浏览节点、读写数据、调用方法
+- **方法调用**：下拉选择 ResetCounter、SetMode 等方法
+- **动态更新控制**：可开关的自动刷新功能
 
 ### 端口扫描
 
@@ -136,7 +197,7 @@ python restart_ubuntu.py
 ```
 ubuntu_deploy/
 ├── manage.py            # Django 管理入口
-├── sync_to_ubuntu.py    # 同步代码到 Ubuntu
+├── sync_to_ubuntu.py    # 同步代码到 Ubuntu（含 namespace 自动创建）
 ├── restart_ubuntu.py    # 重启 Ubuntu 服务
 ├── coredump_monitor.py  # Coredump 监控模块
 ├── djangoProject/       # Django 配置
@@ -147,22 +208,59 @@ ubuntu_deploy/
 ├── agents/              # Agent 程序
 │   ├── full_agent.py    # 全功能 Agent
 │   ├── modules/         # 功能模块
+│   │   ├── packet_sender.py
+│   │   ├── packet_capture.py
+│   │   ├── port_scanner.py
+│   │   └── packet_replay.py
 │   └── protocols/       # 工控协议
+│       ├── opcua_server.py
+│       ├── opcua_client.py
+│       ├── opcua_common.py
+│       ├── modbus_server.py
+│       ├── modbus_client.py
+│       ├── s7_server.py
+│       ├── s7_client.py
+│       └── ...
 ├── templates/           # 前端模板
+│   └── industrial_protocol.html
 ├── static/              # 静态资源
-├── deploy/              # 部署配置
-│   ├── agent-eth*.service
-│   └── setup.sh
 ├── scripts/             # 辅助脚本
+│   ├── network-namespace-setup.sh  # Namespace 创建脚本
+│   ├── network-namespace.service   # Namespace systemd 服务
+│   ├── agent-eth*-ns.service       # Agent systemd 服务
+│   └── opc_da_client.py            # OPC DA 客户端（Windows）
 └── logs/                # 日志目录
 ```
 
 ## 技术栈
 
-- Django 5.1
-- Flask + Scapy (Agent)
+- Django 5.1 + Daphne (ASGI)
+- Flask + Gunicorn (Agent)
+- asyncua (OPC UA)
+- pymodbus (Modbus)
+- python-snap7 (S7)
 - systemd + Network Namespace (服务管理)
 - SQLite3 (数据库)
+
+## 注意事项
+
+### Network Namespace
+
+- Linux Network Namespace 重启后会清除，需要重新创建
+- `network-namespace.service` 已配置开机自启动，会自动创建
+- 如需手动重建：`sudo /opt/SFW-TEST3/scripts/network-namespace-setup.sh setup-all`
+
+### Agent 服务
+
+- Agent 服务依赖 namespace，在 namespace 创建后才能启动
+- 如 Agent 启动失败，先检查 namespace 是否存在：`sudo ip netns list`
+- 服务已配置开机自启动，重启后自动恢复
+
+### Windows 客户端脚本
+
+- `scripts/opc_da_client.py` - OPC DA 客户端，运行在 Windows 上
+- 需要安装 pywin32：`pip install pywin32`
+- 用于连接远程 OPC DA 服务器（如 Matrikon）
 
 ## 许可证
 
