@@ -5578,8 +5578,23 @@ def api_auth_radius_restart(request):
         clients_content = _read_file_sudo(RADIUS_CLIENTS_CONF)
         secret = _parse_radius_secret(clients_content)
 
-    _run_sudo(['systemctl', 'restart', 'freeradius'])
-    time.sleep(1.5)
+    # 重启 freeradius
+    restart_result = _run_sudo(['systemctl', 'restart', 'freeradius'])
+    time.sleep(2)
+
+    # 检查服务状态
+    st = _run_sudo(['systemctl', 'is-active', 'freeradius'])
+    if st.stdout.strip() != 'active':
+        # 服务启动失败，获取日志
+        log_result = _run_sudo(['journalctl', '-u', 'freeradius', '-n', '10', '--no-pager'])
+        error_msg = log_result.stdout[-500:] if len(log_result.stdout) > 500 else log_result.stdout
+        return JsonResponse({
+            'success': False,
+            'error': 'freeradius 服务启动失败',
+            'log': error_msg,
+        })
+
+    # 重启代理
     _run_sudo(['pkill', '-f', 'radius_proxy.py'])
     time.sleep(0.5)
     proxy_result = _run_sudo(['python3', RADIUS_PROXY_PATH, '--secret', secret], timeout=5)
