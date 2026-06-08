@@ -5597,12 +5597,12 @@ def api_auth_radius_restart(request):
     # 重启代理（后台启动，使用 setsid 脱离终端）
     _run_sudo(['pkill', '-9', '-f', 'radius_proxy.py'])
     time.sleep(0.5)
-    # 使用 setsid 确保进程脱离终端，不会随 SSH 会话关闭而终止
-    subprocess.run(
+    # 使用 Popen 启动，不等待完成
+    subprocess.Popen(
         ['sudo', 'setsid', 'python3', RADIUS_PROXY_PATH, '--secret', secret],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
-    time.sleep(1)
+    time.sleep(2)  # 等待进程启动
 
     # 检查代理进程是否存在
     proxy_check = _run_sudo(['pgrep', '-f', 'radius_proxy.py'])
