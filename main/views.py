@@ -5594,16 +5594,23 @@ def api_auth_radius_restart(request):
             'log': error_msg,
         })
 
-    # 重启代理
+    # 重启代理（后台启动）
     _run_sudo(['pkill', '-f', 'radius_proxy.py'])
     time.sleep(0.5)
-    proxy_result = _run_sudo(['python3', RADIUS_PROXY_PATH, '--secret', secret], timeout=5)
+    # 使用 shell 命令后台启动
+    proxy_cmd = f'sudo nohup python3 {RADIUS_PROXY_PATH} --secret {secret} > /tmp/radius_proxy.log 2>&1 &'
+    subprocess.run(proxy_cmd, shell=True, timeout=5)
+    time.sleep(1)
 
-    _log_auth_operation('restart_radius', f'{{proxy_secret: *****, proxy_rc: {proxy_result.returncode}}}')
+    # 检查代理进程是否存在
+    proxy_check = _run_sudo(['pgrep', '-f', 'radius_proxy.py'])
+    proxy_running = proxy_check.stdout.strip() != ''
+
+    _log_auth_operation('restart_radius', f'{{proxy_secret: *****, proxy_running: {proxy_running}}}')
     return JsonResponse({
         'success': True,
         'message': 'Radius 服务已重启',
-        'proxy_rc': proxy_result.returncode,
+        'proxy_running': proxy_running,
     })
 
 
