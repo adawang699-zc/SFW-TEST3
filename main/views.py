@@ -5594,12 +5594,14 @@ def api_auth_radius_restart(request):
             'log': error_msg,
         })
 
-    # 重启代理（后台启动）
-    _run_sudo(['pkill', '-f', 'radius_proxy.py'])
+    # 重启代理（后台启动，使用 setsid 脱离终端）
+    _run_sudo(['pkill', '-9', '-f', 'radius_proxy.py'])
     time.sleep(0.5)
-    # 使用 shell 命令后台启动
-    proxy_cmd = f'sudo nohup python3 {RADIUS_PROXY_PATH} --secret {secret} > /tmp/radius_proxy.log 2>&1 &'
-    subprocess.run(proxy_cmd, shell=True, timeout=5)
+    # 使用 setsid 确保进程脱离终端，不会随 SSH 会话关闭而终止
+    subprocess.run(
+        ['sudo', 'setsid', 'python3', RADIUS_PROXY_PATH, '--secret', secret],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5
+    )
     time.sleep(1)
 
     # 检查代理进程是否存在
