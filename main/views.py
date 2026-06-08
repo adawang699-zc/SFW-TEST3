@@ -5394,6 +5394,19 @@ def api_auth_radius_status(request):
     ps_out = _run_sudo(['ps', 'aux'])
     proxy_running = 'radius_proxy.py' in ps_out.stdout
 
+    # 获取 eth0 地址（用于防火墙配置）
+    eth0_ip = ''
+    try:
+        import psutil
+        addrs = psutil.net_if_addrs()
+        if 'eth0' in addrs:
+            for addr in addrs['eth0']:
+                if addr.family == socket.AF_INET:
+                    eth0_ip = addr.address
+                    break
+    except Exception:
+        pass
+
     result = {
         'running': running,
         'secret': secret,
@@ -5402,6 +5415,7 @@ def api_auth_radius_status(request):
         'acct_port': '1813',
         'proxy_port': '11812',
         'proxy_running': proxy_running,
+        'eth0_ip': eth0_ip or '192.168.81.140',  # 默认值
     }
     return JsonResponse({'success': True, 'data': result})
 

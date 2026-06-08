@@ -365,6 +365,9 @@
                     <span id="radius_status_text" style="font-size: 0.85rem; color: var(--text-muted); margin-left: 8px;">检测中...</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-info" onclick="showRadiusFirewallModal()">
+                        <i class="fas fa-shield-alt"></i> 防火墙配置
+                    </button>
                     <button class="btn btn-sm btn-primary" onclick="showRadiusSecretModal()">
                         <i class="fas fa-key"></i> 修改密钥
                     </button>
@@ -428,6 +431,9 @@
                     <span id="ldap_status_text" style="font-size: 0.85rem; color: var(--text-muted); margin-left: 8px;">检测中...</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-info" onclick="showLdapFirewallModal()">
+                        <i class="fas fa-shield-alt"></i> 防火墙配置
+                    </button>
                     <button class="btn btn-sm btn-primary" onclick="saveLdapConfig()">
                         <i class="fas fa-save"></i> 保存配置
                     </button>
@@ -1246,6 +1252,25 @@ async function detectAuthStatus() {
             lText.textContent = '未安装';
         }
         document.getElementById('auth_ldap_badge').textContent = 'LDAP: ' + (ldap.running ? '运行中' : (ldap.installed ? '已停止' : '未安装'));
+
+        // 更新防火墙配置数据
+        const radiusConfig = radius.config || {};
+        radiusFirewallData = {
+            eth0_ip: radiusConfig.eth0_ip || '192.168.81.140',
+            secret: radiusConfig.secret || 'testing123',
+            proxy_port: radiusConfig.proxy_port || '11812',
+            auth_port: radiusConfig.auth_port || '1812',
+            accounts: radiusConfig.accounts || []
+        };
+        ldapFirewallData = {
+            uri: (ldap.config && ldap.config.uri) || 'ldap://127.0.0.1',
+            port: (ldap.config && ldap.config.port) || '389',
+            base_dn: (ldap.config && ldap.config.base_dn) || 'dc=tdhx,dc=local',
+            user_filter: (ldap.config && ldap.config.user_filter) || 'cn',
+            group_filter: (ldap.config && ldap.config.group_filter) || 'cn',
+            admin_dn: (ldap.config && ldap.config.admin_dn) || 'cn=admin,dc=tdhx,dc=local',
+            admin_password: (ldap.config && ldap.config.admin_password) || 'secAdmin#123456'
+        };
 
         addAuthLog('检测完成: Radius ' + (radius.running ? '运行中' : '已停止') + ', LDAP ' + (ldap.running ? '运行中' : '已停止'), 'success');
     } catch (e) {
@@ -2142,5 +2167,191 @@ document.addEventListener('DOMContentLoaded', function() {
     loadPortTestDevices();
     loadPortTestAgents();
 });
+
+// ========== 防火墙配置模态框 ==========
+
+// Radius 防火墙配置数据（从 API 获取）
+let radiusFirewallData = {
+    eth0_ip: '',
+    secret: '',
+    proxy_port: '11812',
+    auth_port: '1812',
+    accounts: []
+};
+
+// LDAP 防火墙配置数据（从 API 获取）
+let ldapFirewallData = {
+    uri: '',
+    port: '389',
+    base_dn: '',
+    user_filter: 'cn',
+    group_filter: 'cn',
+    admin_dn: '',
+    admin_password: ''
+};
+
+function showRadiusFirewallModal() {
+    // 使用已获取的数据填充
+    const eth0Ip = radiusFirewallData.eth0_ip || '192.168.81.140';
+    const secret = radiusFirewallData.secret || 'testing123';
+    const proxyPort = radiusFirewallData.proxy_port || '11812';
+    const authPort = radiusFirewallData.auth_port || '1812';
+    const accounts = radiusFirewallData.accounts || [];
+
+    // 构建账号列表
+    let accountList = '';
+    if (accounts.length > 0) {
+        accountList = accounts.map(a => `<tr><td style="padding:4px 8px;">${escapeHtml(a.username)}</td><td style="padding:4px 8px;">${escapeHtml(a.password)}</td></tr>`).join('');
+    } else {
+        accountList = '<tr><td colspan="2" style="padding:8px;color:var(--text-muted);">暂无账号，请先添加</td></tr>';
+    }
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = `
+<div style="background:var(--bg-card);border-radius:12px;padding:24px;min-width:450px;max-width:650px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+    <div style="font-size:1.1rem;font-weight:600;margin-bottom:16px;color:var(--info);">
+        <i class="fas fa-shield-alt"></i> 防火墙 RADIUS 认证配置
+    </div>
+
+    <div style="background:rgba(0,168,150,0.1);border-radius:8px;padding:16px;margin-bottom:16px;border:1px solid rgba(0,168,150,0.2);">
+        <div style="font-weight:600;margin-bottom:12px;color:var(--secondary);">配置参数</div>
+        <table style="width:100%;font-size:0.85rem;">
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);width:140px;">服务器IP地址</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(eth0Ip)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">服务器端口</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(proxyPort)}</code> <span style="color:var(--text-muted);font-size:0.8rem;">(代理端口)</span></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">共享密钥</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(secret)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">认证协议</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">PAP</code></td></tr>
+        </table>
+    </div>
+
+    <div style="background:rgba(255,193,7,0.1);border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid rgba(255,193,7,0.3);">
+        <div style="color:var(--warning);font-size:0.9rem;">
+            <i class="fas fa-exclamation-triangle"></i> 重要提示
+        </div>
+        <div style="color:var(--text-secondary);font-size:0.85rem;margin-top:6px;">
+            服务器端口默认使用 ${escapeHtml(proxyPort)}（代理端口），如认证失败请使用 ${escapeHtml(authPort)}（认证端口）
+        </div>
+    </div>
+
+    <div style="background:var(--bg-dark);border-radius:8px;padding:16px;margin-bottom:16px;">
+        <div style="font-weight:600;margin-bottom:12px;">测试步骤</div>
+        <ol style="color:var(--text-secondary);font-size:0.85rem;padding-left:20px;line-height:1.8;">
+            <li>查看界面上的 RADIUS 账号，如没有可自行添加</li>
+            <li>添加账号后点击"重启服务"按钮</li>
+            <li>在防火墙中添加认证账号（如 radius），认证类型选择 RADIUS 服务器认证</li>
+            <li>使用界面显示的账号密码登录防火墙</li>
+        </ol>
+    </div>
+
+    <div style="background:var(--bg-dark);border-radius:8px;padding:16px;margin-bottom:16px;">
+        <div style="font-weight:600;margin-bottom:12px;">现有 RADIUS 账号</div>
+        <table style="width:100%;font-size:0.85rem;border-collapse:collapse;">
+            <thead><tr style="background:rgba(0,0,0,0.2);"><th style="padding:6px 8px;text-align:left;">用户名</th><th style="padding:6px 8px;text-align:left;">密码</th></tr></thead>
+            <tbody>${accountList}</tbody>
+        </table>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px;">
+        <button class="btn btn-secondary" id="radius_fw_close_btn">关闭</button>
+        <button class="btn btn-primary" id="radius_fw_copy_btn"><i class="fas fa-copy"></i> 复制配置</button>
+    </div>
+</div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('radius_fw_close_btn').onclick = function() { modal.remove(); };
+    document.getElementById('radius_fw_copy_btn').onclick = function() {
+        const configText = `服务器IP地址: ${eth0Ip}
+服务器端口: ${proxyPort} (代理端口)
+共享密钥: ${secret}
+认证协议: PAP
+
+重要提示: 默认使用端口 ${proxyPort}，认证失败时使用端口 ${authPort}`;
+        navigator.clipboard.writeText(configText).then(function() {
+            showToast('配置已复制到剪贴板', 'success');
+        });
+    };
+}
+
+function showLdapFirewallModal() {
+    // 使用已获取的数据填充
+    const uri = ldapFirewallData.uri || 'ldap://127.0.0.1';
+    const port = ldapFirewallData.port || '389';
+    const baseDn = ldapFirewallData.base_dn || 'dc=tdhx,dc=local';
+    const userFilter = ldapFirewallData.user_filter || 'cn';
+    const groupFilter = ldapFirewallData.group_filter || 'cn';
+    const adminDn = ldapFirewallData.admin_dn || 'cn=admin,dc=tdhx,dc=local';
+    const adminPassword = ldapFirewallData.admin_password || 'secAdmin#123456';
+
+    // 解析服务器地址
+    let serverAddr = uri.replace('ldap://', '').replace('ldaps://', '').split(':')[0];
+    if (serverAddr === '127.0.0.1' || serverAddr === '0.0.0.0') {
+        serverAddr = radiusFirewallData.eth0_ip || '192.168.81.140';
+    }
+
+    var modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    modal.innerHTML = `
+<div style="background:var(--bg-card);border-radius:12px;padding:24px;min-width:450px;max-width:650px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+    <div style="font-size:1.1rem;font-weight:600;margin-bottom:16px;color:var(--info);">
+        <i class="fas fa-shield-alt"></i> 防火墙 LDAP 认证配置
+    </div>
+
+    <div style="background:rgba(0,168,150,0.1);border-radius:8px;padding:16px;margin-bottom:16px;border:1px solid rgba(0,168,150,0.2);">
+        <div style="font-weight:600;margin-bottom:12px;color:var(--secondary);">配置参数</div>
+        <table style="width:100%;font-size:0.85rem;">
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);width:140px;">服务器地址</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(serverAddr)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">服务器端口</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(port)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">超时</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">10</code> <span style="color:var(--text-muted);font-size:0.8rem;">秒</span></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">Base DN</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(baseDn)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">用户过滤字段</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(userFilter)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">组过滤字段</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(groupFilter)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">管理员 DN</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(adminDn)}</code></td></tr>
+            <tr><td style="padding:4px 8px;color:var(--text-secondary);">管理员密码</td>
+                <td style="padding:4px 8px;"><code style="font-size:0.85rem;background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:4px;">${escapeHtml(adminPassword)}</code></td></tr>
+        </table>
+    </div>
+
+    <div style="background:var(--bg-dark);border-radius:8px;padding:16px;margin-bottom:16px;">
+        <div style="font-weight:600;margin-bottom:12px;">测试步骤</div>
+        <ol style="color:var(--text-secondary);font-size:0.85rem;padding-left:20px;line-height:1.8;">
+            <li>在防火墙界面添加 LDAP 用户</li>
+            <li>密码内容不校验，可直接登录</li>
+            <li>使用 LDAP 界面配置的管理员密码进行绑定认证</li>
+        </ol>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:12px;">
+        <button class="btn btn-secondary" id="ldap_fw_close_btn">关闭</button>
+        <button class="btn btn-primary" id="ldap_fw_copy_btn"><i class="fas fa-copy"></i> 复制配置</button>
+    </div>
+</div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('ldap_fw_close_btn').onclick = function() { modal.remove(); };
+    document.getElementById('ldap_fw_copy_btn').onclick = function() {
+        const configText = `服务器地址: ${serverAddr}
+服务器端口: ${port}
+超时: 10秒
+Base DN: ${baseDn}
+用户过滤字段: ${userFilter}
+组过滤字段: ${groupFilter}
+管理员 DN: ${adminDn}
+管理员密码: ${adminPassword}`;
+        navigator.clipboard.writeText(configText).then(function() {
+            showToast('配置已复制到剪贴板', 'success');
+        });
+    };
+}
 </script>
 {% endblock %}
