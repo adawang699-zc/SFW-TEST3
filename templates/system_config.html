@@ -573,10 +573,23 @@
 <div class="tab-content" id="tab-system_manage" style="display: none;">
     <div class="card">
         <div class="card-header">系统管理</div>
-        <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
-            <div style="font-size: 3rem; margin-bottom: 16px;">🚧</div>
-            <div style="font-size: 1.2rem; margin-bottom: 8px;">系统管理</div>
-            <div>功能开发中，敬请期待...</div>
+
+        <!-- 关联地址配置 -->
+        <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <div style="font-weight: 600; font-size: 1.05rem;">
+                    <i class="fas fa-link"></i> 关联地址配置
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="showAddLinkModal()">
+                    <i class="fas fa-plus"></i> 添加关联地址
+                </button>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px;">
+                配置的关联地址将在页面右上角显示，最多支持 3 个关联地址。
+            </div>
+            <div id="links_list" style="min-height: 60px;">
+                <div style="color: var(--text-muted); text-align: center; padding: 20px;">点击"检测状态"加载...</div>
+            </div>
         </div>
     </div>
 </div>
@@ -2166,6 +2179,7 @@ function stopPortTest() {
 document.addEventListener('DOMContentLoaded', function() {
     loadPortTestDevices();
     loadPortTestAgents();
+    loadLinksConfig();  // 加载关联地址配置
 });
 
 // ========== 防火墙配置模态框 ==========
@@ -2352,6 +2366,163 @@ Base DN: ${baseDn}
             showToast('配置已复制到剪贴板', 'success');
         });
     };
+}
+
+// ========== 关联地址配置 ==========
+
+let linksData = [];
+
+async function loadLinksConfig() {
+    const listDiv = document.getElementById('links_list');
+    try {
+        const resp = await fetch('/api/links/list/');
+        const data = await resp.json();
+        if (data.success) {
+            linksData = data.links || [];
+            renderLinksList();
+        } else {
+            listDiv.innerHTML = '<div style="color:var(--danger);">加载失败: ' + escapeHtml(data.error || '') + '</div>';
+        }
+    } catch (e) {
+        listDiv.innerHTML = '<div style="color:var(--danger);">加载异常: ' + escapeHtml(e) + '</div>';
+    }
+}
+
+function renderLinksList() {
+    const listDiv = document.getElementById('links_list');
+    if (linksData.length === 0) {
+        listDiv.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:20px;">暂无关联地址，点击上方按钮添加</div>';
+        return;
+    }
+    let html = '<table style="width:100%;font-size:0.85rem;border-collapse:collapse;">';
+    html += '<thead><tr style="background:rgba(0,0,0,0.2);"><th style="padding:6px 8px;text-align:left;">名称</th><th style="padding:6px 8px;text-align:left;">地址</th><th style="padding:6px 8px;text-align:right;">操作</th></tr></thead><tbody>';
+    linksData.forEach(function(link, index) {
+        html += '<tr>';
+        html += '<td style="padding:6px 8px;">' + escapeHtml(link.name) + '</td>';
+        html += '<td style="padding:6px 8px;"><a href="' + escapeHtml(link.url) + '" target="_blank" style="color:var(--secondary);">' + escapeHtml(link.url) + '</a></td>';
+        html += '<td style="padding:6px 8px;text-align:right;">';
+        html += '<button class="btn btn-sm btn-secondary" onclick="showEditLinkModal(' + index + ')" style="margin-right:4px;padding:2px 8px;font-size:0.8rem;">编辑</button>';
+        html += '<button class="btn btn-sm btn-danger" onclick="deleteLink(' + index + ')" style="padding:2px 8px;font-size:0.8rem;">删除</button>';
+        html += '</td></tr>';
+    });
+    html += '</tbody></table>';
+    listDiv.innerHTML = html;
+}
+
+function showAddLinkModal() {
+    if (linksData.length >= 3) {
+        showToast('最多只能添加 3 个关联地址', 'warning');
+        return;
+    }
+    showPromptModal2('添加关联地址', [
+        {id: 'link_name', label: '关联名称', placeholder: '如：实验室设备管理'},
+        {id: 'link_url', label: '关联地址', placeholder: '如：http://192.168.81.100:8080'}
+    ], function(values) {
+        const name = values.link_name.trim();
+        const url = values.link_url.trim();
+        if (!name || !url) {
+            showToast('名称和地址不能为空', 'warning');
+            return;
+        }
+        addLink(name, url);
+    });
+}
+
+function showEditLinkModal(index) {
+    const link = linksData[index];
+    showPromptModal2('编辑关联地址', [
+        {id: 'edit_link_name', label: '关联名称', placeholder: '', defaultValue: link.name},
+        {id: 'edit_link_url', label: '关联地址', placeholder: '', defaultValue: link.url}
+    ], function(values) {
+        const name = values.edit_link_name.trim();
+        const url = values.edit_link_url.trim();
+        if (!name || !url) {
+            showToast('名称和地址不能为空', 'warning');
+            return;
+        }
+        updateLink(index, name, url);
+    });
+}
+
+async function addLink(name, url) {
+    try {
+        const resp = await fetch('/api/links/add/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name: name, url: url})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showToast('关联地址已添加', 'success');
+            loadLinksConfig();
+            // 更新 base.html 中的链接显示（通过刷新页面或重新加载）
+            loadHeaderLinks();
+        } else {
+            showToast('添加失败: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('添加异常: ' + e, 'error');
+    }
+}
+
+async function updateLink(index, name, url) {
+    try {
+        const resp = await fetch('/api/links/update/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({index: index, name: name, url: url})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showToast('关联地址已更新', 'success');
+            loadLinksConfig();
+            loadHeaderLinks();
+        } else {
+            showToast('更新失败: ' + data.error, 'error');
+        }
+    } catch (e) {
+        showToast('更新异常: ' + e, 'error');
+    }
+}
+
+async function deleteLink(index) {
+    showConfirmModal('确认删除', '确定要删除关联地址 "' + linksData[index].name + '" 吗？', function() {
+        fetch('/api/links/delete/', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({index: index})
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showToast('关联地址已删除', 'success');
+                loadLinksConfig();
+                loadHeaderLinks();
+            } else {
+                showToast('删除失败: ' + data.error, 'error');
+            }
+        })
+        .catch(e => showToast('删除异常: ' + e, 'error'));
+    }, '🗑️');
+}
+
+async function loadHeaderLinks() {
+    // 加载关联地址到页面头部（如果 base.html 有对应的容器）
+    const headerLinksContainer = document.getElementById('header_links');
+    if (!headerLinksContainer) return;
+    try {
+        const resp = await fetch('/api/links/list/');
+        const data = await resp.json();
+        if (data.success && data.links && data.links.length > 0) {
+            let html = data.links.map(link =>
+                '<a href="' + escapeHtml(link.url) + '" target="_blank" class="header-link">' +
+                '<i class="fas fa-external-link-alt"></i> ' + escapeHtml(link.name) + '</a>'
+            ).join('');
+            headerLinksContainer.innerHTML = html;
+        } else {
+            headerLinksContainer.innerHTML = '';
+        }
+    } catch (e) {}
 }
 </script>
 {% endblock %}

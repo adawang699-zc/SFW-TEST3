@@ -5780,6 +5780,109 @@ def api_auth_logs(request):
         return JsonResponse({'success': True, 'logs': f'读取日志失败: {e}'})
 
 
+# ========== 关联地址配置 API ==========
+LINKS_CONFIG_FILE = '/opt/SFW-TEST3/config/links.json'
+
+
+def _read_links_config():
+    """读取关联地址配置"""
+    try:
+        if os.path.exists(LINKS_CONFIG_FILE):
+            with open(LINKS_CONFIG_FILE, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return []
+
+
+def _write_links_config(links):
+    """写入关联地址配置"""
+    try:
+        os.makedirs(os.path.dirname(LINKS_CONFIG_FILE), exist_ok=True)
+        with open(LINKS_CONFIG_FILE, 'w') as f:
+            json.dump(links, f, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+@require_http_methods(["GET"])
+def api_links_list(request):
+    """获取关联地址列表"""
+    links = _read_links_config()
+    return JsonResponse({'success': True, 'links': links})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_links_add(request):
+    """添加关联地址"""
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        url = data.get('url', '').strip()
+        if not name or not url:
+            return JsonResponse({'success': False, 'error': '名称和地址不能为空'})
+
+        links = _read_links_config()
+        if len(links) >= 3:
+            return JsonResponse({'success': False, 'error': '最多只能添加 3 个关联地址'})
+
+        links.append({'name': name, 'url': url})
+        if _write_links_config(links):
+            return JsonResponse({'success': True, 'message': '关联地址已添加'})
+        else:
+            return JsonResponse({'success': False, 'error': '保存失败'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_links_update(request):
+    """更新关联地址"""
+    try:
+        data = json.loads(request.body)
+        index = data.get('index', -1)
+        name = data.get('name', '').strip()
+        url = data.get('url', '').strip()
+        if not name or not url:
+            return JsonResponse({'success': False, 'error': '名称和地址不能为空'})
+
+        links = _read_links_config()
+        if index < 0 or index >= len(links):
+            return JsonResponse({'success': False, 'error': '索引无效'})
+
+        links[index] = {'name': name, 'url': url}
+        if _write_links_config(links):
+            return JsonResponse({'success': True, 'message': '关联地址已更新'})
+        else:
+            return JsonResponse({'success': False, 'error': '保存失败'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_links_delete(request):
+    """删除关联地址"""
+    try:
+        data = json.loads(request.body)
+        index = data.get('index', -1)
+
+        links = _read_links_config()
+        if index < 0 or index >= len(links):
+            return JsonResponse({'success': False, 'error': '索引无效'})
+
+        links.pop(index)
+        if _write_links_config(links):
+            return JsonResponse({'success': True, 'message': '关联地址已删除'})
+        else:
+            return JsonResponse({'success': False, 'error': '保存失败'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
 # ========== 带宽测试 API ==========
 @require_http_methods(["GET"])
 def api_bandwidth_my_agents(request):

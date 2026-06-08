@@ -157,6 +157,12 @@ urlpatterns = [
     path('api/auth/ldap/restart/', views.api_auth_ldap_restart, name='api_auth_ldap_restart'),
     path('api/auth/logs/', views.api_auth_logs, name='api_auth_logs'),
 
+    # ========== 关联地址配置 ==========
+    path('api/links/list/', views.api_links_list, name='api_links_list'),
+    path('api/links/add/', views.api_links_add, name='api_links_add'),
+    path('api/links/update/', views.api_links_update, name='api_links_update'),
+    path('api/links/delete/', views.api_links_delete, name='api_links_delete'),
+
     # ========== 授权管理 ==========
     path('license-management/', views.license_management, name='license_management'),
     path('api/license/verify-password/', views.api_license_verify_password, name='api_license_verify_password'),

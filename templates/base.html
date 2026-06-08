@@ -78,6 +78,20 @@
             font-size: 0.85rem;
         }
 
+        .header-link {
+            color: var(--secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(0, 168, 150, 0.1);
+            transition: all 0.2s;
+        }
+        .header-link:hover {
+            background: rgba(0, 168, 150, 0.2);
+            color: var(--secondary-light);
+        }
+
         /* 侧边栏 */
         .sidebar {
             position: fixed;
@@ -526,6 +540,9 @@
     <nav class="navbar">
         <a href="{% url 'main:home' %}" class="navbar-brand">防火墙测试平台</a>
         <span class="navbar-time" id="realtime-clock">系统时间: <span id="clock">--:--:--</span></span>
+        <div id="header_links" style="margin-left: auto; display: flex; gap: 12px;">
+            <!-- 关联地址将通过 JavaScript 动态加载 -->
+        </div>
     </nav>
 
     <!-- 侧边栏 -->
@@ -641,6 +658,36 @@
         }
         updateClock();
         setInterval(updateClock, 1000);
+
+        // 加载关联地址到头部
+        async function loadHeaderLinks() {
+            const container = document.getElementById('header_links');
+            if (!container) return;
+            try {
+                const resp = await fetch('/api/links/list/');
+                const data = await resp.json();
+                if (data.success && data.links && data.links.length > 0) {
+                    let html = data.links.map(link =>
+                        '<a href="' + escapeHtml(link.url) + '" target="_blank" class="header-link">' +
+                        '<i class="fas fa-external-link-alt"></i> ' + escapeHtml(link.name) + '</a>'
+                    ).join('');
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '';
+                }
+            } catch (e) {
+                container.innerHTML = '';
+            }
+        }
+        loadHeaderLinks();
+
+        // 转义 HTML 函数
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         // API 请求封装
         async function apiRequest(url, method = 'GET', data = null) {
