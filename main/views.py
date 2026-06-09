@@ -4590,19 +4590,6 @@ def _check_ssh_connectivity(ip, port=22, user='admin', password='', timeout=10):
 
 # ========== 防火墙后端 Shell 辅助函数 ==========
 
-# Ubuntu 服务器 SSH 凭据（用于防火墙上 SCP 拉取脚本）
-UBUNTU_SSH_IP = '192.168.81.140'
-UBUNTU_SSH_USER = 'zhangc'
-UBUNTU_SSH_PASSWORD = 'tdhx@2017'
-UBUNTU_PROJECT_PATH = '/opt/SFW-TEST3'
-
-
-def _to_ubuntu_path(local_path):
-    """将本地 Windows 路径转换为 Ubuntu 服务器上的对应路径"""
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    rel_path = os.path.relpath(local_path, project_root)
-    return f'{UBUNTU_PROJECT_PATH}/{rel_path.replace(os.sep, "/")}'
-
 # 天融信防火墙默认后台密码
 DEFAULT_FIREWALL_BACKEND_PASSWORD = '#HiNA_!ns@USHDLk'
 
@@ -4657,6 +4644,29 @@ def _exec_backend_cmd(chan, cmd, wait_time=1):
             if not chan.recv_ready():
                 break
     return out
+
+
+def _write_file_via_heredoc(chan, remote_path, content, marker='ENDOFFILE'):
+    """通过 shell heredoc 将文件内容写入远程设备
+
+    使用 cat << 'MARKER' 避免 shell 变量展开，支持任意文本文件。
+    调用方需确保 marker 字符串不出现在 content 中。
+    """
+    chan.send(f'cat > {remote_path} << \'{marker}\'\n')
+    time.sleep(0.3)
+    while chan.recv_ready():
+        chan.recv(8192)
+    # 分块发送内容，避免触发 shell 行缓冲限制
+    chunk_size = 2000
+    for i in range(0, len(content), chunk_size):
+        chan.send(content[i:i + chunk_size])
+        time.sleep(0.1)
+        while chan.recv_ready():
+            chan.recv(8192)
+    chan.send(f'\n{marker}\n')
+    time.sleep(0.3)
+    while chan.recv_ready():
+        chan.recv(8192)
 
 
 def _clean_cat_output(raw_output):
@@ -4716,24 +4726,19 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         chan = _enter_backend_shell(ssh, backend_password)
         _update_task_output(task_id, f'进程: {task_id[:8]}, 表: {table_name}, 条数: {row_count}\n')
 
-        # 步骤 2: 创建目标目录和临时目录
+        # 步骤 2: 创建目标目录
         _exec_backend_cmd(chan, 'mkdir -p /app/local/share/new_self_manage/', wait_time=1)
         _exec_backend_cmd(chan, 'mkdir -p /data/tmp/', wait_time=0.5)
 
-        # 步骤 3: 在防火墙上执行 SCP 从 Ubuntu 拉取脚本
+        # 步骤 3: 通过 shell heredoc 写入脚本文件
         _update_task_output(task_id, '同步脚本...\n')
         for fpath in script_files:
             fname = os.path.basename(fpath)
             remote_path = f'/app/local/share/new_self_manage/{fname}'
-            ubuntu_src = _to_ubuntu_path(fpath)
-            scp_cmd = (
-                f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
-                f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{ubuntu_src} {remote_path}'
-            )
-            out = _exec_backend_cmd(chan, scp_cmd, wait_time=3)
-            if 'lost connection' in out.lower() or 'not found' in out.lower():
-                raise Exception(f'SCP 传输失败: {fname}\n{out[:500]}')
-            _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.5)
+            with open(fpath, 'r', encoding='utf-8') as f:
+                content = f.read()
+            _write_file_via_heredoc(chan, remote_path, content)
+            _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.3)
 
         # 步骤 4: 在防火墙上执行脚本（后台 nohup）
         remote_dir = '/app/local/share/new_self_manage/'
@@ -5067,19 +5072,14 @@ def _execute_archive_task(task_id, device, date_str, days, file_size_gb, file_co
         _exec_backend_cmd(chan, 'mkdir -p /app/local/share/new_self_manage/', wait_time=1)
         _exec_backend_cmd(chan, 'mkdir -p /data/tmp/', wait_time=0.5)
 
-        # SCP 拉取脚本
+        # 通过 heredoc 写入脚本到目标目录
         _update_task_output(task_id, '同步脚本...\n')
         fname = os.path.basename(script_path)
         remote_path = f'{remote_dir}{fname}'
-        ubuntu_src = _to_ubuntu_path(script_path)
-        scp_cmd = (
-            f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
-            f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{ubuntu_src} {remote_path}'
-        )
-        out = _exec_backend_cmd(chan, scp_cmd, wait_time=3)
-        if 'lost connection' in out.lower() or 'not found' in out.lower():
-            raise Exception(f'SCP 传输失败: {fname}\n{out[:500]}')
-        _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.5)
+        with open(script_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        _write_file_via_heredoc(chan, remote_path, content)
+        _exec_backend_cmd(chan, f'chmod +x {remote_path}', wait_time=0.3)
 
         # 构建执行命令
         exec_cmd = (
