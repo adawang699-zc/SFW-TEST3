@@ -4594,6 +4594,14 @@ def _check_ssh_connectivity(ip, port=22, user='admin', password='', timeout=10):
 UBUNTU_SSH_IP = '192.168.81.140'
 UBUNTU_SSH_USER = 'zhangc'
 UBUNTU_SSH_PASSWORD = 'tdhx@2017'
+UBUNTU_PROJECT_PATH = '/opt/SFW-TEST3'
+
+
+def _to_ubuntu_path(local_path):
+    """将本地 Windows 路径转换为 Ubuntu 服务器上的对应路径"""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    rel_path = os.path.relpath(local_path, project_root)
+    return f'{UBUNTU_PROJECT_PATH}/{rel_path.replace(os.sep, "/")}'
 
 # 天融信防火墙默认后台密码
 DEFAULT_FIREWALL_BACKEND_PASSWORD = '#HiNA_!ns@USHDLk'
@@ -4717,9 +4725,10 @@ def _execute_log_task(task_id, device, table_name, row_count, start_time, end_ti
         for fpath in script_files:
             fname = os.path.basename(fpath)
             remote_path = f'/app/local/share/new_self_manage/{fname}'
+            ubuntu_src = _to_ubuntu_path(fpath)
             scp_cmd = (
                 f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
-                f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{fpath} {remote_path}'
+                f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{ubuntu_src} {remote_path}'
             )
             out = _exec_backend_cmd(chan, scp_cmd, wait_time=3)
             if 'lost connection' in out.lower() or 'not found' in out.lower():
@@ -5062,9 +5071,10 @@ def _execute_archive_task(task_id, device, date_str, days, file_size_gb, file_co
         _update_task_output(task_id, '同步脚本...\n')
         fname = os.path.basename(script_path)
         remote_path = f'{remote_dir}{fname}'
+        ubuntu_src = _to_ubuntu_path(script_path)
         scp_cmd = (
             f'sshpass -p {UBUNTU_SSH_PASSWORD} scp -o StrictHostKeyChecking=no '
-            f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{script_path} {remote_path}'
+            f'{UBUNTU_SSH_USER}@{UBUNTU_SSH_IP}:{ubuntu_src} {remote_path}'
         )
         out = _exec_backend_cmd(chan, scp_cmd, wait_time=3)
         if 'lost connection' in out.lower() or 'not found' in out.lower():
