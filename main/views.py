@@ -6604,7 +6604,7 @@ def api_file_upload(request):
 
         from .device_utils import get_backend_password
         backend_pwd = get_backend_password(
-            device.device_type or 'ic_firewall',
+            device.type or 'ic_firewall',
             custom_password=device.backend_password or None,
         )
         chan = _enter_backend_shell(ssh, backend_pwd)
@@ -6671,7 +6671,7 @@ def api_file_download(request):
 
         from .device_utils import get_backend_password
         backend_pwd = get_backend_password(
-            device.device_type or 'ic_firewall',
+            device.type or 'ic_firewall',
             custom_password=device.backend_password or None,
         )
         chan = _enter_backend_shell(ssh, backend_pwd)
