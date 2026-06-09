@@ -6502,3 +6502,214 @@ def api_port_test_progress(request, test_id):
     response['Cache-Control'] = 'no-cache'
     response['X-Accel-Buffering'] = 'no'
     return response
+
+
+# ========== 文件操作（上传/下载） ==========
+
+# Ubuntu 管理网络配置（用于防火墙 SCP 中转）
+_UBUNTU_MGMT_IP = '192.168.81.140'
+_UBUNTU_SSH_USER = 'zhangc'
+_UBUNTU_SSH_PASSWORD = 'tdhx@2017'
+_FILE_UPLOAD_TEMP_DIR = '/tmp/sfw_file_upload/'
+_FILE_DOWNLOAD_TEMP_DIR = '/tmp/sfw_file_download/'
+_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+
+
+def _scp_via_firewall_shell(chan, scp_cmd, timeout=180):
+    """在防火墙 root shell 中执行 SCP，自动检测密码提示并输入
+
+    Args:
+        chan: invoke_shell channel（已在 root shell 中）
+        scp_cmd: 完整的 scp 命令
+        timeout: 传输超时秒数
+    """
+    chan.send(scp_cmd + '\n')
+
+    out = ''
+    start = time.time()
+    password_sent = False
+
+    while time.time() - start < timeout:
+        if chan.recv_ready():
+            data = chan.recv(65535).decode('utf-8', errors='ignore')
+            out += data
+
+            if 'password:' in data.lower() and not password_sent:
+                time.sleep(0.3)
+                while chan.recv_ready():
+                    chan.recv(65535)
+                chan.send(_UBUNTU_SSH_PASSWORD + '\n')
+                password_sent = True
+
+            no_such = 'No such file' in data or 'No such' in data
+            denied = 'Permission denied' in data or 'permission denied' in data
+            conn_lost = 'lost connection' in data or 'Connection refused' in data
+            if no_such or denied or conn_lost:
+                raise Exception(f'SCP 失败: {data[:300]}')
+
+            if password_sent and ('[root@' in data or '[root ' in data):
+                return out
+        else:
+            time.sleep(0.3)
+
+    raise Exception('SCP 传输超时')
+
+
+@require_http_methods(["GET"])
+def api_file_devices(request):
+    """获取防火墙设备列表（供文件操作选择）"""
+    try:
+        devices = TestDevice.objects.all().values('id', 'name', 'ip', 'port', 'type')
+        return JsonResponse({'success': True, 'devices': list(devices)})
+    except Exception as e:
+        logger.exception("获取设备列表失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@csrf_exempt
+def api_file_upload(request):
+    """上传文件到防火墙。浏览器 → Ubuntu 临时目录 → SCP → 防火墙 /data/tmp/"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': '仅支持 POST'})
+
+    device_id = request.POST.get('device_id', '').strip()
+    upload_file = request.FILES.get('file')
+
+    if not device_id or not upload_file:
+        return JsonResponse({'success': False, 'error': '缺少 device_id 或 file 参数'})
+    if upload_file.size > _MAX_FILE_SIZE:
+        return JsonResponse({
+            'success': False,
+            'error': f'文件大小超过 100MB 限制 ({upload_file.size / 1024 / 1024:.1f}MB)',
+        })
+
+    device = TestDevice.objects.filter(id=device_id).first()
+    if not device:
+        return JsonResponse({'success': False, 'error': '设备不存在'})
+
+    local_path = None
+    try:
+        os.makedirs(_FILE_UPLOAD_TEMP_DIR, exist_ok=True)
+        filename = upload_file.name
+        local_path = os.path.join(_FILE_UPLOAD_TEMP_DIR, filename)
+        with open(local_path, 'wb') as f:
+            for chunk in upload_file.chunks():
+                f.write(chunk)
+
+        import paramiko
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(device.ip, port=device.port or 22, username='admin',
+                    password=device.password, timeout=15)
+
+        from .device_utils import get_backend_password
+        backend_pwd = get_backend_password(
+            device.device_type or 'ic_firewall',
+            custom_password=device.backend_password or None,
+        )
+        chan = _enter_backend_shell(ssh, backend_pwd)
+
+        _exec_backend_cmd(chan, 'mkdir -p /data/tmp', wait_time=1)
+
+        remote_path = f'/data/tmp/{filename}'
+        scp_cmd = f'scp -o StrictHostKeyChecking=no {_UBUNTU_SSH_USER}@{_UBUNTU_MGMT_IP}:"{local_path}" "{remote_path}"'
+        _scp_via_firewall_shell(chan, scp_cmd)
+
+        verify = _exec_backend_cmd(chan, f'ls -l "{remote_path}"', wait_time=1)
+        if 'No such file' in verify:
+            raise Exception('文件验证失败')
+
+        ssh.close()
+
+        return JsonResponse({
+            'success': True,
+            'message': f'文件已上传至 {remote_path}',
+            'filename': filename,
+            'size': upload_file.size,
+            'remote_path': remote_path,
+        })
+    except Exception as e:
+        logger.exception("文件上传失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+    finally:
+        if local_path and os.path.exists(local_path):
+            os.remove(local_path)
+
+
+@csrf_exempt
+def api_file_download(request):
+    """从防火墙下载文件。防火墙 SCP → Ubuntu 临时目录 → HTTP 响应"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': '仅支持 POST'})
+
+    device_id = request.POST.get('device_id', '').strip()
+    remote_path = request.POST.get('remote_path', '').strip()
+
+    if not device_id or not remote_path:
+        return JsonResponse({'success': False, 'error': '缺少 device_id 或 remote_path 参数'})
+    if not remote_path.startswith('/data/'):
+        return JsonResponse({'success': False, 'error': '只允许下载 /data/ 目录下的文件'})
+
+    device = TestDevice.objects.filter(id=device_id).first()
+    if not device:
+        return JsonResponse({'success': False, 'error': '设备不存在'})
+
+    local_path = None
+    try:
+        filename = os.path.basename(remote_path)
+        if not filename:
+            return JsonResponse({'success': False, 'error': '无效的文件路径'})
+
+        os.makedirs(_FILE_DOWNLOAD_TEMP_DIR, exist_ok=True)
+        local_path = os.path.join(_FILE_DOWNLOAD_TEMP_DIR, filename)
+
+        import paramiko
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(device.ip, port=device.port or 22, username='admin',
+                    password=device.password, timeout=15)
+
+        from .device_utils import get_backend_password
+        backend_pwd = get_backend_password(
+            device.device_type or 'ic_firewall',
+            custom_password=device.backend_password or None,
+        )
+        chan = _enter_backend_shell(ssh, backend_pwd)
+
+        check = _exec_backend_cmd(chan, f'ls -l "{remote_path}"', wait_time=1)
+        if 'No such file' in check:
+            raise Exception(f'文件在防火墙上不存在: {remote_path}')
+
+        scp_cmd = f'scp "{remote_path}" {_UBUNTU_SSH_USER}@{_UBUNTU_MGMT_IP}:"{local_path}"'
+        _scp_via_firewall_shell(chan, scp_cmd)
+
+        ssh.close()
+
+        if not os.path.exists(local_path):
+            raise Exception('SCP 下载完成但本地文件未找到')
+
+        file_size = os.path.getsize(local_path)
+
+        from django.http import FileResponse
+        response = FileResponse(open(local_path, 'rb'), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response['Content-Length'] = file_size
+
+        old_close = response.close
+
+        def _cleanup():
+            old_close()
+            if os.path.exists(local_path):
+                os.remove(local_path)
+        response.close = _cleanup
+
+        return response
+
+    except Exception as e:
+        logger.exception("文件下载失败")
+        if local_path and os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+            except Exception:
+                pass
+        return JsonResponse({'success': False, 'error': str(e)})

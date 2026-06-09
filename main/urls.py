@@ -143,6 +143,9 @@ urlpatterns = [
     path('api/system-config/log-status/', views.api_system_config_log_status, name='api_system_config_log_status'),
     path('api/system-config/log-devices/', views.api_system_config_log_devices, name='api_system_config_log_devices'),
     path('api/system-config/archive-generate/', views.api_system_config_archive_generate, name='api_system_config_archive_generate'),
+    path('api/system-config/file-devices/', views.api_file_devices, name='api_file_devices'),
+    path('api/system-config/file-upload/', views.api_file_upload, name='api_file_upload'),
+    path('api/system-config/file-download/', views.api_file_download, name='api_file_download'),
 
     # ========== 认证服务器管理 ==========
     path('api/auth/detect/', views.api_auth_detect, name='api_auth_detect'),

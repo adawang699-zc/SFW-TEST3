@@ -15,6 +15,7 @@
         <button class="btn btn-primary tab-btn" data-tab="log_manage" onclick="switchTab('log_manage')">日志管理</button>
         <button class="btn btn-secondary tab-btn" data-tab="port_manage" onclick="switchTab('port_manage')">网口管理</button>
         <button class="btn btn-secondary tab-btn" data-tab="auth_server" onclick="switchTab('auth_server')">认证服务器配置</button>
+        <button class="btn btn-secondary tab-btn" data-tab="file_ops" onclick="switchTab('file_ops')">文件操作</button>
         <button class="btn btn-secondary tab-btn" data-tab="ha_monitor" onclick="switchTab('ha_monitor')">HA监测</button>
         <button class="btn btn-secondary tab-btn" data-tab="ipsec" onclick="switchTab('ipsec')">IPSec</button>
         <button class="btn btn-secondary tab-btn" data-tab="bandwidth" onclick="switchTab('bandwidth')">带宽测试</button>
@@ -492,6 +493,62 @@
             <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">操作结果</div>
             <div id="authResult" style="min-height: 80px; max-height: 200px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap;">
                 <div style="color: var(--text-muted);">点击"检测状态"查看认证服务器配置...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 文件操作 ==================== -->
+<div class="tab-content" id="tab-file_ops" style="display: none;">
+    <div class="card">
+        <div class="card-header">文件操作</div>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            通过 Ubuntu 中转，上传文件到防火墙或从防火墙下载文件。默认路径 <code>/data/tmp</code>。
+        </p>
+
+        <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+            <!-- ======== 上传区域 ======== -->
+            <div style="flex: 1; min-width: 350px; background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+                <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 16px;">
+                    <i class="fas fa-upload"></i> 上传文件到防火墙
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择设备</label>
+                    <select class="form-input" id="file_upload_device">
+                        <option value="">-- 请选择防火墙 --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择本地文件</label>
+                    <input type="file" class="form-input" id="file_upload_input">
+                    <small style="color: var(--text-muted);">最大 100MB</small>
+                </div>
+                <button class="btn btn-primary" onclick="startFileUpload()">
+                    <i class="fas fa-cloud-upload-alt"></i> 上传
+                </button>
+                <div id="file_upload_progress" style="margin-top: 12px;"></div>
+            </div>
+
+            <!-- ======== 下载区域 ======== -->
+            <div style="flex: 1; min-width: 350px; background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+                <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 16px;">
+                    <i class="fas fa-download"></i> 从防火墙下载文件
+                </div>
+                <div class="form-group">
+                    <label class="form-label">选择设备</label>
+                    <select class="form-input" id="file_download_device">
+                        <option value="">-- 请选择防火墙 --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">防火墙文件路径</label>
+                    <input type="text" class="form-input" id="file_download_path" value="/data/tmp/" placeholder="/data/tmp/filename">
+                    <small style="color: var(--text-muted);">只允许下载 /data/ 目录下的文件</small>
+                </div>
+                <button class="btn btn-primary" onclick="startFileDownload()">
+                    <i class="fas fa-cloud-download-alt"></i> 下载
+                </button>
+                <div id="file_download_progress" style="margin-top: 12px;"></div>
             </div>
         </div>
     </div>
@@ -2524,5 +2581,144 @@ async function loadHeaderLinks() {
         }
     } catch (e) {}
 }
+
+// ========== 文件操作 JS ==========
+
+let fileOpsLoaded = false;
+
+function initFileOps() {
+    if (fileOpsLoaded) return;
+    fileOpsLoaded = true;
+    loadFileDevices();
+}
+
+function addFileOpsLog(elId, message, type) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (el.querySelector('.text-muted') || el.children.length === 0) el.innerHTML = '';
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+    el.innerHTML += '<div style="color: ' + color + '; margin-bottom: 4px;"><small style="color: var(--text-muted);">[' + time + ']</small> ' + message + '</div>';
+    el.scrollTop = el.scrollHeight;
+}
+
+async function loadFileDevices() {
+    try {
+        const resp = await fetch('/api/system-config/file-devices/');
+        const data = await resp.json();
+        if (!data.success) return;
+        const uploadSel = document.getElementById('file_upload_device');
+        const downloadSel = document.getElementById('file_download_device');
+        uploadSel.innerHTML = '<option value="">-- 请选择防火墙 --</option>';
+        downloadSel.innerHTML = '<option value="">-- 请选择防火墙 --</option>';
+        for (const d of data.devices) {
+            uploadSel.innerHTML += '<option value="' + d.id + '">' + escapeHtml(d.name) + ' (' + d.ip + ')</option>';
+            downloadSel.innerHTML += '<option value="' + d.id + '">' + escapeHtml(d.name) + ' (' + d.ip + ')</option>';
+        }
+    } catch (e) {
+        console.error('加载设备列表失败:', e);
+    }
+}
+
+async function startFileUpload() {
+    const deviceId = document.getElementById('file_upload_device').value;
+    const fileInput = document.getElementById('file_upload_input');
+    const progress = document.getElementById('file_upload_progress');
+
+    if (!deviceId) {
+        addFileOpsLog('file_upload_progress', '请选择设备', 'warning');
+        return;
+    }
+    if (!fileInput.files || fileInput.files.length === 0) {
+        addFileOpsLog('file_upload_progress', '请选择文件', 'warning');
+        return;
+    }
+
+    const file = fileInput.files[0];
+    if (file.size > 100 * 1024 * 1024) {
+        addFileOpsLog('file_upload_progress', '文件大小超过 100MB 限制 (' + (file.size / 1024 / 1024).toFixed(1) + 'MB)', 'error');
+        return;
+    }
+
+    addFileOpsLog('file_upload_progress', '正在上传 ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)...', 'info');
+
+    const formData = new FormData();
+    formData.append('device_id', deviceId);
+    formData.append('file', file);
+
+    try {
+        const resp = await fetch('/api/system-config/file-upload/', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+            addFileOpsLog('file_upload_progress', '上传成功: ' + data.remote_path + ' (' + (data.size / 1024).toFixed(1) + ' KB)', 'success');
+        } else {
+            addFileOpsLog('file_upload_progress', '上传失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        addFileOpsLog('file_upload_progress', '上传异常: ' + e, 'error');
+    }
+}
+
+async function startFileDownload() {
+    const deviceId = document.getElementById('file_download_device').value;
+    const remotePath = document.getElementById('file_download_path').value.trim();
+    const progress = document.getElementById('file_download_progress');
+
+    if (!deviceId) {
+        addFileOpsLog('file_download_progress', '请选择设备', 'warning');
+        return;
+    }
+    if (!remotePath) {
+        addFileOpsLog('file_download_progress', '请输入防火墙文件路径', 'warning');
+        return;
+    }
+
+    addFileOpsLog('file_download_progress', '正在从防火墙下载: ' + remotePath + '...', 'info');
+
+    try {
+        const resp = await fetch('/api/system-config/file-download/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'device_id=' + encodeURIComponent(deviceId) + '&remote_path=' + encodeURIComponent(remotePath)
+        });
+
+        const contentType = resp.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            const data = await resp.json();
+            addFileOpsLog('file_download_progress', '下载失败: ' + (data.error || '未知错误'), 'error');
+            return;
+        }
+
+        const cd = resp.headers.get('content-disposition') || '';
+        const match = cd.match(/filename="(.+)"/);
+        const filename = match ? match[1] : remotePath.split('/').pop();
+
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        addFileOpsLog('file_download_progress', '下载完成: ' + filename + ' (' + (blob.size / 1024).toFixed(1) + ' KB)', 'success');
+    } catch (e) {
+        addFileOpsLog('file_download_progress', '下载异常: ' + e, 'error');
+    }
+}
+
+// Override switchTab to init file ops on first switch
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(tabId) {
+    if (tabId === 'file_ops') {
+        initFileOps();
+    }
+    _origSwitchTab(tabId);
+};
 </script>
 {% endblock %}
