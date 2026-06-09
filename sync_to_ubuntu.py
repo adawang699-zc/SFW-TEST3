@@ -125,7 +125,8 @@ def step3_restart_django(ssh: paramiko.SSHClient) -> bool:
     time.sleep(2)
 
     # 启动 daphne (后台运行，支持 WebSocket)
-    cmd = f"cd {UBUNTU_PROJECT_PATH} && nohup sfw/bin/daphne -b 0.0.0.0 -p 8000 djangoProject.asgi:application > logs/django.log 2>&1 &"
+    # sfw/bin/ 目录可能不存在，使用 python -m daphne + PYTHONPATH
+    cmd = f"cd {UBUNTU_PROJECT_PATH} && nohup env PYTHONPATH={UBUNTU_PROJECT_PATH}/sfw/lib/python3.10/site-packages /usr/bin/python3 -m daphne -b 0.0.0.0 -p 8000 djangoProject.asgi:application > logs/django.log 2>&1 &"
     code, out, err = ssh_exec(ssh, cmd, background=True)
 
     if code != 0:
