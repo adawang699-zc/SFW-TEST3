@@ -428,3 +428,18 @@ class PortTestResult(models.Model):
 
     def __str__(self):
         return f"{self.test_session_id} - 场景{self.scenario_id}: {self.result}"
+
+
+class LinkAddress(models.Model):
+    """关联地址模型 - 顶部导航栏的自定义链接"""
+    name = models.CharField(max_length=200, verbose_name="名称")
+    url = models.URLField(max_length=500, verbose_name="地址")
+    order = models.IntegerField(default=0, verbose_name="排序")
+
+    class Meta:
+        verbose_name = "关联地址"
+        verbose_name_plural = "关联地址"
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return self.name

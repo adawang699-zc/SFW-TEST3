@@ -2458,8 +2458,8 @@ function renderLinksList() {
         html += '<td style="padding:6px 8px;">' + escapeHtml(link.name) + '</td>';
         html += '<td style="padding:6px 8px;"><a href="' + escapeHtml(link.url) + '" target="_blank" style="color:var(--secondary);">' + escapeHtml(link.url) + '</a></td>';
         html += '<td style="padding:6px 8px;text-align:right;">';
-        html += '<button class="btn btn-sm btn-secondary" onclick="showEditLinkModal(' + index + ')" style="margin-right:4px;padding:2px 8px;font-size:0.8rem;">编辑</button>';
-        html += '<button class="btn btn-sm btn-danger" onclick="deleteLink(' + index + ')" style="padding:2px 8px;font-size:0.8rem;">删除</button>';
+        html += '<button class="btn btn-sm btn-secondary" onclick="showEditLinkModal(' + link.id + ')" style="margin-right:4px;padding:2px 8px;font-size:0.8rem;">编辑</button>';
+        html += '<button class="btn btn-sm btn-danger" onclick="deleteLink(' + link.id + ')" style="padding:2px 8px;font-size:0.8rem;">删除</button>';
         html += '</td></tr>';
     });
     html += '</tbody></table>';
@@ -2485,8 +2485,13 @@ function showAddLinkModal() {
     });
 }
 
-function showEditLinkModal(index) {
-    const link = linksData[index];
+function findLinkById(id) {
+    return linksData.find(function(l) { return l.id === id; });
+}
+
+function showEditLinkModal(id) {
+    const link = findLinkById(id);
+    if (!link) return;
     showPromptModal2('编辑关联地址', [
         {id: 'edit_link_name', label: '关联名称', placeholder: '', defaultValue: link.name},
         {id: 'edit_link_url', label: '关联地址', placeholder: '', defaultValue: link.url}
@@ -2497,7 +2502,7 @@ function showEditLinkModal(index) {
             showToast('名称和地址不能为空', 'warning');
             return;
         }
-        updateLink(index, name, url);
+        updateLink(id, name, url);
     });
 }
 
@@ -2522,12 +2527,12 @@ async function addLink(name, url) {
     }
 }
 
-async function updateLink(index, name, url) {
+async function updateLink(id, name, url) {
     try {
         const resp = await fetch('/api/links/update/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({index: index, name: name, url: url})
+            body: JSON.stringify({id: id, name: name, url: url})
         });
         const data = await resp.json();
         if (data.success) {
@@ -2542,12 +2547,14 @@ async function updateLink(index, name, url) {
     }
 }
 
-async function deleteLink(index) {
-    showConfirmModal('确认删除', '确定要删除关联地址 "' + linksData[index].name + '" 吗？', function() {
+async function deleteLink(id) {
+    const link = findLinkById(id);
+    if (!link) return;
+    showConfirmModal('确认删除', '确定要删除关联地址 "' + link.name + '" 吗？', function() {
         fetch('/api/links/delete/', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({index: index})
+            body: JSON.stringify({id: id})
         })
         .then(r => r.json())
         .then(data => {
