@@ -121,6 +121,11 @@ def scan_namespace_interfaces(namespace):
                     # 提取网卡名（去掉后面的状态）
                     iface_name = parts[1].strip().split('@')[0].strip()
 
+                    # 跳过虚拟接口（bridge、veth、vlan等）
+                    virtual_prefixes = ['lo', 'br', 'br-', 'vh', 'veth', 'vlan', 'bond', 'tun', 'tap', 'docker']
+                    if any(iface_name.startswith(p) for p in virtual_prefixes):
+                        continue
+
                     # 获取 MAC 地址
                     mac_line = lines[i+1] if i+1 < len(lines) else ''
                     mac_match = mac_line.split('link/ether')[1].strip().split()[0] if 'link/ether' in mac_line else ''
@@ -438,6 +443,10 @@ def api_scan_interfaces(request):
         for name, addrs in net_if_addrs.items():
             # 跳过回环接口
             if name.startswith('lo') or name.lower() == 'loopback':
+                continue
+            # 跳过虚拟接口（veth、VM、bridge等）
+            virtual_prefixes = ['br', 'br-', 'vh', 'veth', 'vlan', 'vnet', 'virbr', 'docker', 'bond', 'tun', 'tap']
+            if any(name.startswith(p) for p in virtual_prefixes):
                 continue
 
             # 获取 IPv4 地址（可能为空）
@@ -1138,29 +1147,33 @@ def api_agent_config_ip(request):
         interface_name = agent.interface.name
         namespace = agent.interface.namespace
 
+        # 检测网卡是否在 bridge 中（如 eth1 在 br1 中）
+        bridge_name = get_bridge_master_iface(interface_name, namespace)
+        effective_iface = bridge_name or interface_name
+        bind_interface = bridge_name or interface_name  # BIND_INTERFACE 使用 bridge 名
+
         # 检查 Agent 是否正在运行
         if agent.status == 'running':
             return JsonResponse({'success': False, 'error': 'Agent 正在运行，请先停止 Agent'})
 
         # 获取命令执行函数（考虑 namespace）
-        # 注意: sudo 应该在整个命令外面，而不是在 namespace 内
         def run_ip_cmd(args):
             if namespace:
-                # sudo ip netns exec <namespace> <command>
                 full_cmd = ['sudo', 'ip', 'netns', 'exec', namespace] + args
                 return subprocess.run(full_cmd, capture_output=True, text=True, timeout=10)
             else:
                 return subprocess.run(['sudo'] + args, capture_output=True, text=True, timeout=10)
 
-        # 先启动网卡
+        # 先启动 bridge 和网卡
+        run_ip_cmd(['ip', 'link', 'set', effective_iface, 'up'])
         run_ip_cmd(['ip', 'link', 'set', interface_name, 'up'])
 
-        # 清空网卡上所有旧的 IP 地址
-        run_ip_cmd(['ip', 'addr', 'flush', 'dev', interface_name])
+        # 清空有效接口上所有旧的 IP 地址
+        run_ip_cmd(['ip', 'addr', 'flush', 'dev', effective_iface])
 
-        # 配置新的 IP 地址（CIDR 格式）
+        # 配置新的 IP 地址（CIDR 格式）到有效接口
         cidr = f"{ip_address}/{netmask}"
-        result = run_ip_cmd(['ip', 'addr', 'add', cidr, 'dev', interface_name])
+        result = run_ip_cmd(['ip', 'addr', 'add', cidr, 'dev', effective_iface])
 
         if namespace or result.returncode == 0 or 'File exists' in result.stderr:
             # 更新数据库
@@ -1169,7 +1182,7 @@ def api_agent_config_ip(request):
             agent.interface.status = 'UP'
             agent.interface.save()
 
-            # 更新 systemd 服务配置文件（namespace 时使用 -ns 后缀）
+            # 更新 systemd 服务配置文件
             if namespace:
                 service_name = agent.get_namespace_service_name()
                 exec_prefix = f'/usr/bin/ip netns exec {namespace}'
@@ -1178,7 +1191,6 @@ def api_agent_config_ip(request):
                 exec_prefix = ''
 
             service_file = f'/etc/systemd/system/{service_name}.service'
-            # 使用 Gunicorn 启动（单 worker + preload）
             if exec_prefix:
                 exec_start = f'{exec_prefix} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app'
             else:
@@ -1191,7 +1203,7 @@ After=network.target
 Type=simple
 Environment="AGENT_ID={agent.agent_id}"
 Environment="BIND_IP={ip_address}"
-Environment="BIND_INTERFACE={interface_name}"
+Environment="BIND_INTERFACE={bind_interface}"
 Environment="AGENT_PORT={agent.port}"
 WorkingDirectory={settings.AGENT_WORK_DIR}
 ExecStart={exec_start}
@@ -3134,10 +3146,33 @@ def _generate_device_license_dev_code(machine_code: str) -> tuple:
 
 # ========== 网卡配置 API ==========
 
+def get_bridge_master_iface(interface_name: str, namespace: str = None) -> str:
+    """检测网卡是否在bridge中，返回bridge名称；不在bridge中返回None"""
+    try:
+        cmd = ['ip', 'link', 'show', interface_name]
+        if namespace:
+            result = subprocess.run(
+                ['sudo', 'ip', 'netns', 'exec', namespace] + cmd,
+                capture_output=True, text=True, timeout=5
+            )
+        else:
+            result = subprocess.run(['sudo'] + cmd, capture_output=True, text=True, timeout=5)
+
+        if result.returncode == 0:
+            # 查找 "master <bridge_name>" 模式
+            import re
+            match = re.search(r'master\s+(\S+)', result.stdout)
+            if match:
+                return match.group(1)
+        return None
+    except Exception:
+        return None
+
+
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_interface_config_ip(request):
-    """配置网卡 IP 地址（支持 namespace）"""
+    """配置网卡 IP 地址（支持 namespace + bridge）"""
     try:
         data = json.loads(request.body)
         interface_name = data.get('interface_name')
@@ -3151,18 +3186,23 @@ def api_interface_config_ip(request):
         iface = NetworkInterface.objects.filter(name=interface_name).first()
         namespace = iface.namespace if iface else None
 
+        # 检测网卡是否在 bridge 中（比如 eth1 在 br1 中），IP 应配在 bridge 上
+        bridge_name = get_bridge_master_iface(interface_name, namespace)
+        effective_iface = bridge_name or interface_name
+
         def run_ip_cmd(args):
             if namespace:
                 return exec_in_namespace(namespace, ['sudo'] + args)
             else:
                 return subprocess.run(['sudo'] + args, capture_output=True, text=True, timeout=10)
 
-        # 先启动网卡
+        # 先启动 bridge 和网卡
+        run_ip_cmd(['ip', 'link', 'set', effective_iface, 'up'])
         run_ip_cmd(['ip', 'link', 'set', interface_name, 'up'])
 
-        # 配置 IP 地址（CIDR 格式）
+        # 配置 IP 地址到有效的接口（bridge 或物理网卡）
         cidr = f"{ip_address}/{netmask}"
-        result = run_ip_cmd(['ip', 'addr', 'add', cidr, 'dev', interface_name])
+        result = run_ip_cmd(['ip', 'addr', 'add', cidr, 'dev', effective_iface])
 
         if result.returncode == 0 or 'File exists' in result.stderr:
             # 更新数据库
@@ -3206,9 +3246,16 @@ def api_interface_startup(request):
         iface = NetworkInterface.objects.filter(name=interface_name).first()
         namespace = iface.namespace if iface else None
 
+        # 检测 bridge 并同时启动
+        bridge_name = get_bridge_master_iface(interface_name, namespace)
+
         if namespace:
+            if bridge_name:
+                exec_in_namespace(namespace, ['sudo', 'ip', 'link', 'set', bridge_name, 'up'])
             result = exec_in_namespace(namespace, ['sudo', 'ip', 'link', 'set', interface_name, 'up'])
         else:
+            if bridge_name:
+                subprocess.run(['sudo', 'ip', 'link', 'set', bridge_name, 'up'], capture_output=True, text=True, timeout=10)
             result = subprocess.run(
                 ['sudo', 'ip', 'link', 'set', interface_name, 'up'],
                 capture_output=True,
