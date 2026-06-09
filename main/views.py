@@ -130,7 +130,7 @@ def scan_namespace_interfaces(namespace):
                     mac_line = lines[i+1] if i+1 < len(lines) else ''
                     mac_match = mac_line.split('link/ether')[1].strip().split()[0] if 'link/ether' in mac_line else ''
 
-                    # 获取 IP 地址
+                    # 获取 IP 地址（先从网卡自身获取）
                     ip_result = subprocess.run(
                         ['sudo', 'ip', 'netns', 'exec', namespace, 'ip', 'addr', 'show', iface_name],
                         capture_output=True, text=True, timeout=5
@@ -140,6 +140,21 @@ def scan_namespace_interfaces(namespace):
                         for ip_line in ip_result.stdout.split('\n'):
                             if 'inet ' in ip_line:
                                 ipv4 = ip_line.split('inet ')[1].split()[0].split('/')[0]
+
+                    # 如果物理网卡自身没有 IP，检查是否在 bridge 中，从 bridge master 获取 IP
+                    if not ipv4:
+                        import re
+                        bridge_match = re.search(r'master\s+(\S+)', line)
+                        if bridge_match:
+                            bridge_name = bridge_match.group(1)
+                            br_ip_result = subprocess.run(
+                                ['sudo', 'ip', 'netns', 'exec', namespace, 'ip', 'addr', 'show', bridge_name],
+                                capture_output=True, text=True, timeout=5
+                            )
+                            if br_ip_result.returncode == 0:
+                                for ip_line in br_ip_result.stdout.split('\n'):
+                                    if 'inet ' in ip_line:
+                                        ipv4 = ip_line.split('inet ')[1].split()[0].split('/')[0]
 
                     # 判断是否有网线连接（carrier 状态）
                     # LOWER_UP 表示有物理连接，NO-CARRIER 表示无连接
