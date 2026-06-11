@@ -661,7 +661,7 @@ function showEditModal(deviceId) {
     }
     document.getElementById('edit-device-long-running').checked = device.is_long_running || false;
     document.getElementById('edit-device-description').value = device.description || '';
-    document.getElementById('edit-modal').style.display = 'block';
+    document.getElementById('edit-modal').style.display = 'flex';
 }
 
 function hideEditModal() {
@@ -969,22 +969,9 @@ async function editTestConnection() {
             ip, port: parseInt(port), user, password, device_type, backend_password
         });
 
-        if (result.results) {
-            const s = result.results.ssh;
-            const v = result.results.vtysh;
-            const b = result.results.backend;
-            const ok = result.success;
-
-            let html = ok
-                ? '<div style="color: #8fce00; font-weight: bold;">✓ 连接测试成功</div>'
-                : '<div style="color: #f8d7da; font-weight: bold;">✗ 连接测试失败</div>';
-            html += `<div>SSH: ${s.success ? '✓' : '✗'} ${s.message}</div>`;
-            if (v.message) html += `<div>vtysh: ${v.success ? '✓' : '✗'} ${v.message}</div>`;
-            if (b.message) html += `<div>后台: ${b.success ? '✓' : '✗'} ${b.message}</div>`;
-            resultDiv.innerHTML = html;
-        } else {
-            resultDiv.innerHTML = `<span style="color: #f8d7da;">${result.error || '连接失败'}</span>`;
-        }
+        resultDiv.innerHTML = result.success
+            ? '<span style="color: #8fce00; font-weight: bold;">✓ 连接测试成功</span>'
+            : '<span style="color: #f8d7da; font-weight: bold;">✗ 连接测试失败</span>';
     } catch (e) {
         resultDiv.innerHTML = `<span style="color: #f8d7da;">请求失败: ${e.message}</span>`;
     }
