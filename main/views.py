@@ -951,9 +951,11 @@ WantedBy=multi-user.target
                 else:
                     agent.status = 'starting'
                     agent.save()
+                    log_operation(request, '启动Agent', 'Agent', agent_id, f'namespace: {ns}, 状态: starting')
                     return JsonResponse({'success': True, 'status': 'starting', 'namespace': ns})
             else:
                 logger.error(f"启动 Agent {agent_id} 失败: {result.stderr}")
+                log_operation(request, '启动Agent', 'Agent', agent_id, f'systemctl启动失败: {result.stderr}', result='failure')
                 return JsonResponse({'success': False, 'error': result.stderr})
 
         else:
@@ -1013,9 +1015,11 @@ WantedBy=multi-user.target
                 except:
                     agent.status = 'error'
                     agent.save()
+                    log_operation(request, '启动Agent', 'Agent', agent_id, '状态: starting(error)')
                     return JsonResponse({'success': True, 'status': 'starting'})
             else:
                 logger.error(f"启动 Agent 失败: {result.stderr}")
+                log_operation(request, '启动Agent', 'Agent', agent_id, f'systemctl启动失败: {result.stderr}', result='failure')
                 return JsonResponse({'success': False, 'error': result.stderr})
             logger.error(f"启动 Agent 失败: {result.stderr}")
             return JsonResponse({'success': False, 'error': result.stderr})
@@ -1381,6 +1385,7 @@ def api_agents_lock(request):
             lock.agents.add(agent)
 
         logger.info(f"租用成功: {user_identifier} ({client_ip}) 租用 Agent: {agent_ids}, 无活动 {INACTIVITY_TIMEOUT_HOURS} 小时后自动释放")
+        log_operation(request, '租用Agent', 'Agent', '', f'用户: {user_identifier}, Agents: {", ".join(agent_ids)}')
 
         return JsonResponse({
             'success': True,
@@ -1443,6 +1448,7 @@ def api_agents_unlock(request):
             lock.save()
 
         logger.info(f"手动释放租用: {user_identifier}, Agent: {released_agents}")
+        log_operation(request, '释放Agent', 'Agent', '', f'用户: {user_identifier}, Agents: {", ".join(released_agents)}')
 
         return JsonResponse({
             'success': True,
