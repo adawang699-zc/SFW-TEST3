@@ -166,6 +166,14 @@ urlpatterns = [
     path('api/links/update/', views.api_links_update, name='api_links_update'),
     path('api/links/delete/', views.api_links_delete, name='api_links_delete'),
 
+    # ========== 管理口配置 API ==========
+    path('api/mgmt-port/info/', views.api_mgmt_port_info, name='api_mgmt_port_info'),
+    path('api/mgmt-port/update/', views.api_mgmt_port_update, name='api_mgmt_port_update'),
+
+    # ========== 虚拟机管理 API ==========
+    path('api/vm/list/', views.api_vm_list, name='api_vm_list'),
+    path('api/vm/detail/', views.api_vm_detail, name='api_vm_detail'),
+
     # ========== 授权管理 ==========
     path('license-management/', views.license_management, name='license_management'),
     path('api/license/verify-password/', views.api_license_verify_password, name='api_license_verify_password'),

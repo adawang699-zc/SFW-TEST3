@@ -23,6 +23,8 @@
         <button class="btn btn-secondary tab-btn" data-tab="custom_protocol" onclick="switchTab('custom_protocol')">自定义协议生成</button>
         <button class="btn btn-secondary tab-btn" data-tab="security_test" onclick="switchTab('security_test')">安全测试</button>
         <button class="btn btn-secondary tab-btn" data-tab="system_manage" onclick="switchTab('system_manage')">系统管理</button>
+        <button class="btn btn-secondary tab-btn" data-tab="mgmt_port" onclick="switchTab('mgmt_port')">管理口配置</button>
+        <button class="btn btn-secondary tab-btn" data-tab="vm_config" onclick="switchTab('vm_config')">虚拟机配置</button>
     </div>
 </div>
 
@@ -649,6 +651,123 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- ==================== 管理口配置 ==================== -->
+<div class="tab-content" id="tab-mgmt_port" style="display: none;">
+    <div class="card">
+        <div class="card-header">管理口配置</div>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            配置管理口的 IP 地址、网关和 DNS。当前管理口为 <strong>br0</strong>（物理网口 <strong>eth0</strong>）。
+        </p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+            <!-- 左侧：当前状态 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">当前状态</div>
+                    <table id="mgmt_port_info_table" style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary); width: 120px;">连接名称</td>
+                            <td style="padding: 6px 8px;" id="mgmt_con_name">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">接口</td>
+                            <td style="padding: 6px 8px;" id="mgmt_interface">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">物理网口</td>
+                            <td style="padding: 6px 8px;" id="mgmt_physical">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">IP 地址</td>
+                            <td style="padding: 6px 8px;" id="mgmt_ip_display">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">子网掩码</td>
+                            <td style="padding: 6px 8px;" id="mgmt_netmask_display">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">网关</td>
+                            <td style="padding: 6px 8px;" id="mgmt_gateway_display">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">DNS</td>
+                            <td style="padding: 6px 8px;" id="mgmt_dns_display">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">MAC 地址</td>
+                            <td style="padding: 6px 8px;" id="mgmt_mac">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">状态</td>
+                            <td style="padding: 6px 8px;" id="mgmt_state">--</td></tr>
+                        <tr><td style="padding: 6px 8px; color: var(--text-secondary);">速率</td>
+                            <td style="padding: 6px 8px;" id="mgmt_speed">--</td></tr>
+                    </table>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-primary" onclick="loadMgmtPortInfo()">
+                        <i class="fas fa-sync"></i> 刷新状态
+                    </button>
+                </div>
+            </div>
+
+            <!-- 右侧：配置修改 -->
+            <div>
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 12px;">修改配置</div>
+                    <div style="margin-bottom: 16px; padding: 12px; background: rgba(255, 193, 7, 0.1); border-radius: 6px; border: 1px solid rgba(255, 193, 7, 0.3);">
+                        <div style="color: var(--warning); font-size: 0.85rem;">
+                            <i class="fas fa-exclamation-triangle"></i> 修改 IP 地址后，如果 IP 发生变化，当前页面可能会断连，请使用新 IP 重新访问。
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">IP 地址 <span style="color: var(--danger);">*</span></label>
+                        <input type="text" class="form-input" id="mgmt_ip_input" placeholder="192.168.81.140">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">子网掩码</label>
+                        <select class="form-input" id="mgmt_netmask_input">
+                            <option value="24">255.255.255.0 (/24)</option>
+                            <option value="16">255.255.0.0 (/16)</option>
+                            <option value="8">255.0.0.0 (/8)</option>
+                            <option value="23">255.255.254.0 (/23)</option>
+                            <option value="22">255.255.252.0 (/22)</option>
+                            <option value="20">255.255.240.0 (/20)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">网关</label>
+                        <input type="text" class="form-input" id="mgmt_gateway_input" placeholder="192.168.81.1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">DNS 服务器</label>
+                        <input type="text" class="form-input" id="mgmt_dns_input" placeholder="8.8.8.8, 114.114.114.114">
+                        <small style="color: var(--text-muted);">多个 DNS 用逗号分隔</small>
+                    </div>
+                    <button class="btn btn-warning" onclick="confirmUpdateMgmtPort()" id="mgmt_update_btn">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                </div>
+
+                <div style="background: var(--bg-dark); border-radius: 8px; padding: 16px;">
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">操作结果</div>
+                    <div id="mgmt_port_result" style="min-height: 80px; max-height: 200px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap;">
+                        <div style="color: var(--text-muted);">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== 虚拟机配置 ==================== -->
+<div class="tab-content" id="tab-vm_config" style="display: none;">
+    <div class="card">
+        <div class="card-header">虚拟机配置</div>
+        <p style="color: var(--text-secondary); margin-bottom: 20px;">
+            查看虚拟机信息、IP 地址和桥接网卡配置。
+        </p>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+            <button class="btn btn-primary" onclick="loadVMList()">
+                <i class="fas fa-sync"></i> 刷新虚拟机列表
+            </button>
+        </div>
+
+        <!-- 虚拟机列表 -->
+        <div id="vm_list_container">
+            <div style="color: var(--text-muted); text-align: center; padding: 20px;">点击上方按钮刷新虚拟机列表...</div>
+        </div>
+    </div>
+
+    <!-- VM 详情弹窗 -->
+    <div id="vm_detail_modal" style="display: none;"></div>
 </div>
 {% endblock %}
 
@@ -2719,13 +2838,337 @@ async function startFileDownload() {
     }
 }
 
-// Override switchTab to init file ops on first switch
+// Override switchTab to init features on first switch
 const _origSwitchTab = window.switchTab;
+let mgmtPortLoaded = false;
+let vmConfigLoaded = false;
 window.switchTab = function(tabId) {
     if (tabId === 'file_ops') {
         initFileOps();
     }
+    if (tabId === 'mgmt_port' && !mgmtPortLoaded) {
+        mgmtPortLoaded = true;
+        loadMgmtPortInfo();
+    }
+    if (tabId === 'vm_config' && !vmConfigLoaded) {
+        vmConfigLoaded = true;
+        loadVMList();
+    }
     _origSwitchTab(tabId);
 };
+
+// ========== 管理口配置 JS ==========
+
+function addMgmtLog(message, type) {
+    const el = document.getElementById('mgmt_port_result');
+    if (!el) return;
+    if (el.querySelector('.text-muted') || el.children.length === 0) el.innerHTML = '';
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+    el.innerHTML += '<div style="color: ' + color + '; margin-bottom: 4px;"><small style="color: var(--text-muted);">[' + time + ']</small> ' + message + '</div>';
+    el.scrollTop = el.scrollHeight;
+}
+
+async function loadMgmtPortInfo() {
+    addMgmtLog('正在获取管理口信息...', 'info');
+    try {
+        const resp = await fetch('/api/mgmt-port/info/');
+        const data = await resp.json();
+        if (!data.success) {
+            addMgmtLog('获取失败: ' + (data.error || ''), 'error');
+            return;
+        }
+        const d = data.data;
+        document.getElementById('mgmt_con_name').textContent = d.connection_name || '--';
+        document.getElementById('mgmt_interface').textContent = d.interface || '--';
+        document.getElementById('mgmt_physical').textContent = d.physical_interface || '--';
+        document.getElementById('mgmt_ip_display').textContent = d.ip_address || '--';
+        document.getElementById('mgmt_netmask_display').textContent = '/' + (d.netmask || '--');
+        document.getElementById('mgmt_gateway_display').textContent = d.gateway || '--';
+        document.getElementById('mgmt_dns_display').textContent = d.dns || '--';
+        document.getElementById('mgmt_mac').textContent = d.mac || '--';
+        document.getElementById('mgmt_state').textContent = d.state || '--';
+        document.getElementById('mgmt_speed').textContent = d.speed || '--';
+
+        // 填充编辑框
+        document.getElementById('mgmt_ip_input').value = d.ip_address || '';
+        document.getElementById('mgmt_netmask_input').value = d.netmask || '24';
+        document.getElementById('mgmt_gateway_input').value = d.gateway || '';
+        document.getElementById('mgmt_dns_input').value = d.dns || '';
+
+        addMgmtLog('获取管理口信息成功', 'success');
+    } catch (e) {
+        addMgmtLog('获取异常: ' + e.message, 'error');
+    }
+}
+
+function confirmUpdateMgmtPort() {
+    const ip = document.getElementById('mgmt_ip_input').value.trim();
+    const netmask = document.getElementById('mgmt_netmask_input').value;
+    const gateway = document.getElementById('mgmt_gateway_input').value.trim();
+    const dns = document.getElementById('mgmt_dns_input').value.trim();
+
+    if (!ip) {
+        showToast('IP 地址不能为空', 'warning');
+        return;
+    }
+
+    const msg = '确定要修改管理口配置吗？\n\n'
+        + 'IP 地址: ' + ip + '/' + netmask + '\n'
+        + (gateway ? '网关: ' + gateway + '\n' : '')
+        + (dns ? 'DNS: ' + dns + '\n' : '')
+        + '\n⚠️ 警告：如果 IP 发生变化，连接将中断！\n'
+        + '请确保使用新 IP 重新访问。';
+
+    showConfirmModal('确认修改管理口配置', msg, function() {
+        updateMgmtPort(ip, netmask, gateway, dns);
+    }, '⚠️');
+}
+
+async function updateMgmtPort(ip, netmask, gateway, dns) {
+    const btn = document.getElementById('mgmt_update_btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 配置中...';
+    addMgmtLog('正在更新管理口配置...', 'info');
+
+    try {
+        const resp = await fetch('/api/mgmt-port/update/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({
+                ip_address: ip,
+                netmask: netmask,
+                gateway: gateway,
+                dns: dns
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            addMgmtLog('配置已更新! 新 IP: ' + ip + '/' + netmask, 'success');
+            if (gateway) addMgmtLog('网关: ' + gateway, 'info');
+            if (dns) addMgmtLog('DNS: ' + dns, 'info');
+            showToast(data.message, 'success');
+            // 重新加载信息
+            setTimeout(loadMgmtPortInfo, 3000);
+        } else {
+            addMgmtLog('配置失败: ' + (data.error || ''), 'error');
+            showToast('配置失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        addMgmtLog('配置异常: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> 保存配置';
+    }
+}
+
+// ========== 虚拟机配置 JS ==========
+
+function addVMLog(message, type) {
+    const el = document.getElementById('vm_list_container');
+    if (!el) return;
+    if (el.querySelector('.text-muted') && el.children.length === 1) el.innerHTML = '';
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+    el.innerHTML += '<div style="color: ' + color + '; margin-bottom: 4px; font-size: 0.85rem;"><small style="color: var(--text-muted);">[' + time + ']</small> ' + message + '</div>';
+    el.scrollTop = el.scrollHeight;
+}
+
+function renderVMTable(vms) {
+    const container = document.getElementById('vm_list_container');
+    if (!vms || vms.length === 0) {
+        container.innerHTML = '<div style="background: var(--bg-dark); border-radius: 8px; padding: 32px; text-align: center; color: var(--text-muted);">暂无虚拟机</div>';
+        return;
+    }
+
+    let html = '';
+    vms.forEach(function(vm) {
+        const statusColor = vm.running ? 'var(--success)' : 'var(--text-muted)';
+        const statusIcon = vm.running ? 'fa-play-circle' : 'fa-stop-circle';
+
+        html += '<div style="background: var(--bg-dark); border-radius: 8px; padding: 16px; margin-bottom: 12px; border: 1px solid var(--border-color);">';
+
+        // VM 标题行
+        html += '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">';
+        html += '<div style="display: flex; align-items: center; gap: 8px;">';
+        html += '<i class="fas ' + statusIcon + '" style="color: ' + statusColor + '; font-size: 1.2rem;"></i>';
+        html += '<span style="font-weight: 600; font-size: 1.05rem;">' + escapeHtml(vm.name) + '</span>';
+        html += '<span style="font-size: 0.8rem; color: ' + statusColor + ';">' + escapeHtml(vm.status) + '</span>';
+        html += '</div>';
+        html += '<button class="btn btn-sm btn-secondary" onclick="showVMDetail(\'' + escapeHtml(vm.name) + '\')" style="padding: 4px 12px; font-size: 0.8rem;">';
+        html += '<i class="fas fa-info-circle"></i> 详情</button>';
+        html += '</div>';
+
+        // VM 网络信息
+        if (vm.interfaces && vm.interfaces.length > 0) {
+            html += '<div style="margin-bottom: 8px;">';
+            html += '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 6px;">桥接网卡信息:</div>';
+            html += '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            html += '<thead><tr style="background: rgba(0,0,0,0.2);">';
+            html += '<th style="padding: 4px 8px; text-align: left;">接口</th>';
+            html += '<th style="padding: 4px 8px; text-align: left;">类型</th>';
+            html += '<th style="padding: 4px 8px; text-align: left;">桥接/网络</th>';
+            html += '<th style="padding: 4px 8px; text-align: left;">模型</th>';
+            html += '</tr></thead><tbody>';
+            vm.interfaces.forEach(function(iface) {
+                html += '<tr>';
+                html += '<td style="padding: 4px 8px;">' + escapeHtml(iface.interface || '') + '</td>';
+                html += '<td style="padding: 4px 8px;">' + escapeHtml(iface.type || '') + '</td>';
+                html += '<td style="padding: 4px 8px; color: var(--secondary);">' + escapeHtml(iface.source || '') + '</td>';
+                html += '<td style="padding: 4px 8px;">' + escapeHtml(iface.model || '') + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            html += '</div>';
+        }
+
+        // VM IP 地址
+        if (vm.ip_addresses && vm.ip_addresses.length > 0) {
+            html += '<div>';
+            html += '<div style="color: var(--text-secondary); font-size: 0.8rem; margin-bottom: 6px;">IP 地址:</div>';
+            vm.ip_addresses.forEach(function(addr) {
+                html += '<div style="display: inline-block; background: rgba(0, 168, 150, 0.1); border-radius: 4px; padding: 4px 10px; margin-right: 8px; margin-bottom: 4px; font-size: 0.85rem;">';
+                html += '<span style="color: var(--text-muted);">' + escapeHtml(addr.mac) + '</span> → ';
+                html += '<span style="color: var(--primary); font-family: monospace;">' + escapeHtml(addr.address) + '</span>';
+                html += '</div>';
+            });
+            html += '</div>';
+        } else if (vm.running) {
+            html += '<div style="color: var(--text-muted); font-size: 0.85rem;">暂无 IP 地址（可能需要虚拟机内配置网络或安装 qemu-guest-agent）</div>';
+        }
+
+        html += '</div>';
+    });
+
+    // 统计信息
+    const runningCount = vms.filter(function(v) { return v.running; }).length;
+    html += '<div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 8px;">共 ' + vms.length + ' 个虚拟机，' + runningCount + ' 个运行中</div>';
+
+    container.innerHTML = html;
+}
+
+async function loadVMList() {
+    addVMLog('正在获取虚拟机列表...', 'info');
+    try {
+        const resp = await fetch('/api/vm/list/');
+        const data = await resp.json();
+        if (!data.success) {
+            addVMLog('获取失败: ' + (data.error || ''), 'error');
+            return;
+        }
+        const d = data.data;
+        if (!d.available) {
+            document.getElementById('vm_list_container').innerHTML =
+                '<div style="background: var(--bg-dark); border-radius: 8px; padding: 32px; text-align: center; color: var(--text-muted);">'
+                + '⚠️ ' + escapeHtml(d.message || 'virsh 不可用')
+                + '</div>';
+            return;
+        }
+        renderVMTable(d.vms);
+        addVMLog('获取成功，共 ' + d.count + ' 个虚拟机', 'success');
+    } catch (e) {
+        addVMLog('获取异常: ' + e.message, 'error');
+    }
+}
+
+async function showVMDetail(vmName) {
+    try {
+        const resp = await fetch('/api/vm/detail/?name=' + encodeURIComponent(vmName));
+        const data = await resp.json();
+        if (!data.success) {
+            showToast('获取详情失败: ' + (data.error || ''), 'error');
+            return;
+        }
+        const d = data.data;
+
+        let infoHtml = '';
+        if (d.info) {
+            const fields = ['UUID', 'OS 类型', '状态', 'CPU', '最大内存', '使用内存', '是否自动启动'];
+            const keys = ['UUID', 'OS Type', 'State', 'CPU(s)', 'Max memory', 'Used memory', 'Autostart'];
+            infoHtml = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            keys.forEach(function(key, idx) {
+                const val = d.info[key] || '';
+                infoHtml += '<tr><td style="padding: 4px 8px; color: var(--text-secondary); width: 120px;">' + fields[idx] + '</td>'
+                    + '<td style="padding: 4px 8px;">' + escapeHtml(val) + '</td></tr>';
+            });
+            infoHtml += '</table>';
+        }
+
+        let ifaceHtml = '';
+        if (d.interfaces && d.interfaces.length > 0) {
+            ifaceHtml = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            ifaceHtml += '<thead><tr style="background: rgba(0,0,0,0.2);">'
+                + '<th style="padding: 4px 8px; text-align: left;">接口</th>'
+                + '<th style="padding: 4px 8px; text-align: left;">类型</th>'
+                + '<th style="padding: 4px 8px; text-align: left;">桥接/网络</th>'
+                + '<th style="padding: 4px 8px; text-align: left;">模型</th>'
+                + '</tr></thead><tbody>';
+            d.interfaces.forEach(function(iface) {
+                ifaceHtml += '<tr>'
+                    + '<td style="padding: 4px 8px;">' + escapeHtml(iface.interface || '') + '</td>'
+                    + '<td style="padding: 4px 8px;">' + escapeHtml(iface.type || '') + '</td>'
+                    + '<td style="padding: 4px 8px; color: var(--secondary);">' + escapeHtml(iface.source || '') + '</td>'
+                    + '<td style="padding: 4px 8px;">' + escapeHtml(iface.model || '') + '</td>'
+                    + '</tr>';
+            });
+            ifaceHtml += '</tbody></table>';
+        } else {
+            ifaceHtml = '<div style="color: var(--text-muted); padding: 8px;">暂无网络接口</div>';
+        }
+
+        let addrHtml = '';
+        if (d.ip_addresses && d.ip_addresses.length > 0) {
+            addrHtml = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            addrHtml += '<thead><tr style="background: rgba(0,0,0,0.2);">'
+                + '<th style="padding: 4px 8px; text-align: left;">MAC</th>'
+                + '<th style="padding: 4px 8px; text-align: left;">协议</th>'
+                + '<th style="padding: 4px 8px; text-align: left;">地址</th>'
+                + '</tr></thead><tbody>';
+            d.ip_addresses.forEach(function(addr) {
+                addrHtml += '<tr>'
+                    + '<td style="padding: 4px 8px; font-family: monospace;">' + escapeHtml(addr.mac) + '</td>'
+                    + '<td style="padding: 4px 8px;">' + escapeHtml(addr.protocol) + '</td>'
+                    + '<td style="padding: 4px 8px; color: var(--primary); font-family: monospace;">' + escapeHtml(addr.address) + '</td>'
+                    + '</tr>';
+            });
+            addrHtml += '</tbody></table>';
+        } else {
+            addrHtml = '<div style="color: var(--text-muted); padding: 8px;">暂无 IP 地址</div>';
+        }
+
+        // 弹窗
+        var modal = document.createElement('div');
+        modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9999;';
+        modal.innerHTML = '<div style="background:var(--bg-card);border-radius:12px;padding:24px;min-width:500px;max-width:700px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.4);">'
+            + '<div style="font-size:1.1rem;font-weight:600;margin-bottom:16px;color:var(--secondary);">'
+            + '<i class="fas fa-server"></i> ' + escapeHtml(vmName) + ' 详细信息</div>'
+
+            + '<div style="background:var(--bg-dark);border-radius:8px;padding:16px;margin-bottom:16px;">'
+            + '<div style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:8px;">基本信息</div>'
+            + infoHtml
+            + '</div>'
+
+            + '<div style="background:var(--bg-dark);border-radius:8px;padding:16px;margin-bottom:16px;">'
+            + '<div style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:8px;">网络接口</div>'
+            + ifaceHtml
+            + '</div>'
+
+            + '<div style="background:var(--bg-dark);border-radius:8px;padding:16px;margin-bottom:16px;">'
+            + '<div style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:8px;">IP 地址</div>'
+            + addrHtml
+            + '</div>'
+
+            + '<div style="display:flex;justify-content:flex-end;">'
+            + '<button class="btn btn-secondary" onclick="this.closest(\'[style*=\\"fixed\\"]\').remove()">关闭</button>'
+            + '</div></div>';
+        document.body.appendChild(modal);
+
+    } catch (e) {
+        showToast('获取详情异常: ' + e.message, 'error');
+    }
+}
 </script>
 {% endblock %}

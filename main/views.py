@@ -6684,3 +6684,424 @@ def api_file_download(request):
             except Exception:
                 pass
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 管理口配置 API ==========
+
+@require_http_methods(["GET"])
+def api_mgmt_port_info(request):
+    """获取管理口当前配置信息"""
+    try:
+        # 找到管理口连接名称
+        mgmt_iface = getattr(settings, 'MANAGEMENT_INTERFACE', 'eth0')
+
+        # 通过 nmcli 获取活动连接
+        result = subprocess.run(
+            ['nmcli', '-t', '-f', 'NAME,DEVICE,TYPE', 'con', 'show', '--active'],
+            capture_output=True, text=True, timeout=10
+        )
+
+        mgmt_con_name = None
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split(':')
+                if len(parts) >= 3:
+                    name, device, ctype = parts[0], parts[1], parts[2]
+                    if device == 'br0' or device == mgmt_iface or ctype == 'bridge':
+                        if device == 'br0' or device == mgmt_iface:
+                            mgmt_con_name = name
+                            break
+
+        # 如果没找到，尝试找 bridge 连接
+        if not mgmt_con_name:
+            result = subprocess.run(
+                ['nmcli', '-t', '-f', 'NAME,DEVICE', 'con', 'show', '--active'],
+                capture_output=True, text=True, timeout=10
+            )
+            for line in result.stdout.strip().split('\n'):
+                parts = line.split(':')
+                if len(parts) >= 2 and parts[1] == 'br0':
+                    mgmt_con_name = parts[0]
+                    break
+
+        if not mgmt_con_name:
+            logger.warning("未找到管理口连接名称，尝试使用 br0")
+            mgmt_con_name = 'br0'
+
+        # 获取连接详细信息
+        detail = subprocess.run(
+            ['nmcli', '-s', 'con', 'show', mgmt_con_name],
+            capture_output=True, text=True, timeout=10
+        )
+
+        config = {}
+        if detail.returncode == 0:
+            for line in detail.stdout.strip().split('\n'):
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    config[key.strip()] = value.strip()
+
+        # 获取当前 IP 地址
+        ip_result = subprocess.run(
+            ['ip', '-4', 'addr', 'show', 'br0'],
+            capture_output=True, text=True, timeout=5
+        )
+
+        current_ip = ''
+        current_prefix = '24'
+        if ip_result.returncode == 0:
+            for line in ip_result.stdout.split('\n'):
+                if 'inet ' in line:
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        ip_cidr = parts[1]
+                        if '/' in ip_cidr:
+                            current_ip, current_prefix = ip_cidr.split('/')
+
+        # 获取当前 gateway
+        gateway = config.get('ipv4.gateway', '')
+        if not gateway:
+            gw_result = subprocess.run(
+                ['ip', 'route', 'show', 'default'],
+                capture_output=True, text=True, timeout=5
+            )
+            if gw_result.returncode == 0:
+                parts = gw_result.stdout.strip().split()
+                if len(parts) >= 3:
+                    gateway = parts[2]
+
+        # 获取 DNS
+        dns = config.get('ipv4.dns', '')
+        if not dns:
+            dns = config.get('ipv4.ignore-auto-dns', '')
+
+        # 获取接口信息
+        iface_result = subprocess.run(
+            ['ip', 'link', 'show', 'br0'],
+            capture_output=True, text=True, timeout=5
+        )
+        mac = ''
+        state = ''
+        if iface_result.returncode == 0:
+            for line in iface_result.stdout.split('\n'):
+                if 'link/ether' in line:
+                    parts = line.strip().split()
+                    if len(parts) >= 2:
+                        mac = parts[1]
+                if 'state' in line:
+                    parts = line.strip().split()
+                    for i, p in enumerate(parts):
+                        if p == 'state' and i + 1 < len(parts):
+                            state = parts[i + 1]
+
+        # 获取物理网口状态（br0）
+        ethtool_result = subprocess.run(
+            ['ethtool', 'br0'],
+            capture_output=True, text=True, timeout=5
+        )
+        speed = ''
+        duplex = ''
+        if ethtool_result.returncode == 0:
+            for line in ethtool_result.stdout.split('\n'):
+                if 'Speed:' in line:
+                    speed = line.split(':', 1)[1].strip()
+                if 'Duplex:' in line:
+                    duplex = line.split(':', 1)[1].strip()
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'connection_name': mgmt_con_name,
+                'interface': 'br0',
+                'physical_interface': mgmt_iface,
+                'ip_address': current_ip,
+                'netmask': current_prefix,
+                'gateway': gateway,
+                'dns': dns,
+                'mac': mac,
+                'state': state,
+                'speed': speed,
+                'duplex': duplex,
+                'method': config.get('ipv4.method', 'auto'),
+            }
+        })
+
+    except Exception as e:
+        logger.exception("获取管理口信息失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_mgmt_port_update(request):
+    """更新管理口配置（IP、网关、DNS）"""
+    try:
+        data = json.loads(request.body)
+        ip_address = data.get('ip_address', '').strip()
+        netmask = data.get('netmask', '24').strip()
+        gateway = data.get('gateway', '').strip()
+        dns_servers = data.get('dns', '').strip()
+
+        if not ip_address:
+            return JsonResponse({'success': False, 'error': 'IP 地址不能为空'})
+
+        # 找到管理口连接名称
+        result = subprocess.run(
+            ['nmcli', '-t', '-f', 'NAME,DEVICE', 'con', 'show', '--active'],
+            capture_output=True, text=True, timeout=10
+        )
+        con_name = None
+        for line in result.stdout.strip().split('\n'):
+            parts = line.split(':')
+            if len(parts) >= 2 and parts[1] == 'br0':
+                con_name = parts[0]
+                break
+        if not con_name:
+            con_name = 'br0'
+
+        cidr = f"{ip_address}/{netmask}"
+
+        # 配置 IP 地址
+        subprocess.run(
+            ['sudo', 'nmcli', 'con', 'mod', con_name, 'ipv4.addresses', cidr],
+            capture_output=True, text=True, timeout=10
+        )
+
+        # 配置方法为 manual
+        subprocess.run(
+            ['sudo', 'nmcli', 'con', 'mod', con_name, 'ipv4.method', 'manual'],
+            capture_output=True, text=True, timeout=10
+        )
+
+        # 配置网关
+        if gateway:
+            subprocess.run(
+                ['sudo', 'nmcli', 'con', 'mod', con_name, 'ipv4.gateway', gateway],
+                capture_output=True, text=True, timeout=10
+            )
+        else:
+            subprocess.run(
+                ['sudo', 'nmcli', 'con', 'mod', con_name, 'ipv4.gateway', ''],
+                capture_output=True, text=True, timeout=10
+            )
+
+        # 配置 DNS
+        if dns_servers:
+            subprocess.run(
+                ['sudo', 'nmcli', 'con', 'mod', con_name, 'ipv4.dns', dns_servers],
+                capture_output=True, text=True, timeout=10
+            )
+        else:
+            subprocess.run(
+                ['sudo', 'nmcli', 'con', 'mod', con_name, 'ipv4.dns', ''],
+                capture_output=True, text=True, timeout=10
+            )
+
+        # 应用配置
+        subprocess.run(
+            ['sudo', 'nmcli', 'con', 'down', con_name],
+            capture_output=True, text=True, timeout=30
+        )
+        up_result = subprocess.run(
+            ['sudo', 'nmcli', 'con', 'up', con_name],
+            capture_output=True, text=True, timeout=30
+        )
+
+        if up_result.returncode == 0:
+            logger.info(f"管理口配置已更新: {cidr}, gateway={gateway}, dns={dns_servers}")
+            return JsonResponse({
+                'success': True,
+                'message': f'管理口配置已更新，新 IP: {cidr}',
+                'ip_address': ip_address,
+                'netmask': netmask
+            })
+        else:
+            error_msg = up_result.stderr or up_result.stdout or '应用配置失败'
+            logger.error(f"管理口配置应用失败: {error_msg}")
+            return JsonResponse({'success': False, 'error': error_msg})
+
+    except Exception as e:
+        logger.exception("更新管理口配置失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ========== 虚拟机管理 API ==========
+
+@require_http_methods(["GET"])
+def api_vm_list(request):
+    """获取虚拟机列表"""
+    try:
+        # 检查 virsh 是否可用
+        check = subprocess.run(['which', 'virsh'], capture_output=True, text=True, timeout=5)
+        virsh_available = check.returncode == 0
+
+        if not virsh_available:
+            return JsonResponse({
+                'success': True,
+                'data': {
+                    'available': False,
+                    'message': '未检测到 virsh（libvirt），请先安装 libvirt 和 qemu-kvm',
+                    'vms': []
+                }
+            })
+
+        # 获取所有虚拟机
+        result = subprocess.run(
+            ['sudo', 'virsh', 'list', '--all'],
+            capture_output=True, text=True, timeout=10
+        )
+
+        vms = []
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line or line.startswith('---') or line.startswith('Id') or line.startswith('Name'):
+                    continue
+                parts = line.split(None, 2)
+                if len(parts) >= 3:
+                    vm_id = parts[0]
+                    vm_name = parts[1]
+                    vm_status = parts[2]
+                    vms.append({
+                        'id': vm_id,
+                        'name': vm_name,
+                        'status': vm_status,
+                        'running': vm_status.lower() == 'running'
+                    })
+
+        # 获取各个 VM 的详细信息
+        for vm in vms:
+            if vm['running']:
+                # 获取 IP 地址
+                addr_result = subprocess.run(
+                    ['sudo', 'virsh', 'domifaddr', vm['name']],
+                    capture_output=True, text=True, timeout=10
+                )
+                ips = []
+                if addr_result.returncode == 0:
+                    for aline in addr_result.stdout.strip().split('\n'):
+                        aline = aline.strip()
+                        if not aline or aline.startswith('Name') or aline.startswith('---'):
+                            continue
+                        parts = aline.split()
+                        if len(parts) >= 4:
+                            ips.append({
+                                'mac': parts[1],
+                                'protocol': parts[2],
+                                'address': parts[3]
+                            })
+                vm['ip_addresses'] = ips
+
+            # 获取网络接口信息（运行和停止的 VM 都可以）
+            iface_result = subprocess.run(
+                ['sudo', 'virsh', 'domiflist', vm['name']],
+                capture_output=True, text=True, timeout=10
+            )
+            interfaces = []
+            if iface_result.returncode == 0:
+                for iline in iface_result.stdout.strip().split('\n'):
+                    iline = iline.strip()
+                    if not iline or iline.startswith('Interface') or iline.startswith('---'):
+                        continue
+                    iparts = iline.split(None, 3)
+                    if len(iparts) >= 4:
+                        interfaces.append({
+                            'interface': iparts[0],
+                            'type': iparts[1],
+                            'source': iparts[2],
+                            'model': iparts[3] if len(iparts) > 3 else ''
+                        })
+            vm['interfaces'] = interfaces
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'available': True,
+                'count': len(vms),
+                'vms': vms
+            }
+        })
+
+    except Exception as e:
+        logger.exception("获取虚拟机列表失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_vm_detail(request):
+    """获取虚拟机详细信息"""
+    try:
+        vm_name = request.GET.get('name', '').strip()
+        if not vm_name:
+            return JsonResponse({'success': False, 'error': 'VM 名称不能为空'})
+
+        # 获取 domain 信息
+        info_result = subprocess.run(
+            ['sudo', 'virsh', 'dominfo', vm_name],
+            capture_output=True, text=True, timeout=10
+        )
+        if info_result.returncode != 0:
+            return JsonResponse({
+                'success': False,
+                'error': info_result.stderr or f'未找到虚拟机 {vm_name}'
+            })
+
+        info = {}
+        for line in info_result.stdout.strip().split('\n'):
+            if ':' in line:
+                key, value = line.split(':', 1)
+                info[key.strip()] = value.strip()
+
+        # 获取网络接口
+        iface_result = subprocess.run(
+            ['sudo', 'virsh', 'domiflist', vm_name],
+            capture_output=True, text=True, timeout=10
+        )
+        interfaces = []
+        if iface_result.returncode == 0:
+            for iline in iface_result.stdout.strip().split('\n'):
+                iline = iline.strip()
+                if not iline or iline.startswith('Interface') or iline.startswith('---'):
+                    continue
+                iparts = iline.split(None, 3)
+                if len(iparts) >= 4:
+                    interfaces.append({
+                        'interface': iparts[0],
+                        'type': iparts[1],
+                        'source': iparts[2],
+                        'model': iparts[3] if len(iparts) > 3 else ''
+                    })
+
+        # 获取 IP 地址
+        addr_result = subprocess.run(
+            ['sudo', 'virsh', 'domifaddr', vm_name],
+            capture_output=True, text=True, timeout=10
+        )
+        addresses = []
+        if addr_result.returncode == 0:
+            for aline in addr_result.stdout.strip().split('\n'):
+                aline = aline.strip()
+                if not aline or aline.startswith('Name') or aline.startswith('---'):
+                    continue
+                parts = aline.split()
+                if len(parts) >= 4:
+                    addresses.append({
+                        'mac': parts[1],
+                        'protocol': parts[2],
+                        'address': parts[3]
+                    })
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'name': vm_name,
+                'info': info,
+                'interfaces': interfaces,
+                'ip_addresses': addresses
+            }
+        })
+
+    except Exception as e:
+        logger.exception("获取虚拟机详情失败")
+        return JsonResponse({'success': False, 'error': str(e)})
