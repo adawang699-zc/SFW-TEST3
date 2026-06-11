@@ -7109,23 +7109,72 @@ def api_vm_detail(request):
 @require_http_methods(["POST"])
 @csrf_exempt
 def api_vm_start(request):
-    """启动虚拟机"""
+    """启动虚拟机 - 自动创建缺失的桥接设备"""
     try:
         data = json.loads(request.body)
         vm_name = data.get('name', '').strip()
         if not vm_name:
             return JsonResponse({'success': False, 'error': 'VM 名称不能为空'})
 
+        # 1. 检查 VM 需要的桥接设备是否存在
+        iface_result = subprocess.run(
+            ['sudo', 'virsh', 'domiflist', vm_name],
+            capture_output=True, text=True, timeout=10
+        )
+        missing_bridges = []
+        if iface_result.returncode == 0:
+            for line in iface_result.stdout.strip().split('\n'):
+                line = line.strip()
+                if not line or line.startswith('Interface') or line.startswith('---'):
+                    continue
+                parts = line.split()
+                if len(parts) >= 3 and parts[1] == 'bridge':
+                    bridge_name = parts[2]
+                    if bridge_name == 'br0':
+                        continue  # br0 始终存在
+                    check = subprocess.run(
+                        ['sudo', 'ip', 'link', 'show', bridge_name],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if check.returncode != 0:
+                        missing_bridges.append(bridge_name)
+
+        # 2. 自动创建缺失的 brvX 桥接（完整链路：网桥 → veth → NS 网桥 → 物理网口）
+        created = []
+        failed = []
+        for br in missing_bridges:
+            if br.startswith('brv') and br[3:].isdigit():
+                ns_id = br[3:]
+                iface_name = f'eth{ns_id}'
+                result = _setup_single_vm_bridge(vm_name, iface_name, '')
+                if result.get('success'):
+                    created.append(br)
+                else:
+                    failed.append(br)
+
+        if failed:
+            return JsonResponse({
+                'success': False,
+                'error': f'桥接设备 {", ".join(failed)} 创建失败',
+                'failed': failed,
+                'hint': '请先在"桥接配置"中手动配置'
+            })
+
+        # 3. 启动 VM
         result = subprocess.run(
             ['sudo', 'virsh', 'start', vm_name],
             capture_output=True, text=True, timeout=30
         )
 
         if result.returncode == 0:
-            logger.info(f"虚拟机 {vm_name} 已启动")
+            msg = f'虚拟机 {vm_name} 已启动'
+            if created:
+                msg += f'（已自动创建桥接: {", ".join(created)}）'
+            logger.info(msg)
             return JsonResponse({
                 'success': True,
-                'message': f'虚拟机 {vm_name} 已启动'
+                'message': msg,
+                'created_bridges': created
             })
         else:
             error = result.stderr or result.stdout or '启动失败'
@@ -7365,10 +7414,26 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
         # 6. 配置 VM 连接到主机网桥
         vm_check = run(f'sudo virsh dominfo {vm_name}')
         if vm_check.returncode == 0:
-            # 检查 VM 是否已有该网桥的接口
-            iface_check = run(
+            # 获取 VM 所有该网桥的接口
+            iface_result = run(
                 f'sudo virsh domiflist {vm_name} | grep "{bridge_host}"')
-            if iface_check.returncode != 0:
+            existing_lines = [l.strip() for l in iface_result.stdout.strip().split('\n') if l.strip()] if iface_result.returncode == 0 else []
+            iface_count = len(existing_lines)
+
+            if iface_count >= 2:
+                # 清理重复接口：保留第一个，删除多余的
+                for extra_line in existing_lines[1:]:
+                    extra_parts = extra_line.split()
+                    if len(extra_parts) >= 1:
+                        extra_mac = extra_parts[4] if len(extra_parts) >= 5 else ''
+                        if extra_mac:
+                            run(f'sudo virsh detach-interface --domain {vm_name} '
+                                f'--type bridge --mac {extra_mac} --persistent')
+                            steps.append(f'删除重复接口 {extra_mac}')
+                steps.append(f'{vm_name} 已连接到 {bridge_host}')
+            elif iface_count == 1:
+                steps.append(f'{vm_name} 已连接到 {bridge_host}')
+            else:
                 # 检查 VM 状态
                 state_check = run(
                     f'sudo virsh domstate {vm_name}')
@@ -7384,8 +7449,6 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
                         steps.append(f'已将 {vm_name} 连接到 {bridge_host}')
                     else:
                         steps.append(f'连接 VM 失败: {attach.stderr}')
-            else:
-                steps.append(f'{vm_name} 已连接到 {bridge_host}')
         else:
             steps.append(f'VM {vm_name} 不存在')
 

@@ -16,7 +16,8 @@ set -e
 
 # 配置
 PROJECT_PATH="/opt/SFW-TEST3"
-PYTHON_PATH="/opt/SFW-TEST3/sfw/bin/python"
+PYTHON_PATH="/usr/bin/python3"
+export PYTHONPATH="${PROJECT_PATH}:${PROJECT_PATH}/sfw/lib/python3.10/site-packages"
 LOG_DIR="/opt/SFW-TEST3/logs"
 
 # 日志
@@ -87,6 +88,12 @@ setup_interface_with_bridge() {
     local port="$3"
     local bridge_name="${4:-br${interface#eth}}"  # 默认: eth1->br1, eth2->br2
     local ns=$(get_namespace_name "$interface")
+
+    # 安全保护：绝对不能操作管理网口和桥接口
+    if [ "$interface" = "eth0" ] || [ "$interface" = "br0" ] || echo "$interface" | grep -qE '^(br|virbr|veth|vnet|vh|docker|bond|tun|tap)'; then
+        log "错误: 禁止操作接口 $interface！"
+        return 1
+    fi
 
     # 如果未提供IP/端口，从数据库读取
     if [ -z "$ip_cidr" ] || [ -z "$port" ]; then
@@ -223,10 +230,17 @@ except Exception as e:
 
     log "=== $interface bridge namespace 已移除 ==="
 }
+setup_interface() {
     local interface="$1"
     local ip_cidr="$2"
     local port="$3"
     local ns=$(get_namespace_name "$interface")
+
+    # 安全保护：绝对不能操作管理网口和桥接口
+    if [ "$interface" = "eth0" ] || [ "$interface" = "br0" ] || echo "$interface" | grep -qE '^(br|virbr|veth|vnet|vh|docker|bond|tun|tap)'; then
+        log "错误: 禁止操作接口 $interface！"
+        return 1
+    fi
 
     # 如果未提供IP/端口，从数据库读取
     if [ -z "$ip_cidr" ] || [ -z "$port" ]; then
@@ -336,8 +350,8 @@ Environment="AGENT_ID=$agent_id"
 Environment="BIND_IP=$ip"
 Environment="BIND_INTERFACE=$bind_iface"
 Environment="AGENT_PORT=$port"
-ExecStart=/usr/bin/ip netns exec $ns $PYTHON_PATH -m gunicorn -w 1 -b $ip:$port --preload --timeout 30 agents.full_agent:app
-ExecStop=/usr/bin/ip netns exec $ns $PYTHON_PATH -c "import sys; sys.exit(0)"
+ExecStart=/usr/bin/ip netns exec $ns env PYTHONPATH=${PROJECT_PATH}:${PROJECT_PATH}/sfw/lib/python3.10/site-packages $PYTHON_PATH -m gunicorn -w 1 -b $ip:$port --preload --timeout 30 agents.full_agent:app
+ExecStop=/usr/bin/ip netns exec $ns env PYTHONPATH=${PROJECT_PATH}:${PROJECT_PATH}/sfw/lib/python3.10/site-packages $PYTHON_PATH -c "import sys; sys.exit(0)"
 Restart=always
 RestartSec=5
 StandardOutput=append:$LOG_DIR/agent_${interface}_ns.log
@@ -484,6 +498,10 @@ django.setup()
 from main.models import NetworkInterface, LocalAgent
 
 for iface in NetworkInterface.objects.filter(is_management=False):
+    # 跳过桥接/虚拟接口
+    skip_prefixes = ('br', 'virbr', 'veth', 'vnet', 'vh', 'docker', 'bond', 'tun', 'tap')
+    if iface.name.startswith(skip_prefixes):
+        continue
     agent_obj = LocalAgent.objects.filter(interface=iface).first()
     port = agent_obj.port if agent_obj else 8888
     ip = iface.ip_address or ''
