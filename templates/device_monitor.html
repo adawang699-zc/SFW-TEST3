@@ -262,6 +262,8 @@ let devices = [];
 let monitorIntervals = {};
 let diskIntervals = {};
 let currentDeviceId = null;
+let currentDevicePassword = '';
+let currentDeviceBackendPassword = '';
 let monitoringStatus = {};
 let alertStatus = {};
 let deviceOnlineStatus = {};  // 设备在线状态
@@ -638,20 +640,21 @@ function showEditModal(deviceId) {
     if (!device) return;
 
     currentDeviceId = deviceId;
+    currentDevicePassword = device.password || '';
+    currentDeviceBackendPassword = device.backend_password || '';
     document.getElementById('edit-device-name').value = device.name || '';
     document.getElementById('edit-device-type').value = device.type || 'ic_firewall';
     document.getElementById('edit-device-ip').value = device.ip || '';
     document.getElementById('edit-device-port').value = device.port || 22;
     document.getElementById('edit-device-user').value = device.user || 'admin';
-    // 密码回显：如果已有密码显示 placeholder，否则为空
+    // 密码回显
     const sshPwdInput = document.getElementById('edit-device-password');
     sshPwdInput.value = '';
-    sshPwdInput.placeholder = device.password ? '********' : '留空保持原密码';
+    sshPwdInput.placeholder = device.password ? '******** (留空使用原密码)' : '留空保持原密码';
     const backendPwdInput = document.getElementById('edit-device-backend-password');
     backendPwdInput.value = '';
-    // 后台密码：如果已有自定义密码显示星号；否则提示使用默认密码（根据设备类型自动填充）
     if (device.has_backend_password) {
-        backendPwdInput.placeholder = '********';
+        backendPwdInput.placeholder = '******** (留空使用原密码)';
     } else {
         backendPwdInput.placeholder = '******** (使用默认密码)';
     }
@@ -945,9 +948,11 @@ async function editTestConnection() {
     const ip = document.getElementById('edit-device-ip').value;
     const port = document.getElementById('edit-device-port').value || 22;
     const user = document.getElementById('edit-device-user').value || 'admin';
-    const password = document.getElementById('edit-device-password').value;
+    const pwdField = document.getElementById('edit-device-password');
+    const password = pwdField.value || currentDevicePassword;
     const device_type = document.getElementById('edit-device-type').value;
-    const backend_password = document.getElementById('edit-device-backend-password').value;
+    const backendPwdField = document.getElementById('edit-device-backend-password');
+    const backend_password = backendPwdField.value || currentDeviceBackendPassword;
 
     if (!ip) {
         showToast('请输入 IP 地址', 'error');
