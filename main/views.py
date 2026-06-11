@@ -7101,6 +7101,151 @@ def api_vm_detail(request):
                 'ip_addresses': addresses
             }
         })
+    except Exception as e:
+        logger.exception("获取虚拟机详情失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_vm_start(request):
+    """启动虚拟机"""
+    try:
+        data = json.loads(request.body)
+        vm_name = data.get('name', '').strip()
+        if not vm_name:
+            return JsonResponse({'success': False, 'error': 'VM 名称不能为空'})
+
+        result = subprocess.run(
+            ['sudo', 'virsh', 'start', vm_name],
+            capture_output=True, text=True, timeout=30
+        )
+
+        if result.returncode == 0:
+            logger.info(f"虚拟机 {vm_name} 已启动")
+            return JsonResponse({
+                'success': True,
+                'message': f'虚拟机 {vm_name} 已启动'
+            })
+        else:
+            error = result.stderr or result.stdout or '启动失败'
+            return JsonResponse({'success': False, 'error': error})
+
+    except Exception as e:
+        logger.exception("启动虚拟机失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_vm_shutdown(request):
+    """关闭虚拟机"""
+    try:
+        data = json.loads(request.body)
+        vm_name = data.get('name', '').strip()
+        force = data.get('force', False)
+
+        if not vm_name:
+            return JsonResponse({'success': False, 'error': 'VM 名称不能为空'})
+
+        cmd = ['sudo', 'virsh', 'destroy' if force else 'shutdown', vm_name]
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True, text=True, timeout=30
+        )
+
+        if result.returncode == 0:
+            action = '强制关闭' if force else '已发送关机信号'
+            logger.info(f"虚拟机 {vm_name} {action}")
+            return JsonResponse({
+                'success': True,
+                'message': f'虚拟机 {vm_name} {action}'
+            })
+        else:
+            error = result.stderr or result.stdout or '操作失败'
+            return JsonResponse({'success': False, 'error': error})
+
+    except Exception as e:
+        logger.exception("关闭虚拟机失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["GET"])
+def api_vm_bridge_status(request):
+    """获取虚拟机相关桥接设备状态（brv/veth 等）"""
+    try:
+        # 检查 brv1, brv2, vh1h, vh2h 等接口状态
+        iface_names = ['brv1', 'brv2', 'vh1h', 'vh2h', 'vh1n', 'vh2n']
+        bridges = []
+
+        for name in iface_names:
+            result = subprocess.run(
+                ['ip', 'link', 'show', name],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                # Parse interface info
+                line = result.stdout.strip().split('\n')[0]
+                # Get state
+                state = ''
+                master = ''
+                if 'state UP' in line or 'state UNKNOWN' in line:
+                    state = 'UP'
+                elif 'state DOWN' in line:
+                    state = 'DOWN'
+                # Get master (bridge)
+                if 'master ' in line:
+                    idx = line.find('master ')
+                    if idx >= 0:
+                        rest = line[idx + 7:]
+                        master = rest.split()[0] if rest.split() else ''
+
+                bridges.append({
+                    'name': name,
+                    'exists': True,
+                    'state': state,
+                    'master': master
+                })
+            else:
+                bridges.append({
+                    'name': name,
+                    'exists': False,
+                    'state': '',
+                    'master': ''
+                })
+
+        # Check all bridges on host
+        br_result = subprocess.run(
+            ['ip', 'link', 'show', 'type', 'bridge'],
+            capture_output=True, text=True, timeout=5
+        )
+        all_bridges = []
+        if br_result.returncode == 0:
+            for line in br_result.stdout.strip().split('\n'):
+                line = line.strip()
+                if line and line[0].isdigit():
+                    parts = line.split(':')
+                    if len(parts) >= 2:
+                        name = parts[1].strip()
+                        state = 'UP' if 'state UP' in line else ('DOWN' if 'state DOWN' in line else 'UNKNOWN')
+                        all_bridges.append({
+                            'name': name.split('@')[0],
+                            'state': state,
+                            'full_line': line[:100]
+                        })
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'bridges': bridges,
+                'all_host_bridges': all_bridges
+            }
+        })
+
+    except Exception as e:
+        logger.exception("获取桥接状态失败")
+        return JsonResponse({'success': False, 'error': str(e)})
 
     except Exception as e:
         logger.exception("获取虚拟机详情失败")

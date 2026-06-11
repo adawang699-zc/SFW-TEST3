@@ -173,6 +173,9 @@ urlpatterns = [
     # ========== 虚拟机管理 API ==========
     path('api/vm/list/', views.api_vm_list, name='api_vm_list'),
     path('api/vm/detail/', views.api_vm_detail, name='api_vm_detail'),
+    path('api/vm/start/', views.api_vm_start, name='api_vm_start'),
+    path('api/vm/shutdown/', views.api_vm_shutdown, name='api_vm_shutdown'),
+    path('api/vm/bridge-status/', views.api_vm_bridge_status, name='api_vm_bridge_status'),
 
     # ========== 授权管理 ==========
     path('license-management/', views.license_management, name='license_management'),

@@ -754,15 +754,26 @@
             查看虚拟机信息、IP 地址和桥接网卡配置。
         </p>
 
-        <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap;">
             <button class="btn btn-primary" onclick="loadVMList()">
                 <i class="fas fa-sync"></i> 刷新虚拟机列表
+            </button>
+            <button class="btn btn-secondary" onclick="loadVMBridgeStatus()">
+                <i class="fas fa-network-wired"></i> 查看桥接状态
             </button>
         </div>
 
         <!-- 虚拟机列表 -->
         <div id="vm_list_container">
             <div style="color: var(--text-muted); text-align: center; padding: 20px;">点击上方按钮刷新虚拟机列表...</div>
+        </div>
+
+        <!-- 桥接状态区域 -->
+        <div id="vm_bridge_status_container" style="display: none;">
+            <div class="card" style="margin-top: 16px;">
+                <div class="card-header">主机桥接设备状态</div>
+                <div id="vm_bridge_status_content"></div>
+            </div>
         </div>
     </div>
 
@@ -2998,8 +3009,17 @@ function renderVMTable(vms) {
         html += '<span style="font-weight: 600; font-size: 1.05rem;">' + escapeHtml(vm.name) + '</span>';
         html += '<span style="font-size: 0.8rem; color: ' + statusColor + ';">' + escapeHtml(vm.status) + '</span>';
         html += '</div>';
+        html += '<div style="display: flex; gap: 6px;">';
+        if (vm.running) {
+            html += '<button class="btn btn-sm btn-danger" onclick="vmShutdown(\'' + escapeHtml(vm.name) + '\')" style="padding: 4px 12px; font-size: 0.8rem;">';
+            html += '<i class="fas fa-stop"></i> 关机</button>';
+        } else {
+            html += '<button class="btn btn-sm btn-success" onclick="vmStart(\'' + escapeHtml(vm.name) + '\')" style="padding: 4px 12px; font-size: 0.8rem;">';
+            html += '<i class="fas fa-play"></i> 启动</button>';
+        }
         html += '<button class="btn btn-sm btn-secondary" onclick="showVMDetail(\'' + escapeHtml(vm.name) + '\')" style="padding: 4px 12px; font-size: 0.8rem;">';
         html += '<i class="fas fa-info-circle"></i> 详情</button>';
+        html += '</div>';
         html += '</div>';
 
         // VM 网络信息
@@ -3162,13 +3182,146 @@ async function showVMDetail(vmName) {
             + '</div>'
 
             + '<div style="display:flex;justify-content:flex-end;">'
-            + '<button class="btn btn-secondary" onclick="this.closest(\'[style*=\\"fixed\\"]\').remove()">关闭</button>'
+            + '<button class="btn btn-secondary" id="vm_detail_close_btn">关闭</button>'
             + '</div></div>';
         document.body.appendChild(modal);
+        // 给关闭按钮添加事件
+        document.getElementById('vm_detail_close_btn').onclick = function() {
+            modal.remove();
+        };
+        // 点击背景也可以关闭
+        modal.onclick = function(e) {
+            if (e.target === modal) modal.remove();
+        };
 
     } catch (e) {
         showToast('获取详情异常: ' + e.message, 'error');
     }
 }
-</script>
+
+// ========== VM 启停操作 ==========
+
+async function vmStart(vmName) {
+    showConfirmModal('确认启动', '确定要启动虚拟机 "' + vmName + '" 吗？', async function() {
+        showToast('正在启动 ' + vmName + '...', 'info');
+        try {
+            const resp = await fetch('/api/vm/start/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') || ''
+                },
+                body: JSON.stringify({name: vmName})
+            });
+            const data = await resp.json();
+            if (data.success) {
+                showToast(vmName + ' 已启动', 'success');
+                loadVMList();
+            } else {
+                showToast('启动失败: ' + (data.error || ''), 'error');
+            }
+        } catch (e) {
+            showToast('启动异常: ' + e.message, 'error');
+        }
+    }, '▶️');
+}
+
+async function vmShutdown(vmName) {
+    showConfirmModal('确认关机', '确定要关闭虚拟机 "' + vmName + '" 吗？\n\n选择"强制关闭"可立即断电。', function() {
+        showConfirmModal('确认强制关闭', '确定要强制关闭 "' + vmName + '" 吗？\n此操作相当于直接断电！', async function() {
+            await doVmShutdown(vmName, true);
+        }, '⚠️');
+        // 默认发送关机信号
+        doVmShutdown(vmName, false);
+    }, '⏹️');
+}
+
+async function doVmShutdown(vmName, force) {
+    showToast((force ? '强制关闭' : '正在关机') + ' ' + vmName + '...', 'info');
+    try {
+        const resp = await fetch('/api/vm/shutdown/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') || ''
+            },
+            body: JSON.stringify({name: vmName, force: force})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(loadVMList, 3000);
+        } else {
+            showToast('操作失败: ' + (data.error || ''), 'error');
+        }
+    } catch (e) {
+        showToast('操作异常: ' + e.message, 'error');
+    }
+}
+
+// ========== 桥接状态查看 ==========
+
+async function loadVMBridgeStatus() {
+    const container = document.getElementById('vm_bridge_status_container');
+    const content = document.getElementById('vm_bridge_status_content');
+    container.style.display = 'block';
+    content.innerHTML = '<div style="color: var(--text-secondary); padding: 12px;">加载中...</div>';
+
+    try {
+        const resp = await fetch('/api/vm/bridge-status/');
+        const data = await resp.json();
+        if (!data.success) {
+            content.innerHTML = '<div style="color: var(--danger);">加载失败: ' + escapeHtml(data.error || '') + '</div>';
+            return;
+        }
+        const d = data.data;
+
+        let html = '<div style="padding: 8px;">';
+
+        // 虚拟机相关专用桥接设备
+        html += '<div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">虚拟机桥接设备状态 (brv* / vh*)</div>';
+        html += '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse; margin-bottom: 16px;">';
+        html += '<thead><tr style="background: rgba(0,0,0,0.2);">'
+            + '<th style="padding: 6px 8px; text-align: left;">设备</th>'
+            + '<th style="padding: 6px 8px; text-align: left;">状态</th>'
+            + '<th style="padding: 6px 8px; text-align: left;">桥接主设备</th>'
+            + '</tr></thead><tbody>';
+
+        (d.bridges || []).forEach(function(b) {
+            const color = b.exists ? (b.state === 'UP' ? 'var(--success)' : 'var(--warning)') : 'var(--text-muted)';
+            const statusText = b.exists ? (b.state || '未知') : '不存在';
+            html += '<tr>'
+                + '<td style="padding: 6px 8px; font-family: monospace;">' + escapeHtml(b.name) + '</td>'
+                + '<td style="padding: 6px 8px; color: ' + color + ';">' + statusText + '</td>'
+                + '<td style="padding: 6px 8px;">' + escapeHtml(b.master || '-') + '</td>'
+                + '</tr>';
+        });
+        html += '</tbody></table>';
+
+        // 所有主机桥接设备
+        html += '<div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 8px;">主机上所有桥接设备</div>';
+        if (d.all_host_bridges && d.all_host_bridges.length > 0) {
+            html += '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            html += '<thead><tr style="background: rgba(0,0,0,0.2);">'
+                + '<th style="padding: 6px 8px; text-align: left;">名称</th>'
+                + '<th style="padding: 6px 8px; text-align: left;">状态</th>'
+                + '</tr></thead><tbody>';
+            d.all_host_bridges.forEach(function(b) {
+                const color = b.state === 'UP' ? 'var(--success)' : 'var(--text-muted)';
+                html += '<tr>'
+                    + '<td style="padding: 6px 8px; font-family: monospace;">' + escapeHtml(b.name) + '</td>'
+                    + '<td style="padding: 6px 8px; color: ' + color + ';">' + b.state + '</td>'
+                    + '</tr>';
+            });
+            html += '</tbody></table>';
+        } else {
+            html += '<div style="color: var(--text-muted);">除 br0 外无其他桥接设备</div>';
+        }
+
+        html += '</div>';
+        content.innerHTML = html;
+    } catch (e) {
+        content.innerHTML = '<div style="color: var(--danger);">加载异常: ' + escapeHtml(e.message) + '</div>';
+    }
+}
 {% endblock %}
