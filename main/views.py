@@ -7414,29 +7414,37 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
         # 6. 配置 VM 连接到主机网桥
         vm_check = run(f'sudo virsh dominfo {vm_name}')
         if vm_check.returncode == 0:
-            # 获取 VM 所有该网桥的接口
-            iface_result = run(
-                f'sudo virsh domiflist {vm_name} | grep "{bridge_host}"')
-            existing_lines = [l.strip() for l in iface_result.stdout.strip().split('\n') if l.strip()] if iface_result.returncode == 0 else []
-            iface_count = len(existing_lines)
+            # 获取 VM 所有该网桥的接口（用 Python 解析，不能用 shell pipe）
+            iface_all = run(f'sudo virsh domiflist {vm_name}')
+            existing_macs = []
+            if iface_all.returncode == 0:
+                for line in iface_all.stdout.strip().split('\n'):
+                    line = line.strip()
+                    if not line or line.startswith('Interface') or line.startswith('---'):
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 3 and parts[1] == 'bridge' and parts[2] == bridge_host:
+                        mac = parts[4] if len(parts) >= 5 else ''
+                        if mac:
+                            existing_macs.append(mac)
+
+            iface_count = len(existing_macs)
 
             if iface_count >= 2:
                 # 清理重复接口：保留第一个，删除多余的
-                for extra_line in existing_lines[1:]:
-                    extra_parts = extra_line.split()
-                    if len(extra_parts) >= 1:
-                        extra_mac = extra_parts[4] if len(extra_parts) >= 5 else ''
-                        if extra_mac:
-                            run(f'sudo virsh detach-interface --domain {vm_name} '
-                                f'--type bridge --mac {extra_mac} --persistent')
-                            steps.append(f'删除重复接口 {extra_mac}')
+                for extra_mac in existing_macs[1:]:
+                    detach = run(f'sudo virsh detach-interface --domain {vm_name} '
+                                 f'--type bridge --mac {extra_mac} --persistent')
+                    if detach.returncode == 0:
+                        steps.append(f'删除重复接口 {extra_mac}')
+                    else:
+                        steps.append(f'删除接口 {extra_mac} 失败: {detach.stderr.strip()}')
                 steps.append(f'{vm_name} 已连接到 {bridge_host}')
             elif iface_count == 1:
                 steps.append(f'{vm_name} 已连接到 {bridge_host}')
             else:
                 # 检查 VM 状态
-                state_check = run(
-                    f'sudo virsh domstate {vm_name}')
+                state_check = run(f'sudo virsh domstate {vm_name}')
                 vm_state = state_check.stdout.strip()
                 if vm_state == 'running':
                     steps.append(
@@ -7448,7 +7456,7 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
                     if attach.returncode == 0:
                         steps.append(f'已将 {vm_name} 连接到 {bridge_host}')
                     else:
-                        steps.append(f'连接 VM 失败: {attach.stderr}')
+                        steps.append(f'连接 VM 失败: {attach.stderr.strip()}')
         else:
             steps.append(f'VM {vm_name} 不存在')
 
