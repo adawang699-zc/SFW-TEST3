@@ -7,9 +7,309 @@
 <div class="page-header">
     <h2><i class="fas fa-history"></i> 日志管理</h2>
 </div>
-<div class="card">
-    <div class="card-body">
-        <p style="color: var(--text-muted); padding: 40px; text-align: center;">日志管理页面开发中...</p>
+
+<!-- 筛选栏 -->
+<div class="card" style="padding: 16px 20px;">
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+            <label class="form-label">资源类型</label>
+            <select class="form-input" id="filter-type" onchange="loadLogs()">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+            <label class="form-label">操作类型</label>
+            <select class="form-input" id="filter-action" onchange="loadLogs()">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 120px;">
+            <label class="form-label">结果</label>
+            <select class="form-input" id="filter-result" onchange="loadLogs()">
+                <option value="">全部</option>
+                <option value="success">成功</option>
+                <option value="failure">失败</option>
+                <option value="error">错误</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+            <label class="form-label">开始日期</label>
+            <input type="date" class="form-input" id="filter-date-from">
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 140px;">
+            <label class="form-label">结束日期</label>
+            <input type="date" class="form-input" id="filter-date-to">
+        </div>
+        <div class="form-group" style="margin-bottom: 0; min-width: 180px; flex: 1;">
+            <label class="form-label">搜索</label>
+            <input type="text" class="form-input" id="filter-keyword" placeholder="操作/资源ID/详情..." onkeydown="if(event.key==='Enter')loadLogs()">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="loadLogs()" style="height: 40px;">
+            <i class="fas fa-search"></i> 查询
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="resetFilters()" style="height: 40px;">
+            <i class="fas fa-undo"></i> 重置
+        </button>
     </div>
 </div>
+
+<!-- 日志表格 -->
+<div class="card">
+    <div class="card-header">
+        操作日志
+        <span id="log-count" style="margin-left: auto; font-size: 0.85rem; color: var(--text-muted);"></span>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="table" id="log-table">
+            <thead>
+                <tr>
+                    <th style="width: 160px;">操作时间</th>
+                    <th style="width: 130px;">操作IP</th>
+                    <th style="width: 140px;">资源类型</th>
+                    <th style="width: 150px;">操作名称</th>
+                    <th>操作详情</th>
+                    <th style="width: 80px;">耗时</th>
+                    <th style="width: 80px;">结果</th>
+                </tr>
+            </thead>
+            <tbody id="log-tbody">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <!-- 分页 -->
+    <div id="pagination" style="display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
+    </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div id="detail-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: var(--z-modal); align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; max-width: 640px; width: 90%; max-height: 80vh; overflow-y: auto;">
+        <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-info-circle"></i> 日志详情
+        </h3>
+        <div id="detail-content" style="display: grid; gap: 12px;">
+        </div>
+        <button class="btn btn-primary" onclick="closeDetail()" style="margin-top: 20px; width: 100%;">关闭</button>
+    </div>
+</div>
+
+<style>
+    .log-result {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .log-result.success { background: rgba(56, 176, 0, 0.2); color: var(--success); }
+    .log-result.failure { background: rgba(208, 0, 0, 0.2); color: var(--danger); }
+    .log-result.error { background: rgba(255, 107, 53, 0.2); color: var(--primary); }
+
+    .log-detail-row {
+        display: flex;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .log-detail-row:last-child { border-bottom: none; }
+    .log-detail-label {
+        width: 100px;
+        flex-shrink: 0;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+    }
+    .log-detail-value {
+        flex: 1;
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        word-break: break-all;
+    }
+
+    .page-btn {
+        padding: 6px 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+    .page-btn:hover:not(:disabled) {
+        border-color: var(--primary);
+        color: var(--primary);
+    }
+    .page-btn.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .page-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .detail-text { white-space: pre-wrap; max-height: 200px; overflow-y: auto; }
+    .ip-address { font-family: monospace; }
+</style>
+
+<script>
+let currentPage = 1;
+
+function loadLogs(page) {
+    if (page !== undefined) currentPage = page;
+    else currentPage = 1;
+
+    const params = new URLSearchParams({
+        page: currentPage,
+        page_size: 50,
+        resource_type: document.getElementById('filter-type').value,
+        action: document.getElementById('filter-action').value,
+        result: document.getElementById('filter-result').value,
+        keyword: document.getElementById('filter-keyword').value,
+        date_from: document.getElementById('filter-date-from').value,
+        date_to: document.getElementById('filter-date-to').value,
+    });
+
+    const tbody = document.getElementById('log-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;"><i class="fas fa-spinner fa-spin"></i> 加载中...</td></tr>';
+
+    fetch('/api/operation-logs/?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('log-count').textContent = '共 ' + data.total + ' 条';
+
+            if (data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">暂无日志记录</td></tr>';
+            } else {
+                tbody.innerHTML = data.items.map(item => {
+                    const resultLabels = { success: '成功', failure: '失败', error: '错误' };
+                    const detail = item.detail ? item.detail.substring(0, 80) + (item.detail.length > 80 ? '...' : '') : '';
+                    const duration = item.duration_ms != null ? item.duration_ms + 'ms' : '-';
+                    return '<tr onclick="showDetail(' + item.id + ')" style="cursor: pointer;">' +
+                        '<td style="white-space: nowrap; font-size: 0.85rem;">' + item.timestamp + '</td>' +
+                        '<td class="ip-address" style="font-size: 0.85rem;">' + item.source_ip + '</td>' +
+                        '<td style="font-size: 0.85rem;">' + item.resource_type + '</td>' +
+                        '<td style="font-size: 0.85rem;">' + item.action + '</td>' +
+                        '<td style="font-size: 0.85rem; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + (item.detail || '') + '">' + detail + '</td>' +
+                        '<td style="font-size: 0.85rem;">' + duration + '</td>' +
+                        '<td><span class="log-result ' + item.result + '">' + (resultLabels[item.result] || item.result) + '</span></td>' +
+                        '</tr>';
+                }).join('');
+            }
+
+            renderPagination(data);
+
+            // 更新筛选选项
+            updateFilterOptions(data.filter_options);
+        })
+        .catch(err => {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 40px;">加载失败: ' + err.message + '</td></tr>';
+        });
+}
+
+function renderPagination(data) {
+    const el = document.getElementById('pagination');
+    if (data.total_pages <= 1) { el.innerHTML = ''; return; }
+
+    const pages = [];
+    if (currentPage > 1) {
+        pages.push('<button class="page-btn" onclick="loadLogs(1)" title="首页"><i class="fas fa-angle-double-left"></i></button>');
+        pages.push('<button class="page-btn" onclick="loadLogs(' + (currentPage - 1) + ')" title="上一页"><i class="fas fa-chevron-left"></i></button>');
+    }
+
+    const range = 2;
+    const start = Math.max(1, currentPage - range);
+    const end = Math.min(data.total_pages, currentPage + range);
+
+    if (start > 1) {
+        pages.push('<button class="page-btn" onclick="loadLogs(1)">1</button>');
+        if (start > 2) pages.push('<span style="color: var(--text-muted);">...</span>');
+    }
+
+    for (let i = start; i <= end; i++) {
+        pages.push('<button class="page-btn' + (i === currentPage ? ' active' : '') + '" onclick="loadLogs(' + i + ')">' + i + '</button>');
+    }
+
+    if (end < data.total_pages) {
+        if (end < data.total_pages - 1) pages.push('<span style="color: var(--text-muted);">...</span>');
+        pages.push('<button class="page-btn" onclick="loadLogs(' + data.total_pages + ')">' + data.total_pages + '</button>');
+    }
+
+    if (currentPage < data.total_pages) {
+        pages.push('<button class="page-btn" onclick="loadLogs(' + (currentPage + 1) + ')" title="下一页"><i class="fas fa-chevron-right"></i></button>');
+        pages.push('<button class="page-btn" onclick="loadLogs(' + data.total_pages + ')" title="末页"><i class="fas fa-angle-double-right"></i></button>');
+    }
+
+    el.innerHTML = pages.join(' ');
+}
+
+function updateFilterOptions(options) {
+    const typeSelect = document.getElementById('filter-type');
+    const actionSelect = document.getElementById('filter-action');
+
+    if (options) {
+        const currentType = typeSelect.value;
+        typeSelect.innerHTML = '<option value="">全部</option>' +
+            (options.resource_types || []).map(t => '<option value="' + t + '"' + (t === currentType ? ' selected' : '') + '>' + t + '</option>').join('');
+
+        const currentAction = actionSelect.value;
+        actionSelect.innerHTML = '<option value="">全部</option>' +
+            (options.actions || []).map(a => '<option value="' + a + '"' + (a === currentAction ? ' selected' : '') + '>' + a + '</option>').join('');
+    }
+}
+
+function resetFilters() {
+    document.getElementById('filter-type').innerHTML = '<option value="">全部</option>';
+    document.getElementById('filter-action').innerHTML = '<option value="">全部</option>';
+    document.getElementById('filter-result').value = '';
+    document.getElementById('filter-date-from').value = '';
+    document.getElementById('filter-date-to').value = '';
+    document.getElementById('filter-keyword').value = '';
+    loadLogs();
+}
+
+function showDetail(id) {
+    // Fetch single log detail
+    const params = new URLSearchParams({ page: 1, page_size: 1000 });
+    // With current API we'll find it from the loaded data by searching
+    // Actually let's just use the API with the ID
+    fetch('/api/operation-logs/?page=1&page_size=1000&keyword=')
+        .then(r => r.json())
+        .then(data => {
+            const item = data.items.find(i => i.id === id);
+            if (!item) return;
+
+            const resultLabels = { success: '成功', failure: '失败', error: '错误' };
+            const duration = item.duration_ms != null ? item.duration_ms + 'ms' : '-';
+
+            document.getElementById('detail-content').innerHTML =
+                '<div class="log-detail-row"><span class="log-detail-label">操作时间</span><span class="log-detail-value">' + item.timestamp + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">操作IP</span><span class="log-detail-value ip-address">' + item.source_ip + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">资源类型</span><span class="log-detail-value">' + item.resource_type + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">资源ID</span><span class="log-detail-value">' + (item.resource_id || '-') + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">操作名称</span><span class="log-detail-value">' + item.action + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">操作详情</span><span class="log-detail-value detail-text">' + (item.detail || '-') + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">耗时</span><span class="log-detail-value">' + duration + '</span></div>' +
+                '<div class="log-detail-row"><span class="log-detail-label">结果</span><span class="log-detail-value"><span class="log-result ' + item.result + '">' + (resultLabels[item.result] || item.result) + '</span></span></div>';
+
+            document.getElementById('detail-modal').style.display = 'flex';
+        });
+}
+
+function closeDetail() {
+    document.getElementById('detail-modal').style.display = 'none';
+}
+
+// 点击弹窗背景关闭
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('detail-modal');
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) closeDetail();
+    });
+
+    loadLogs();
+});
+</script>
 {% endblock %}

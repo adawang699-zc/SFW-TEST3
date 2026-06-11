@@ -139,6 +139,7 @@ urlpatterns = [
 
     # ========== 日志管理 ==========
     path('operation-log/', views.operation_log, name='operation_log'),
+    path('api/operation-logs/', views.api_operation_logs, name='api_operation_logs'),
 
     # ========== 系统配置 ==========
     path('system-config/', views.system_config, name='system_config'),

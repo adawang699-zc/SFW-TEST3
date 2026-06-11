@@ -2226,6 +2226,8 @@ def api_device_add(request):
             except Exception as e:
                 logger.warning(f"自动启动监测失败: {e}")
 
+        log_operation(request, '新增设备', '设备', device.id,
+                      f'设备名称: {device.name}, IP: {device.ip}, 类型: {device.type}')
         return JsonResponse({
             'success': True,
             'device': {
@@ -2236,6 +2238,7 @@ def api_device_add(request):
         })
 
     except Exception as e:
+        log_operation(request, '新增设备', '设备', '', f'添加失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2248,13 +2251,18 @@ def api_device_delete(request):
         device_id = data.get('id')
 
         device = TestDevice.objects.get(id=device_id)
+        name, ip = device.name, device.ip
         device.delete()
 
+        log_operation(request, '删除设备', '设备', device_id,
+                      f'设备名称: {name}, IP: {ip}')
         return JsonResponse({'success': True})
 
     except TestDevice.DoesNotExist:
+        log_operation(request, '删除设备', '设备', device_id, '设备不存在', result='failure')
         return JsonResponse({'success': False, 'error': '设备不存在'})
     except Exception as e:
+        log_operation(request, '删除设备', '设备', device_id, f'删除失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -3356,10 +3364,20 @@ def api_device_test_connection(request):
         except paramiko.AuthenticationException as e:
             results['ssh'] = {'success': False, 'message': f'SSH 认证失败: {e}'}
             logger.warning(f"测试连接 {ip}: SSH 认证失败")
+            device_match = TestDevice.objects.filter(ip=ip).first()
+            log_operation(request, '测试连接', '设备',
+                          device_match.id if device_match else '',
+                          f'设备: {device_match.name if device_match else ip}({ip}), SSH 认证失败',
+                          result='failure')
             return JsonResponse({'success': False, 'results': results, 'error': 'SSH 认证失败'})
         except Exception as e:
             results['ssh'] = {'success': False, 'message': f'SSH 连接失败: {e}'}
             logger.warning(f"测试连接 {ip}: SSH 连接失败: {e}")
+            device_match = TestDevice.objects.filter(ip=ip).first()
+            log_operation(request, '测试连接', '设备',
+                          device_match.id if device_match else '',
+                          f'设备: {device_match.name if device_match else ip}({ip}), SSH 连接失败: {e}',
+                          result='error')
             return JsonResponse({'success': False, 'results': results, 'error': str(e)})
 
         # 2. 测试 vtysh 连接
@@ -3436,6 +3454,16 @@ def api_device_test_connection(request):
         # 判断整体是否成功（SSH 必须成功，vtysh 和 backend 至少一个成功）
         overall_success = results['ssh']['success'] and (results['vtysh']['success'] or results['backend']['success'])
 
+        device_match = TestDevice.objects.filter(ip=ip).first()
+        log_operation(
+            request, '测试连接', '设备',
+            device_match.id if device_match else '',
+            f'设备: {device_match.name if device_match else ip}({ip}), SSH: {"成功" if results["ssh"]["success"] else "失败"}' +
+            f', vtysh: {"成功" if results["vtysh"]["success"] else "失败"}' +
+            f', 后台: {"成功" if results["backend"]["success"] else "失败"}',
+            result='success' if overall_success else 'failure'
+        )
+
         return JsonResponse({
             'success': overall_success,
             'results': results,
@@ -3444,6 +3472,7 @@ def api_device_test_connection(request):
 
     except Exception as e:
         logger.exception(f"测试连接失败: {e}")
+        log_operation(request, '测试连接', '设备', '', f'测试异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -3643,12 +3672,16 @@ def api_device_update(request):
         device.description = data.get('description', device.description)
         device.save()
 
+        log_operation(request, '更新设备', '设备', device.id,
+                      f'设备名称: {device.name}, IP: {device.ip}')
         return JsonResponse({'success': True, 'message': '设备信息已更新'})
 
     except TestDevice.DoesNotExist:
+        log_operation(request, '更新设备', '设备', device_id, f'设备不存在', result='failure')
         return JsonResponse({'success': False, 'error': '设备不存在'})
     except Exception as e:
         logger.exception(f"更新设备失败: {e}")
+        log_operation(request, '更新设备', '设备', device_id, f'更新失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -4862,9 +4895,97 @@ def _update_task_output(task_id, text):
 
 # ========== 日志管理 ==========
 
+def log_operation(request, action, resource_type, resource_id='', detail='', result='success', duration_ms=None):
+    """记录操作日志的快捷函数"""
+    from .models import OperationLog
+    ip = request.META.get('REMOTE_ADDR', '')
+    xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if xff:
+        ip = xff.split(',')[0].strip()
+    OperationLog.objects.create(
+        source_ip=ip,
+        action=action,
+        resource_type=resource_type,
+        resource_id=str(resource_id),
+        detail=detail,
+        result=result,
+        duration_ms=duration_ms,
+    )
+
+
 def operation_log(request):
     """操作日志页面"""
     return render(request, 'operation_log.html')
+
+
+@require_http_methods(['GET'])
+def api_operation_logs(request):
+    """操作日志查询 API"""
+    from .models import OperationLog
+    from django.db import models as dj_models
+    page = int(request.GET.get('page', 1))
+    page_size = int(request.GET.get('page_size', 50))
+    resource_type = request.GET.get('resource_type', '')
+    action = request.GET.get('action', '')
+    result = request.GET.get('result', '')
+    keyword = request.GET.get('keyword', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
+
+    qs = OperationLog.objects.all()
+
+    if resource_type:
+        qs = qs.filter(resource_type=resource_type)
+    if action:
+        qs = qs.filter(action=action)
+    if result:
+        qs = qs.filter(result=result)
+    if keyword:
+        qs = qs.filter(
+            dj_models.Q(detail__icontains=keyword) |
+            dj_models.Q(resource_id__icontains=keyword) |
+            dj_models.Q(action__icontains=keyword)
+        )
+    if date_from:
+        qs = qs.filter(timestamp__gte=date_from)
+    if date_to:
+        qs = qs.filter(timestamp__lte=date_to + ' 23:59:59')
+
+    total = qs.count()
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    qs = qs[(page - 1) * page_size:page * page_size]
+
+    items = []
+    for o in qs:
+        items.append({
+            'id': o.id,
+            'timestamp': o.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'source_ip': o.source_ip,
+            'action': o.action,
+            'resource_type': o.resource_type,
+            'resource_id': o.resource_id,
+            'detail': o.detail,
+            'result': o.result,
+            'duration_ms': o.duration_ms,
+        })
+
+    # 获取筛选选项
+    type_choices = [r['resource_type'] for r in
+                    OperationLog.objects.values('resource_type').distinct().order_by('resource_type')]
+    action_choices = [a['action'] for a in
+                      OperationLog.objects.values('action').distinct().order_by('action')]
+
+    return JsonResponse({
+        'items': items,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'total_pages': total_pages,
+        'filter_options': {
+            'resource_types': type_choices,
+            'actions': action_choices,
+        }
+    })
 
 
 # ========== 系统配置 ==========

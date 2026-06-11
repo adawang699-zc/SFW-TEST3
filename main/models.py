@@ -443,3 +443,34 @@ class LinkAddress(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class OperationLog(models.Model):
+    """操作日志模型 - 记录用户在平台上的所有操作"""
+    RESULT_CHOICES = [
+        ('success', '成功'),
+        ('failure', '失败'),
+        ('error', '错误'),
+    ]
+
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="操作时间")
+    source_ip = models.GenericIPAddressField(verbose_name="操作IP")
+    action = models.CharField(max_length=100, verbose_name="操作名称", help_text="如：新增设备、删除Agent、启动测试")
+    resource_type = models.CharField(max_length=50, verbose_name="资源类型", help_text="如：设备、Agent、系统配置")
+    resource_id = models.CharField(max_length=50, blank=True, default='', verbose_name="资源ID")
+    detail = models.TextField(blank=True, default='', verbose_name="操作详情")
+    result = models.CharField(max_length=20, choices=RESULT_CHOICES, default='success', verbose_name="执行结果")
+    duration_ms = models.IntegerField(null=True, blank=True, verbose_name="耗时(ms)")
+
+    class Meta:
+        verbose_name = "操作日志"
+        verbose_name_plural = "操作日志"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['resource_type']),
+            models.Index(fields=['action']),
+        ]
+
+    def __str__(self):
+        return f"[{self.timestamp}] {self.action} - {self.result}"
