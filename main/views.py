@@ -864,6 +864,11 @@ def api_agent_delete(request):
         logger.exception(f"删除 Agent 失败: {e}")
         log_operation(request, '删除Agent', 'Agent', agent_id, f'删除失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def api_agent_start(request):
     """启动 Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
