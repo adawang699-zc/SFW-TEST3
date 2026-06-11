@@ -604,11 +604,11 @@
         </div>
 
         <div class="nav-group">
-            <div class="nav-group-header" onclick="toggleGroup(this)">
+            <div class="nav-group-header collapsed" onclick="toggleGroup(this)">
                 <span>📦 资源管理</span>
                 <i class="fas fa-chevron-down group-arrow"></i>
             </div>
-            <div class="nav-group-content">
+            <div class="nav-group-content collapsed">
                 <a class="nav-link {% if request.resolver_match.url_name == 'agent_manage' %}active{% endif %}" href="{% url 'main:agent_manage' %}">
                     <i>🔌</i>Agent 管理
                 </a>
@@ -619,11 +619,11 @@
         </div>
 
         <div class="nav-group">
-            <div class="nav-group-header" onclick="toggleGroup(this)">
+            <div class="nav-group-header collapsed" onclick="toggleGroup(this)">
                 <span>🧪 业务测试</span>
                 <i class="fas fa-chevron-down group-arrow"></i>
             </div>
-            <div class="nav-group-content">
+            <div class="nav-group-content collapsed">
                 <a class="nav-link {% if request.resolver_match.url_name == 'packet_send' %}active{% endif %}" href="{% url 'main:packet_send' %}">
                     <i>📡</i>报文发送
                 </a>
@@ -640,11 +640,11 @@
         </div>
 
         <div class="nav-group">
-            <div class="nav-group-header" onclick="toggleGroup(this)">
+            <div class="nav-group-header collapsed" onclick="toggleGroup(this)">
                 <span>🌐 网络测试</span>
                 <i class="fas fa-chevron-down group-arrow"></i>
             </div>
-            <div class="nav-group-content">
+            <div class="nav-group-content collapsed">
                 <a class="nav-link {% if request.resolver_match.url_name == 'port_scan' %}active{% endif %}" href="{% url 'main:port_scan' %}">
                     <i>🔍</i>端口扫描
                 </a>
@@ -655,11 +655,11 @@
         </div>
 
         <div class="nav-group">
-            <div class="nav-group-header" onclick="toggleGroup(this)">
+            <div class="nav-group-header collapsed" onclick="toggleGroup(this)">
                 <span>📊 监控诊断</span>
                 <i class="fas fa-chevron-down group-arrow"></i>
             </div>
-            <div class="nav-group-content">
+            <div class="nav-group-content collapsed">
                 <a class="nav-link {% if request.resolver_match.url_name == 'syslog_receiver' %}active{% endif %}" href="{% url 'main:syslog_receiver' %}">
                     <i>📋</i>Syslog 接收
                 </a>
@@ -673,11 +673,11 @@
         </div>
 
         <div class="nav-group">
-            <div class="nav-group-header" onclick="toggleGroup(this)">
+            <div class="nav-group-header collapsed" onclick="toggleGroup(this)">
                 <span>🔧 系统管理</span>
                 <i class="fas fa-chevron-down group-arrow"></i>
             </div>
-            <div class="nav-group-content">
+            <div class="nav-group-content collapsed">
                 <a class="nav-link {% if request.resolver_match.url_name == 'knowledge_base' %}active{% endif %}" href="{% url 'main:knowledge_base' %}">
                     <i>📚</i>知识库管理
                 </a>
@@ -866,32 +866,27 @@
             hideConfirmModal();
         });
 
-        // 侧边栏分组折叠
+        // 侧边栏分组折叠 — 手风琴模式
         function toggleGroup(header) {
             const content = header.nextElementSibling;
-            const isCollapsed = content.classList.contains('collapsed');
-            content.classList.toggle('collapsed');
-            header.classList.toggle('collapsed');
-            // 展开时恢复高度
-            if (isCollapsed) {
+            const isOpening = content.classList.contains('collapsed');
+
+            // 先关闭所有分组
+            document.querySelectorAll('.nav-group-content').forEach(g => {
+                g.classList.add('collapsed');
+                g.style.maxHeight = '';
+            });
+            document.querySelectorAll('.nav-group-header').forEach(h => {
+                h.classList.add('collapsed');
+            });
+
+            // 再展开当前点击的（如果之前是闭合的）
+            if (isOpening) {
+                content.classList.remove('collapsed');
+                header.classList.remove('collapsed');
                 content.style.maxHeight = content.scrollHeight + 'px';
-                requestAnimationFrame(() => {
-                    content.style.maxHeight = content.scrollHeight + 'px';
-                });
             }
         }
-
-        // 页面加载时自动展开当前页面所在的分组
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.nav-group-content').forEach(group => {
-                if (group.querySelector('.nav-link.active')) {
-                    const header = group.previousElementSibling;
-                    header.classList.remove('collapsed');
-                    group.classList.remove('collapsed');
-                    group.style.maxHeight = group.scrollHeight + 'px';
-                }
-            });
-        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>
