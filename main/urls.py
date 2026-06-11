@@ -176,6 +176,7 @@ urlpatterns = [
     path('api/vm/start/', views.api_vm_start, name='api_vm_start'),
     path('api/vm/shutdown/', views.api_vm_shutdown, name='api_vm_shutdown'),
     path('api/vm/bridge-status/', views.api_vm_bridge_status, name='api_vm_bridge_status'),
+    path('api/vm/bridge-config/', views.api_vm_bridge_config, name='api_vm_bridge_config'),
 
     # ========== 授权管理 ==========
     path('license-management/', views.license_management, name='license_management'),

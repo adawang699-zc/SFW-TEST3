@@ -775,6 +775,30 @@
                 <div id="vm_bridge_status_content"></div>
             </div>
         </div>
+
+        <!-- VM 桥接配置 -->
+        <div class="card" style="margin-top: 16px;">
+            <div class="card-header">虚拟机桥接配置</div>
+            <p style="color: var(--text-secondary); margin-bottom: 16px; font-size: 0.85rem;">
+                配置虚拟机桥接到指定的 NS 管理网口。例如: win10 桥接到 eth1，即 win10 → brv1 → veth → ns-eth1 → eth1。
+                <br><span style="color: var(--warning);">注意: 虚拟机需要在关机状态才能添加新网卡。</span>
+            </p>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 16px;">
+                <button class="btn btn-primary" onclick="loadVMBridgeConfig()">
+                    <i class="fas fa-sync"></i> 刷新映射
+                </button>
+                <button class="btn btn-warning" onclick="applyVMBridgeConfig()" id="apply_bridge_btn">
+                    <i class="fas fa-check"></i> 应用配置
+                </button>
+            </div>
+
+            <div id="vm_bridge_config_container">
+                <div style="color: var(--text-muted); text-align: center; padding: 20px;">点击"刷新映射"加载配置...</div>
+            </div>
+
+            <div id="vm_bridge_config_result" style="margin-top: 12px; min-height: 60px; max-height: 300px; overflow-y: auto; background: #0a0a1a; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 0.85rem; white-space: pre-wrap; display: none;"></div>
+        </div>
     </div>
 
     <!-- VM 详情弹窗 -->
@@ -3323,5 +3347,170 @@ async function loadVMBridgeStatus() {
     } catch (e) {
         content.innerHTML = '<div style="color: var(--danger);">加载异常: ' + escapeHtml(e.message) + '</div>';
     }
+}
+
+// ========== VM 桥接配置 ==========
+
+let vmBridgeMappings = [];
+
+function addBridgeConfigLog(message, type) {
+    const el = document.getElementById('vm_bridge_config_result');
+    if (!el) return;
+    el.style.display = 'block';
+    const time = new Date().toLocaleString();
+    const color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : type === 'warning' ? 'var(--warning)' : 'var(--text-secondary)';
+    el.innerHTML += '<div style="color: ' + color + '; margin-bottom: 2px;"><small style="color: var(--text-muted);">[' + time + ']</small> ' + message + '</div>';
+    el.scrollTop = el.scrollHeight;
+}
+
+async function loadVMBridgeConfig() {
+    const container = document.getElementById('vm_bridge_config_container');
+    container.innerHTML = '<div style="color: var(--text-secondary); padding: 12px;">加载中...</div>';
+
+    try {
+        const resp = await fetch('/api/vm/bridge-config/');
+        const data = await resp.json();
+        if (!data.success) {
+            container.innerHTML = '<div style="color: var(--danger);">加载失败: ' + escapeHtml(data.error || '') + '</div>';
+            return;
+        }
+        const d = data.data;
+
+        // Build mappings: for each VM, find which NS interface it's currently bridged to
+        vmBridgeMappings = (d.vms || []).map(function(vm) {
+            // Check if any bridge matches brvX pattern
+            let currentIface = '';
+            (vm.bridges || []).forEach(function(b) {
+                const m = b.match(/^brv(\d+)$/);
+                if (m) currentIface = 'eth' + m[1];
+            });
+            return {
+                vm_name: vm.name,
+                vm_status: vm.status,
+                running: vm.running,
+                current_interface: currentIface,
+                selected_interface: currentIface
+            };
+        });
+
+        renderBridgeConfig(d.ns_interfaces || []);
+    } catch (e) {
+        container.innerHTML = '<div style="color: var(--danger);">加载异常: ' + escapeHtml(e.message) + '</div>';
+    }
+}
+
+function renderBridgeConfig(nsInterfaces) {
+    const container = document.getElementById('vm_bridge_config_container');
+
+    if (vmBridgeMappings.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">未发现虚拟机</div>';
+        return;
+    }
+
+    let html = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+    html += '<thead><tr style="background: rgba(0,0,0,0.2);">'
+        + '<th style="padding: 8px; text-align: left;">虚拟机</th>'
+        + '<th style="padding: 8px; text-align: left;">状态</th>'
+        + '<th style="padding: 8px; text-align: left;">当前桥接</th>'
+        + '<th style="padding: 8px; text-align: left;">桥接到网口</th>'
+        + '</tr></thead><tbody>';
+
+    vmBridgeMappings.forEach(function(m, idx) {
+        const statusColor = m.running ? 'var(--success)' : 'var(--text-muted)';
+        const currentBridgeText = m.current_interface ? 'brv' + m.current_interface.replace('eth', '') + ' (' + m.current_interface + ')' : '未配置';
+
+        html += '<tr>'
+            + '<td style="padding: 8px; font-weight: 600;">' + escapeHtml(m.vm_name) + '</td>'
+            + '<td style="padding: 8px; color: ' + statusColor + ';">' + escapeHtml(m.vm_status) + '</td>'
+            + '<td style="padding: 8px; color: var(--text-secondary);">' + currentBridgeText + '</td>'
+            + '<td style="padding: 8px;">'
+            + '<select class="form-input" id="bridge_select_' + idx + '" style="width: 160px; padding: 4px 8px;">'
+            + '<option value="">-- 不桥接 --</option>';
+
+        nsInterfaces.forEach(function(ns) {
+            const selected = ns.interface === m.selected_interface ? 'selected' : '';
+            html += '<option value="' + escapeHtml(ns.interface) + '" ' + selected + '>'
+                + escapeHtml(ns.interface) + ' (' + escapeHtml(ns.ns) + ')</option>';
+        });
+
+        html += '</select></td></tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function applyVMBridgeConfig() {
+    // Collect mappings from selects
+    const mappings = [];
+    vmBridgeMappings.forEach(function(m, idx) {
+        const sel = document.getElementById('bridge_select_' + idx);
+        if (sel) {
+            const iface = sel.value;
+            if (iface) {
+                mappings.push({vm: m.vm_name, interface: iface});
+            }
+        }
+    });
+
+    if (mappings.length === 0) {
+        showToast('请选择要桥接的网口', 'warning');
+        return;
+    }
+
+    // Show confirmation
+    let msg = '确认应用以下桥接配置？\n\n';
+    mappings.forEach(function(m) {
+        msg += '  ' + m.vm + ' → ' + m.interface + '\n';
+    });
+    msg += '\n⚠️ 如果虚拟机正在运行，将跳过网卡添加步骤。\n请先关机后再执行。';
+
+    showConfirmModal('确认桥接配置', msg, async function() {
+        const btn = document.getElementById('apply_bridge_btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 配置中...';
+
+        const resultEl = document.getElementById('vm_bridge_config_result');
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = '';
+
+        addBridgeConfigLog('正在应用桥接配置...', 'info');
+
+        try {
+            const resp = await fetch('/api/vm/bridge-config/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') || ''
+                },
+                body: JSON.stringify({mappings: mappings})
+            });
+            const data = await resp.json();
+            if (data.success) {
+                addBridgeConfigLog('✓ ' + data.message, 'success');
+                (data.results || []).forEach(function(r) {
+                    if (r.success) {
+                        addBridgeConfigLog(r.vm + ' → ' + r.interface + ': 成功', 'success');
+                        (r.steps || []).forEach(function(s) {
+                            addBridgeConfigLog('  - ' + s, 'info');
+                        });
+                    } else {
+                        addBridgeConfigLog(r.vm + ': 失败 - ' + (r.error || ''), 'error');
+                    }
+                });
+                showToast(data.message, 'success');
+                // Refresh
+                setTimeout(loadVMBridgeConfig, 2000);
+            } else {
+                addBridgeConfigLog('✗ ' + (data.error || '配置失败'), 'error');
+                showToast('配置失败: ' + (data.error || ''), 'error');
+            }
+        } catch (e) {
+            addBridgeConfigLog('✗ 异常: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check"></i> 应用配置';
+        }
+    }, '🔗');
 }
 {% endblock %}

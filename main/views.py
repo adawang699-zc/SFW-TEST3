@@ -7247,6 +7247,372 @@ def api_vm_bridge_status(request):
         logger.exception("获取桥接状态失败")
         return JsonResponse({'success': False, 'error': str(e)})
 
+
+@require_http_methods(["GET", "POST"])
+@csrf_exempt
+def api_vm_bridge_config(request):
+    """获取/更新虚拟机桥接配置（VM ↔ NS 网口映射）"""
+    if request.method == "GET":
+        return _vm_bridge_config_get()
+    else:
+        return _vm_bridge_config_post(request)
+
+
+def _vm_bridge_config_get():
+    """获取当前 VM 桥接配置"""
+    try:
+        # 获取所有 VM
+        result = subprocess.run(
+            ['sudo', 'virsh', 'list', '--all'],
+            capture_output=True, text=True, timeout=10
+        )
+        vms = []
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                line = line.strip()
+                if not line or line.startswith('---') or line.startswith('Id') or line.startswith('Name'):
+                    continue
+                parts = line.split(None, 2)
+                if len(parts) >= 3:
+                    vm_name = parts[1]
+                    vm_status = parts[2]
+
+                    # 获取 VM 当前桥接接口
+                    iface_result = subprocess.run(
+                        ['sudo', 'virsh', 'domiflist', vm_name],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    bridges = []
+                    if iface_result.returncode == 0:
+                        for iline in iface_result.stdout.strip().split('\n'):
+                            iline = iline.strip()
+                            if not iline or iline.startswith('Interface') or iline.startswith('---'):
+                                continue
+                            iparts = iline.split(None, 3)
+                            if len(iparts) >= 4:
+                                bridges.append(iparts[2])
+
+                    vms.append({
+                        'name': vm_name,
+                        'status': vm_status,
+                        'running': vm_status.lower() == 'running',
+                        'bridges': bridges
+                    })
+
+        # 获取所有 NS 管理网口
+        ns_result = subprocess.run(
+            ['ip', 'netns', 'list'],
+            capture_output=True, text=True, timeout=5
+        )
+        ns_interfaces = []
+        if ns_result.returncode == 0:
+            for line in ns_result.stdout.strip().split('\n'):
+                ns_name = line.split()[0] if line.strip() else ''
+                if ns_name.startswith('ns-eth'):
+                    iface_name = ns_name.replace('ns-', '')
+                    ns_interfaces.append({
+                        'ns': ns_name,
+                        'interface': iface_name
+                    })
+
+        # 检查已存在的桥接/veth设备
+        br_result = subprocess.run(
+            ['ip', 'link', 'show', 'type', 'bridge'],
+            capture_output=True, text=True, timeout=5
+        )
+        existing_bridges = []
+        if br_result.returncode == 0:
+            for line in br_result.stdout.strip().split('\n'):
+                line = line.strip()
+                if line and line[0].isdigit():
+                    parts = line.split(':')
+                    if len(parts) >= 2:
+                        name = parts[1].strip().split('@')[0]
+                        state = 'UP' if 'state UP' in line else 'DOWN'
+                        existing_bridges.append({'name': name, 'state': state})
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'vms': vms,
+                'ns_interfaces': ns_interfaces,
+                'existing_bridges': existing_bridges
+            }
+        })
+
     except Exception as e:
-        logger.exception("获取虚拟机详情失败")
+        logger.exception("获取VM桥接配置失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def _vm_bridge_config_post(request):
+    """更新 VM 桥接配置"""
+    try:
+        data = json.loads(request.body)
+        mappings = data.get('mappings', [])  # [{vm: "win10", interface: "eth1"}, ...]
+
+        if not mappings:
+            return JsonResponse({'success': False, 'error': '映射列表为空'})
+
+        password_echo = data.get('password', 'tdhx@2017')
+
+        results = []
+        for mapping in mappings:
+            vm_name = mapping.get('vm', '').strip()
+            target_iface = mapping.get('interface', '').strip()
+            results.append(_setup_single_vm_bridge(vm_name, target_iface, password_echo))
+
+        success_count = sum(1 for r in results if r.get('success'))
+        return JsonResponse({
+            'success': success_count > 0,
+            'message': f'配置完成: {success_count}/{len(results)} 成功',
+            'results': results
+        })
+
+    except Exception as e:
+        logger.exception("更新VM桥接配置失败")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> dict:
+    """为单个 VM 配置桥接到指定 NS 网口"""
+    try:
+        ns_name = f'ns-{target_iface}'
+        ns_id = target_iface.replace('eth', '')
+        bridge_host = f'brv{ns_id}'       # 主机网桥 (brv1)
+        veth_host = f'vh{ns_id}h'          # veth 主机端 (vh1h)
+        veth_ns = f'vh{ns_id}n'            # veth ns端 (vh1n)
+        bridge_ns = f'br{ns_id}'           # ns内网桥 (br1)
+
+        def run(cmd, timeout_val=15):
+            return subprocess.run(
+                ['sudo'] + cmd.split(),
+                capture_output=True, text=True, timeout=timeout_val
+            )
+
+        def run_ns(ns, cmd, timeout_val=15):
+            return subprocess.run(
+                ['sudo', 'ip', 'netns', 'exec', ns] + cmd.split(),
+                capture_output=True, text=True, timeout=timeout_val
+            )
+
+        steps = []
+
+        # 1. 检查 ns 是否存在
+        ns_check = run(f'ip netns list | grep -q "^{ns_name}"')
+        if ns_check.returncode != 0:
+            # 尝试创建 NS
+            run(f'ip netns add {ns_name}')
+            # 把网口移入 NS
+            run(f'ip link set {target_iface} netns {ns_name}')
+            steps.append(f'创建 NS {ns_name} 并移入 {target_iface}')
+
+        # 2. 在 NS 中创建网桥
+        r1 = run_ns(ns_name, f'ip link show {bridge_ns}')
+        if r1.returncode != 0:
+            run_ns(ns_name, f'ip link add name {bridge_ns} type bridge')
+            run_ns(ns_name, f'ip link set {bridge_ns} up')
+            steps.append(f'在 {ns_name} 中创建网桥 {bridge_ns}')
+        else:
+            steps.append(f'网桥 {bridge_ns} 已存在')
+
+        # 3. 将物理网口加入 NS 网桥
+        r2 = run_ns(ns_name, f'ip link show {target_iface}')
+        if r2.returncode == 0:
+            r2b = run_ns(ns_name,
+                f'ip link show {target_iface} | grep -q "master {bridge_ns}"')
+            if r2b.returncode != 0:
+                run_ns(ns_name, f'ip link set {target_iface} master {bridge_ns}')
+                run_ns(ns_name, f'ip link set {target_iface} up')
+                steps.append(f'将 {target_iface} 加入网桥 {bridge_ns}')
+            else:
+                steps.append(f'{target_iface} 已在网桥 {bridge_ns} 中')
+
+        # 4. 创建 veth pair
+        r3 = run(f'ip link show {veth_host}')
+        if r3.returncode == 0:
+            run(f'ip link delete {veth_host}')
+            steps.append('删除旧的 veth pair')
+
+        run(f'ip link add {veth_host} type veth peer name {veth_ns}')
+        run(f'ip link set {veth_ns} netns {ns_name}')
+        run_ns(ns_name, f'ip link set {veth_ns} up')
+        run_ns(ns_name, f'ip link set {veth_ns} master {bridge_ns}')
+        run(f'ip link set {veth_host} up')
+        steps.append(f'创建 veth pair {veth_host} <-> {veth_ns}')
+
+        # 5. 创建主机网桥并连接 veth
+        r4 = run(f'ip link show {bridge_host}')
+        if r4.returncode != 0:
+            run(f'ip link add name {bridge_host} type bridge')
+            run(f'ip link set {bridge_host} up')
+            steps.append(f'创建主机网桥 {bridge_host}')
+        else:
+            steps.append(f'主机网桥 {bridge_host} 已存在')
+
+        # 将 veth_host 加入主机网桥
+        r4b = run(f'ip link show {veth_host} | grep -q "master {bridge_host}"')
+        if r4b.returncode != 0:
+            run(f'ip link set {veth_host} master {bridge_host}')
+            steps.append(f'将 {veth_host} 加入 {bridge_host}')
+        else:
+            steps.append(f'{veth_host} 已在 {bridge_host} 中')
+
+        # 6. 配置 VM 连接到主机网桥
+        vm_check = run(f'sudo virsh dominfo {vm_name}')
+        if vm_check.returncode == 0:
+            # 检查 VM 是否已有该网桥的接口
+            iface_check = run(
+                f'sudo virsh domiflist {vm_name} | grep "{bridge_host}"')
+            if iface_check.returncode != 0:
+                # 检查 VM 状态
+                state_check = run(
+                    f'sudo virsh domstate {vm_name}')
+                vm_state = state_check.stdout.strip()
+                if vm_state == 'running':
+                    steps.append(
+                        f'⚠️ {vm_name} 正在运行，无法添加网卡，请先关机')
+                else:
+                    attach = run(
+                        f'sudo virsh attach-interface --domain {vm_name} '
+                        f'--type bridge --source {bridge_host} --model virtio --persistent')
+                    if attach.returncode == 0:
+                        steps.append(f'已将 {vm_name} 连接到 {bridge_host}')
+                    else:
+                        steps.append(f'连接 VM 失败: {attach.stderr}')
+            else:
+                steps.append(f'{vm_name} 已连接到 {bridge_host}')
+        else:
+            steps.append(f'VM {vm_name} 不存在')
+
+        return {
+            'success': True,
+            'vm': vm_name,
+            'interface': target_iface,
+            'bridge_host': bridge_host,
+            'bridge_ns': bridge_ns,
+            'steps': steps
+        }
+
+    except Exception as e:
+        logger.exception(f"配置VM {vm_name} 桥接失败")
+        return {
+            'success': False,
+            'vm': vm_name,
+            'error': str(e)
+        }
+
+
+@require_http_methods(["GET", "POST"])
+@csrf_exempt
+def api_vm_bridge_config(request):
+    """获取/更新虚拟机桥接配置（VM ↔ NS 网口映射）"""
+    if request.method == "GET":
+        return _vm_bridge_config_get()
+    else:
+        return _vm_bridge_config_post(request)
+
+
+def _vm_bridge_config_get():
+    """获取当前 VM 桥接配置"""
+    try:
+        # 获取所有 VM
+        result = subprocess.run(
+            ['sudo', 'virsh', 'list', '--all'],
+            capture_output=True, text=True, timeout=10
+        )
+        vms = []
+        if result.returncode == 0:
+            for line in result.stdout.strip().split('\n'):
+                line = line.strip()
+                if not line or line.startswith('---') or line.startswith('Id') or line.startswith('Name'):
+                    continue
+                parts = line.split(None, 2)
+                if len(parts) >= 3:
+                    vm_name = parts[1]
+                    vm_status = parts[2]
+
+                    # 获取 VM 当前桥接接口
+                    iface_result = subprocess.run(
+                        ['sudo', 'virsh', 'domiflist', vm_name],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    bridges = []
+                    if iface_result.returncode == 0:
+                        for iline in iface_result.stdout.strip().split('\n'):
+                            iline = iline.strip()
+                            if not iline or iline.startswith('Interface') or iline.startswith('---'):
+                                continue
+                            iparts = iline.split(None, 3)
+                            if len(iparts) >= 4:
+                                bridges.append(iparts[2])
+
+                    vms.append({
+                        'name': vm_name,
+                        'status': vm_status,
+                        'running': vm_status.lower() == 'running',
+                        'bridges': bridges
+                    })
+
+        # 获取所有 NS 管理网口
+        ns_result = subprocess.run(
+            ['ip', 'netns', 'list'],
+            capture_output=True, text=True, timeout=5
+        )
+        ns_interfaces = []
+        ns_names = []
+        if ns_result.returncode == 0:
+            for line in ns_result.stdout.strip().split('\n'):
+                ns_name = line.split()[0] if line.strip() else ''
+                if ns_name.startswith('ns-eth'):
+                    ns_names.append(ns_name)
+                    iface_name = ns_name.replace('ns-', '')
+                    ns_interfaces.append({
+                        'ns': ns_name,
+                        'interface': iface_name
+                    })
+
+        # 检查已存在的桥接设备
+        bridge_result = subprocess.run(
+            ['ip', 'link', 'show', 'type', 'bridge'],
+            capture_output=True, text=True, timeout=5
+        )
+        existing_bridges = []
+        if bridge_result.returncode == 0:
+            for line in bridge_result.stdout.strip().split('\n'):
+                line = line.strip()
+                if line and line[0].isdigit():
+                    parts = line.split(':')
+                    if len(parts) >= 2:
+                        name = parts[1].strip().split('@')[0]
+                        state = 'UP' if 'state UP' in line else 'DOWN'
+                        existing_bridges.append({'name': name, 'state': state})
+
+        # 检查 veth 设备
+        veth_result = subprocess.run(
+            ['ip', 'link', 'show', 'type', 'veth'],
+            capture_output=True, text=True, timeout=5
+        )
+        existing_veths = []
+        if veth_result.returncode == 0:
+            for line in veth_result.stdout.strip().split('\n'):
+                line = line.strip()
+                if line and line[0].isdigit():
+                    parts = line.split(':')
+                    if len(parts) >= 2:
+                        name = parts[1].strip().split('@')[0]
+                        existing_veths.append(name)
+
+        return JsonResponse({
+            'success': True,
+            'data': {
+                'vms': vms,
+                'ns_interfaces': ns_interfaces,
+                'existing_bridges': existing_bridges,
+                'existing_veths': existing_veths
+            }
+        })
+
+    except Exception as e:
+        logger.exception("获取VM桥接配置失败")
         return JsonResponse({'success': False, 'error': str(e)})
