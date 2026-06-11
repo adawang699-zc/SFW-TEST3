@@ -3061,7 +3061,7 @@ function renderVMTable(vms) {
                 html += '<tr>';
                 html += '<td style="padding: 4px 8px;">' + escapeHtml(iface.interface || '') + '</td>';
                 html += '<td style="padding: 4px 8px;">' + escapeHtml(iface.type || '') + '</td>';
-                html += '<td style="padding: 4px 8px; color: var(--secondary);">' + escapeHtml(iface.source || '') + '</td>';
+                html += '<td style="padding: 4px 8px; color: var(--secondary);">' + escapeHtml(iface.display_name || iface.source || '') + ' <span style="color: var(--text-muted); font-size: 0.75rem;">(' + escapeHtml(iface.source || '') + ')</span></td>';
                 html += '<td style="padding: 4px 8px;">' + escapeHtml(iface.model || '') + '</td>';
                 html += '</tr>';
             });
@@ -3154,7 +3154,7 @@ async function showVMDetail(vmName) {
                 ifaceHtml += '<tr>'
                     + '<td style="padding: 4px 8px;">' + escapeHtml(iface.interface || '') + '</td>'
                     + '<td style="padding: 4px 8px;">' + escapeHtml(iface.type || '') + '</td>'
-                    + '<td style="padding: 4px 8px; color: var(--secondary);">' + escapeHtml(iface.source || '') + '</td>'
+                    + '<td style="padding: 4px 8px; color: var(--secondary);">' + escapeHtml(iface.display_name || iface.source || '') + ' <span style="color: var(--text-muted); font-size: 0.75rem;">(' + escapeHtml(iface.source || '') + ')</span></td>'
                     + '<td style="padding: 4px 8px;">' + escapeHtml(iface.model || '') + '</td>'
                     + '</tr>';
             });
