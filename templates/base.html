@@ -759,18 +759,18 @@
         }
 
         // Toast 提示函数
-        function showToast(message, type = 'success') {
+        function showToast(message, type = 'success', duration = 3000) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast ' + type;
-            toast.textContent = message;
+            toast.innerHTML = message.replace(/\n/g, '<br>');
             container.appendChild(toast);
 
             setTimeout(() => {
                 toast.style.opacity = '0';
                 toast.style.transform = 'translateX(100px)';
                 setTimeout(() => toast.remove(), 300);
-            }, 3000);
+            }, duration);
         }
 
         // 确认弹窗函数

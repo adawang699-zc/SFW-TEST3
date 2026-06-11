@@ -135,6 +135,7 @@
             <textarea id="edit-device-description" class="form-input" rows="2"></textarea>
         </div>
         <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px;">
+            <button class="btn btn-info" onclick="editTestConnection()"><i class="fas fa-plug"></i> 测试连接</button>
             <button class="btn btn-secondary" onclick="hideEditModal()">取消</button>
             <button class="btn btn-primary" onclick="updateDevice()">保存</button>
         </div>
@@ -907,32 +908,84 @@ async function testConnection() {
         });
 
         if (result.success) {
-            // 显示详细测试结果
             if (result.results) {
                 const sshResult = result.results.ssh;
                 const vtyshResult = result.results.vtysh;
                 const backendResult = result.results.backend;
 
-                let detailMsg = `SSH: ${sshResult.success ? '✓' : '✗'}\n`;
-                detailMsg += `vtysh: ${vtyshResult.success ? '✓' : '✗'}\n`;
+                let detailMsg = `SSH: ${sshResult.success ? '✓' : '✗'}<br>`;
+                detailMsg += `vtysh: ${vtyshResult.success ? '✓' : '✗'}<br>`;
                 detailMsg += `后台: ${backendResult.success ? '✓' : '✗'}`;
 
-                showToast(`连接测试成功\n${detailMsg}`, 'success', 5000);
+                showToast(`连接测试成功<br>${detailMsg}`, 'success', 5000);
             } else {
                 showToast('连接成功: ' + ip);
             }
         } else {
-            // 显示失败详情
             if (result.results) {
                 const sshResult = result.results.ssh;
                 const vtyshResult = result.results.vtysh;
                 const backendResult = result.results.backend;
 
-                let detailMsg = `SSH: ${sshResult.message}\n`;
-                if (vtyshResult.message) detailMsg += `vtysh: ${vtyshResult.message}\n`;
+                let detailMsg = `SSH: ${sshResult.message}<br>`;
+                if (vtyshResult.message) detailMsg += `vtysh: ${vtyshResult.message}<br>`;
                 if (backendResult.message) detailMsg += `后台: ${backendResult.message}`;
 
-                showToast(`连接测试失败\n${detailMsg}`, 'error', 5000);
+                showToast(`连接测试失败<br>${detailMsg}`, 'error', 5000);
+            } else {
+                showToast('连接失败: ' + result.error, 'error');
+            }
+        }
+    } catch (e) {
+        showToast('请求失败: ' + e.message, 'error');
+    }
+}
+
+async function editTestConnection() {
+    const ip = document.getElementById('edit-device-ip').value;
+    const port = document.getElementById('edit-device-port').value || 22;
+    const user = document.getElementById('edit-device-user').value || 'admin';
+    const password = document.getElementById('edit-device-password').value;
+    const device_type = document.getElementById('edit-device-type').value;
+    const backend_password = document.getElementById('edit-device-backend-password').value;
+
+    if (!ip) {
+        showToast('请输入 IP 地址', 'error');
+        return;
+    }
+
+    showToast('测试连接中...');
+
+    try {
+        const result = await apiRequest('/api/device/test_connection/', 'POST', {
+            ip, port: parseInt(port), user, password, device_type, backend_password
+        });
+
+        if (result.success) {
+            if (result.results) {
+                const sshResult = result.results.ssh;
+                const vtyshResult = result.results.vtysh;
+                const backendResult = result.results.backend;
+
+                let detailMsg = `SSH: ${sshResult.success ? '✓' : '✗'}<br>`;
+                detailMsg += `vtysh: ${vtyshResult.success ? '✓' : '✗'}<br>`;
+                detailMsg += `后台: ${backendResult.success ? '✓' : '✗'}`;
+
+                showToast(`连接测试成功<br>${detailMsg}`, 'success', 5000);
+            } else {
+                showToast('连接成功: ' + ip);
+            }
+        } else {
+            if (result.results) {
+                const sshResult = result.results.ssh;
+                const vtyshResult = result.results.vtysh;
+                const backendResult = result.results.backend;
+
+                let detailMsg = `SSH: ${sshResult.message}<br>`;
+                if (vtyshResult.message) detailMsg += `vtysh: ${vtyshResult.message}<br>`;
+                if (backendResult.message) detailMsg += `后台: ${backendResult.message}`;
+
+                showToast(`连接测试失败<br>${detailMsg}`, 'error', 5000);
             } else {
                 showToast('连接失败: ' + result.error, 'error');
             }

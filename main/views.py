@@ -3330,6 +3330,21 @@ def api_device_test_connection(request):
             'backend': {'success': False, 'message': ''},
         }
 
+        def _read_until(chan, markers, timeout=5, interval=0.05):
+            """读取 channel 直到出现预期标记或超时，返回 (输出文本, 是否匹配)"""
+            output = ''
+            start = time.time()
+            while time.time() - start < timeout:
+                if chan.recv_ready():
+                    data = chan.recv(4096).decode('utf-8', errors='ignore')
+                    output += data
+                    for m in markers:
+                        if m in output:
+                            return output, True
+                else:
+                    time.sleep(interval)
+            return output, False
+
         # 1. 测试 SSH 基础连接
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -3350,36 +3365,27 @@ def api_device_test_connection(request):
         # 2. 测试 vtysh 连接
         try:
             chan = ssh.invoke_shell()
-            chan.settimeout(15)
+            chan.settimeout(10)
 
             # 清空初始输出
-            time.sleep(0.5)
-            if chan.recv_ready():
-                chan.recv(4096)
+            _read_until(chan, [], timeout=0.5)
 
-            # 进入 vtysh
+            # 进入 vtysh 并等待提示符
             chan.send('vtysh\n')
-            time.sleep(1)
+            _, in_vtysh = _read_until(chan, ['#', 'vtysh'], timeout=3)
 
-            if chan.recv_ready():
-                output = chan.recv(4096).decode('utf-8', errors='ignore')
-                # 检查是否进入 vtysh（输出中有 # 提示符）
-                if '#' in output or 'vtysh' in output.lower():
-                    # 测试执行命令
-                    chan.send('show version\n')
-                    time.sleep(1)
-                    if chan.recv_ready():
-                        output += chan.recv(4096).decode('utf-8', errors='ignore')
-                        results['vtysh'] = {'success': True, 'message': 'vtysh 连接成功'}
-                        logger.info(f"测试连接 {ip}: vtysh 连接成功")
-                    else:
-                        results['vtysh'] = {'success': False, 'message': 'vtysh 响应超时'}
-                else:
-                    results['vtysh'] = {'success': False, 'message': '无法进入 vtysh'}
+            if in_vtysh:
+                # 测试执行命令
+                chan.send('show version\n')
+                _read_until(chan, ['#', '--More--'], timeout=3)
+                results['vtysh'] = {'success': True, 'message': 'vtysh 连接成功'}
+                logger.info(f"测试连接 {ip}: vtysh 连接成功")
+            else:
+                results['vtysh'] = {'success': False, 'message': '无法进入 vtysh 或响应超时'}
 
             # 退出 vtysh
             chan.send('exit\n')
-            time.sleep(0.3)
+            _read_until(chan, [], timeout=0.3)
             chan.close()
         except Exception as e:
             results['vtysh'] = {'success': False, 'message': f'vtysh 测试失败: {e}'}
@@ -3392,38 +3398,31 @@ def api_device_test_connection(request):
         if actual_backend_pwd:
             try:
                 chan = ssh.invoke_shell()
-                chan.settimeout(15)
+                chan.settimeout(10)
 
                 # 清空初始输出
-                time.sleep(0.3)
-                if chan.recv_ready():
-                    chan.recv(4096)
+                _read_until(chan, [], timeout=0.3)
 
                 # 输入 enter 进入后台
                 chan.send('enter\n')
-                time.sleep(0.5)
-                if chan.recv_ready():
-                    chan.recv(4096)
+                _read_until(chan, ['Password:', 'password:', '#'], timeout=2)
 
                 # 输入后台密码
                 chan.send(actual_backend_pwd + '\n')
-                time.sleep(0.5)
-                if chan.recv_ready():
-                    output = chan.recv(4096).decode('utf-8', errors='ignore')
-                    # 检查是否成功进入后台（出现 root@ 提示符）
-                    if 'root@' in output or '#' in output and 'Password:' not in output:
-                        # 测试执行命令
-                        chan.send('whoami\n')
-                        time.sleep(0.5)
-                        if chan.recv_ready():
-                            output += chan.recv(4096).decode('utf-8', errors='ignore')
-                            if 'root' in output:
-                                results['backend'] = {'success': True, 'message': '后台 root 连接成功'}
-                                logger.info(f"测试连接 {ip}: 后台 root 连接成功")
-                            else:
-                                results['backend'] = {'success': False, 'message': '后台权限验证失败'}
+                output, got_prompt = _read_until(chan, ['root@', '#', 'Password:', 'password:'], timeout=3)
+
+                # 检查是否成功进入
+                if 'root@' in output or ('#' in output and 'Password:' not in output and 'password:' not in output):
+                    # 测试执行命令
+                    chan.send('whoami\n')
+                    output, _ = _read_until(chan, ['root', '#'], timeout=2)
+                    if 'root' in output:
+                        results['backend'] = {'success': True, 'message': '后台 root 连接成功'}
+                        logger.info(f"测试连接 {ip}: 后台 root 连接成功")
                     else:
-                        results['backend'] = {'success': False, 'message': '后台密码错误或无法进入'}
+                        results['backend'] = {'success': False, 'message': '后台权限验证失败'}
+                else:
+                    results['backend'] = {'success': False, 'message': '后台密码错误或无法进入'}
 
                 chan.close()
             except Exception as e:
