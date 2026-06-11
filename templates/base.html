@@ -887,6 +887,18 @@
                 content.style.maxHeight = content.scrollHeight + 'px';
             }
         }
+
+        // 页面加载时自动展开当前页面所在的分组
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.nav-group-content').forEach(group => {
+                if (group.querySelector('.nav-link.active')) {
+                    const header = group.previousElementSibling;
+                    header.classList.remove('collapsed');
+                    group.classList.remove('collapsed');
+                    group.style.maxHeight = group.scrollHeight + 'px';
+                }
+            });
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>
