@@ -7010,8 +7010,7 @@ def api_vm_list(request):
                             'interface': iparts[0],
                             'type': iparts[1],
                             'source': iparts[2],
-                            'model': iparts[3] if len(iparts) > 3 else '',
-                            'display_name': _get_bridge_display_name(iparts[2])
+                            'model': iparts[3] if len(iparts) > 3 else ''
                         })
             vm['interfaces'] = interfaces
 
@@ -7071,8 +7070,7 @@ def api_vm_detail(request):
                         'interface': iparts[0],
                         'type': iparts[1],
                         'source': iparts[2],
-                        'model': iparts[3] if len(iparts) > 3 else '',
-                        'display_name': _get_bridge_display_name(iparts[2])
+                        'model': iparts[3] if len(iparts) > 3 else ''
                     })
 
         # 获取 IP 地址
@@ -7106,15 +7104,6 @@ def api_vm_detail(request):
     except Exception as e:
         logger.exception("获取虚拟机详情失败")
         return JsonResponse({'success': False, 'error': str(e)})
-
-
-def _get_bridge_display_name(source: str) -> str:
-    """获取网桥的显示名称（管理口/业务口）"""
-    if source == 'br0':
-        return '管理口'
-    if source.startswith('brv') and source[3:].isdigit():
-        return f'业务口{source[3:]}'
-    return source
 
 
 @require_http_methods(["POST"])
