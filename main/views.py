@@ -4921,6 +4921,7 @@ def operation_log(request):
 @require_http_methods(['GET'])
 def api_operation_logs(request):
     """操作日志查询 API"""
+    from django.utils import timezone
     from .models import OperationLog
     from django.db import models as dj_models
     page = int(request.GET.get('page', 1))
@@ -4959,7 +4960,7 @@ def api_operation_logs(request):
     for o in qs:
         items.append({
             'id': o.id,
-            'timestamp': o.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'timestamp': timezone.localtime(o.timestamp).strftime('%Y-%m-%d %H:%M:%S'),
             'source_ip': o.source_ip,
             'action': o.action,
             'resource_type': o.resource_type,
