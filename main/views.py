@@ -798,6 +798,7 @@ def api_agent_create(request):
         AgentStatistics.objects.create(agent=agent)
 
         logger.info(f"创建 Agent: {agent_id}, 网卡: {interface_name}, 端口: {port}")
+        log_operation(request, '创建Agent', 'Agent', agent_id, f'网卡: {interface_name}, 端口: {port}')
 
         return JsonResponse({
             'success': True,
@@ -811,6 +812,7 @@ def api_agent_create(request):
 
     except Exception as e:
         logger.exception(f"创建 Agent 失败: {e}")
+        log_operation(request, '创建Agent', 'Agent', '', f'创建失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -846,6 +848,7 @@ def api_agent_delete(request):
         agent.delete()
 
         logger.info(f"删除 Agent: {agent_id} (namespace: {ns or 'main'})")
+        log_operation(request, '删除Agent', 'Agent', agent_id, f'网卡: {interface_name}, namespace: {ns or "main"}')
 
         return JsonResponse({
             'success': True,
@@ -855,15 +858,12 @@ def api_agent_delete(request):
         })
 
     except LocalAgent.DoesNotExist:
+        log_operation(request, '删除Agent', 'Agent', agent_id, 'Agent不存在', result='failure')
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         logger.exception(f"删除 Agent 失败: {e}")
+        log_operation(request, '删除Agent', 'Agent', agent_id, f'删除失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
-
-
-@require_http_methods(["POST"])
-@csrf_exempt
-def api_agent_start(request):
     """启动 Agent（支持 namespace）"""
     try:
         data = json.loads(request.body)
@@ -941,6 +941,7 @@ WantedBy=multi-user.target
                     agent.last_start_time = datetime.now()
                     agent.save()
                     logger.info(f"Agent {agent_id} (namespace {ns}) 启动成功")
+                    log_operation(request, '启动Agent', 'Agent', agent_id, f'namespace: {ns}, 状态: running')
                     return JsonResponse({'success': True, 'status': 'running', 'namespace': ns})
                 else:
                     agent.status = 'starting'
@@ -1002,6 +1003,7 @@ WantedBy=multi-user.target
                         agent.last_start_time = datetime.now()
                         agent.save()
                         logger.info(f"Agent {agent_id} 启动成功")
+                        log_operation(request, '启动Agent', 'Agent', agent_id, '状态: running')
                         return JsonResponse({'success': True, 'status': 'running'})
                 except:
                     agent.status = 'error'
@@ -1014,9 +1016,11 @@ WantedBy=multi-user.target
             return JsonResponse({'success': False, 'error': result.stderr})
 
     except LocalAgent.DoesNotExist:
+        log_operation(request, '启动Agent', 'Agent', agent_id, 'Agent不存在', result='failure')
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         logger.exception(f"启动 Agent 失败: {e}")
+        log_operation(request, '启动Agent', 'Agent', agent_id, f'启动失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -1052,14 +1056,17 @@ def api_agent_stop(request):
             agent.last_stop_time = datetime.now()
             agent.save()
             logger.info(f"Agent {agent_id} 已停止 (namespace: {ns or 'main'})")
+            log_operation(request, '停止Agent', 'Agent', agent_id, f'namespace: {ns or "main"}')
             return JsonResponse({'success': True, 'status': 'stopped', 'namespace': ns})
         else:
             return JsonResponse({'success': False, 'error': result.stderr})
 
     except LocalAgent.DoesNotExist:
+        log_operation(request, '停止Agent', 'Agent', agent_id, 'Agent不存在', result='failure')
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         logger.exception(f"停止 Agent 失败: {e}")
+        log_operation(request, '停止Agent', 'Agent', agent_id, f'停止失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -1792,6 +1799,7 @@ def api_send_packet(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/send_packet', forward_data, timeout=10)
 
         if success:
+            log_operation(request, '发送报文', '报文测试', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
@@ -1799,6 +1807,7 @@ def api_send_packet(request):
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         logger.exception(f"发送报文失败: {e}")
+        log_operation(request, '发送报文', '报文测试', '', f'失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -1816,6 +1825,7 @@ def api_stop_send(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/stop', {}, timeout=10)
 
         if success:
+            log_operation(request, '停止发送', '报文测试', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
@@ -1823,6 +1833,7 @@ def api_stop_send(request):
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
         logger.exception(f"停止发送失败: {e}")
+        log_operation(request, '停止发送', '报文测试', '', f'失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -1852,12 +1863,14 @@ def api_send_protocol(request):
         )
 
         if success:
+            log_operation(request, '发送工控协议', '工控测试', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': err or '请求失败'})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
+        log_operation(request, '发送工控协议', '工控测试', '', f'失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -1885,12 +1898,14 @@ def api_start_scan(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/start_scan', data, timeout=10)
 
         if success:
+            log_operation(request, '启动端口扫描', '端口扫描', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
     except LocalAgent.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Agent 不存在'})
     except Exception as e:
+        log_operation(request, '启动端口扫描', '端口扫描', '', f'失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -1918,6 +1933,7 @@ def api_start_replay(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/start_replay', data, timeout=10)
 
         if success:
+            log_operation(request, '启动回放', '报文回放', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
@@ -1940,6 +1956,7 @@ def api_stop_scan(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/stop_scan', {}, timeout=5)
 
         if success:
+            log_operation(request, '停止端口扫描', '端口扫描', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
@@ -2066,6 +2083,7 @@ def api_packet_replay_start(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/packet_replay/start', forward_data, timeout=10)
 
         if success:
+            log_operation(request, '启动报文回放', '报文回放', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
@@ -2087,6 +2105,7 @@ def api_packet_replay_stop(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/packet_replay/stop', {}, timeout=5)
 
         if success:
+            log_operation(request, '停止报文回放', '报文回放', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
     except LocalAgent.DoesNotExist:
@@ -2128,6 +2147,7 @@ def api_stop_replay(request):
         success, resp_data, error = forward_to_agent(agent, 'POST', '/api/stop_replay', {}, timeout=5)
 
         if success:
+            log_operation(request, '停止回放', '报文回放', agent_id, f'Agent: {agent_id}')
             return JsonResponse(resp_data)
         return JsonResponse({'success': False, 'error': error})
 
@@ -2607,8 +2627,10 @@ def api_knowledge_template_save(request):
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
+        log_operation(request, '保存知识库模板', '知识库', name, f'模板: {name}')
         return JsonResponse({'success': True, 'message': '保存成功'})
     except Exception as e:
+        log_operation(request, '保存知识库模板', '知识库', '', f'模板: {name}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2624,8 +2646,10 @@ def api_knowledge_template_delete(request):
         if file_path.exists():
             file_path.unlink()
 
+        log_operation(request, '删除知识库模板', '知识库', name, f'模板: {name}')
         return JsonResponse({'success': True, 'message': '删除成功'})
     except Exception as e:
+        log_operation(request, '删除知识库模板', '知识库', '', f'模板: {name}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2649,15 +2673,19 @@ def api_knowledge_create(request):
         if success:
             content_b64 = base64.b64encode(result).decode('utf-8')
             filename = f'service_{version}.bin'
+            detail = f'版本: {version}'
+            log_operation(request, '创建知识库', '知识库', '', detail)
             return JsonResponse({
                 'success': True,
                 'content': content_b64,
                 'filename': filename
             })
         else:
+            log_operation(request, '创建知识库', '知识库', '', f'版本: {version}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"创建知识库包失败: {e}")
+        log_operation(request, '创建知识库', '知识库', '', f'版本: {version}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2681,11 +2709,15 @@ def api_knowledge_upgrade(request):
         success, result = upgrade_knowledge_to_device(ip, file_content, auto_get_cookie=auto_get_cookie)
 
         if success:
+            detail = f'设备: {ip}'
+            log_operation(request, '升级知识库', '知识库', '', detail)
             return JsonResponse({'success': True, 'response': result})
         else:
+            log_operation(request, '升级知识库', '知识库', '', f'设备: {ip}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"升级知识库失败: {e}")
+        log_operation(request, '升级知识库', '知识库', '', f'设备: {ip}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2737,8 +2769,10 @@ def api_vul_template_save(request):
             for chunk in file.chunks():
                 f.write(chunk)
 
+        log_operation(request, '保存漏洞库模板', '漏洞库', name, f'模板: {name}')
         return JsonResponse({'success': True, 'message': '保存成功'})
     except Exception as e:
+        log_operation(request, '保存漏洞库模板', '漏洞库', '', f'模板: {name}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2754,8 +2788,10 @@ def api_vul_template_delete(request):
         if file_path.exists():
             file_path.unlink()
 
+        log_operation(request, '删除漏洞库模板', '漏洞库', name, f'模板: {name}')
         return JsonResponse({'success': True, 'message': '删除成功'})
     except Exception as e:
+        log_operation(request, '删除漏洞库模板', '漏洞库', '', f'模板: {name}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2780,15 +2816,19 @@ def api_vul_create(request):
         if success:
             content_b64 = base64.b64encode(result).decode('utf-8')
             filename = 'vul.lib'
+            detail = f'版本: {version}'
+            log_operation(request, '创建漏洞库', '漏洞库', '', detail)
             return JsonResponse({
                 'success': True,
                 'content': content_b64,
                 'filename': filename
             })
         else:
+            log_operation(request, '创建漏洞库', '漏洞库', '', f'版本: {version}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"创建漏洞库包失败: {e}")
+        log_operation(request, '创建漏洞库', '漏洞库', '', f'版本: {version}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2811,11 +2851,15 @@ def api_vul_upgrade(request):
         success, result = upgrade_vul_to_device(ip, file_content, auto_get_cookie=auto_get_cookie)
 
         if success:
+            detail = f'设备: {ip}'
+            log_operation(request, '升级漏洞库', '漏洞库', '', detail)
             return JsonResponse({'success': True, 'response': result})
         else:
+            log_operation(request, '升级漏洞库', '漏洞库', '', f'设备: {ip}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"升级漏洞库失败: {e}")
+        log_operation(request, '升级漏洞库', '漏洞库', '', f'设备: {ip}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2867,8 +2911,10 @@ def api_virus_template_save(request):
             for chunk in file.chunks():
                 f.write(chunk)
 
+        log_operation(request, '保存病毒库模板', '病毒库', name, f'模板: {name}')
         return JsonResponse({'success': True, 'message': '保存成功'})
     except Exception as e:
+        log_operation(request, '保存病毒库模板', '病毒库', '', f'模板: {name}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2884,8 +2930,10 @@ def api_virus_template_delete(request):
         if file_path.exists():
             file_path.unlink()
 
+        log_operation(request, '删除病毒库模板', '病毒库', name, f'模板: {name}')
         return JsonResponse({'success': True, 'message': '删除成功'})
     except Exception as e:
+        log_operation(request, '删除病毒库模板', '病毒库', '', f'模板: {name}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2910,15 +2958,19 @@ def api_virus_create(request):
         if success:
             content_b64 = base64.b64encode(result).decode('utf-8')
             filename = 'virus.lib'
+            detail = f'版本: {version}'
+            log_operation(request, '创建病毒库', '病毒库', '', detail)
             return JsonResponse({
                 'success': True,
                 'content': content_b64,
                 'filename': filename
             })
         else:
+            log_operation(request, '创建病毒库', '病毒库', '', f'版本: {version}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"创建病毒库包失败: {e}")
+        log_operation(request, '创建病毒库', '病毒库', '', f'版本: {version}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2941,11 +2993,15 @@ def api_virus_upgrade(request):
         success, result = upgrade_virus_to_device(ip, file_content, auto_get_cookie=auto_get_cookie)
 
         if success:
+            detail = f'设备: {ip}'
+            log_operation(request, '升级病毒库', '病毒库', '', detail)
             return JsonResponse({'success': True, 'response': result})
         else:
+            log_operation(request, '升级病毒库', '病毒库', '', f'设备: {ip}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"升级病毒库失败: {e}")
+        log_operation(request, '升级病毒库', '病毒库', '', f'设备: {ip}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2965,10 +3021,13 @@ def api_license_verify_password(request):
         password = data.get('password')
 
         if password == ADMIN_PASSWORD:
+            log_operation(request, '验证授权密码', '授权', '', '验证结果: 成功')
             return JsonResponse({'success': True, 'message': '验证成功'})
         else:
+            log_operation(request, '验证授权密码', '授权', '', '验证结果: 失败', result='failure')
             return JsonResponse({'success': False, 'error': '密码错误'})
     except Exception as e:
+        log_operation(request, '验证授权密码', '授权', '', f'异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -2993,6 +3052,8 @@ def api_license_knowledge_generate(request):
         )
 
         if success:
+            detail = f'机器码: {machine_code}'
+            log_operation(request, '生成知识库授权', '授权', '', detail)
             return JsonResponse({
                 'success': True,
                 'filename': result.get('filename'),
@@ -3000,9 +3061,11 @@ def api_license_knowledge_generate(request):
                 'message': result.get('message', '生成成功')
             })
         else:
+            log_operation(request, '生成知识库授权', '授权', '', f'机器码: {machine_code}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
     except Exception as e:
         logger.exception(f"生成知识库授权失败: {e}")
+        log_operation(request, '生成知识库授权', '授权', '', f'机器码: {machine_code}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -3076,6 +3139,8 @@ def api_license_device_generate(request):
             # 将二进制内容转为 base64 返回（前端处理）
             import base64
             content_b64 = base64.b64encode(result.get('content', b'')).decode('utf-8')
+            detail = f'方式: {method}, 机器码: {machine_code}'
+            log_operation(request, '生成设备授权', '授权', '', detail)
             return JsonResponse({
                 'success': True,
                 'filename': result.get('filename'),
@@ -3083,12 +3148,15 @@ def api_license_device_generate(request):
                 'message': result.get('message', '生成成功')
             })
         else:
+            log_operation(request, '生成设备授权', '授权', '', f'方式: {method}, 机器码: {machine_code}, 错误: {result}', result='failure')
             return JsonResponse({'success': False, 'error': result})
 
     except json.JSONDecodeError:
+        log_operation(request, '生成设备授权', '授权', '', '无效的JSON格式', result='error')
         return JsonResponse({'success': False, 'error': '无效的JSON格式'})
     except Exception as e:
         logger.exception(f"生成设备授权异常: {e}")
+        log_operation(request, '生成设备授权', '授权', '', f'方式: {method}, 机器码: {machine_code}, 异常: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -4119,8 +4187,11 @@ def api_industrial_modbus_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"modbus_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'Modbus客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
+        log_operation(request, f'Modbus客户端-{action}', '工控测试', '', f'失败: {e}', result='error')
         return JsonResponse({'success': False, 'error': str(e)})
 
 
@@ -4132,6 +4203,8 @@ def api_industrial_modbus_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"modbus_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'Modbus服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4145,6 +4218,8 @@ def api_industrial_s7_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"s7_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'S7客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4158,6 +4233,8 @@ def api_industrial_s7_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"s7_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'S7服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4171,6 +4248,8 @@ def api_industrial_goose_sv(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"goose-sv/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'GOOSE/SV-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4184,6 +4263,8 @@ def api_industrial_enip_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"enip_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'ENIP客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4197,6 +4278,8 @@ def api_industrial_enip_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"enip_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'ENIP服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4210,6 +4293,8 @@ def api_industrial_bacnet_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"bacnet_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'BACnet客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4223,6 +4308,8 @@ def api_industrial_bacnet_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"bacnet_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'BACnet服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4236,6 +4323,8 @@ def api_industrial_dnp3_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"dnp3_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'DNP3客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4249,6 +4338,8 @@ def api_industrial_dnp3_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"dnp3_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'DNP3服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4262,6 +4353,8 @@ def api_industrial_mms_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"mms_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'MMS客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4275,6 +4368,8 @@ def api_industrial_mms_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"mms_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'MMS服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4288,6 +4383,8 @@ def api_industrial_http_client(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"http_client/{action}", method='POST', data=data, timeout=60)
+        if result.get('success'):
+            log_operation(request, f'HTTP客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4301,6 +4398,8 @@ def api_industrial_http_server(request, action):
         data = _merge_get_params(request, data)
         agent_id = data.get('agent_id')
         result = _proxy_industrial_request(agent_id, f"http_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'HTTP服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4327,6 +4426,8 @@ def api_industrial_opcua_server(request, action, variable=None):
             result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='GET', data=data)
         else:
             result = _proxy_industrial_request(agent_id, f"opcua_server/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'OPCUA服务端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4346,6 +4447,8 @@ def api_industrial_opcua_client(request, action):
                 result = {'success': True, 'status': result}
         else:
             result = _proxy_industrial_request(agent_id, f"opcua_client/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'OPCUA客户端-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -4362,6 +4465,8 @@ def api_industrial_opcua_gateway(request, action):
             result = _proxy_industrial_request(agent_id, f"opcua_gateway/{action}", method='GET', data=data)
         else:
             result = _proxy_industrial_request(agent_id, f"opcua_gateway/{action}", method='POST', data=data)
+        if result.get('success'):
+            log_operation(request, f'OPCUA网关-{action}', '工控测试', agent_id, f'Agent: {agent_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -5687,6 +5792,7 @@ def api_auth_radius_account_add(request):
             return JsonResponse({'success': False, 'error': '写入配置文件失败'})
 
         _log_auth_operation('add_radius_account', f'{{username: {username}}}')
+        log_operation(request, '新增RADIUS账号', '认证服务', '', f'用户名: {username}')
         return JsonResponse({'success': True, 'message': f'账号 {username} 已添加'})
 
     except json.JSONDecodeError:
@@ -5729,6 +5835,7 @@ def api_auth_radius_account_update(request):
             return JsonResponse({'success': False, 'error': '写入配置文件失败'})
 
         _log_auth_operation('update_radius_account', f'{{old: {old_username}, new: {new_username}}}')
+        log_operation(request, '更新RADIUS账号', '认证服务', '', f'用户名: {old_username} -> {new_username}')
         return JsonResponse({'success': True, 'message': f'账号 {old_username} 已更新为 {new_username}'})
 
     except json.JSONDecodeError:
@@ -5768,6 +5875,7 @@ def api_auth_radius_account_delete(request):
             return JsonResponse({'success': False, 'error': '写入配置文件失败'})
 
         _log_auth_operation('delete_radius_account', f'{{username: {username}}}')
+        log_operation(request, '删除RADIUS账号', '认证服务', '', f'用户名: {username}')
         return JsonResponse({'success': True, 'message': f'账号 {username} 已删除'})
 
     except json.JSONDecodeError:
@@ -5823,6 +5931,7 @@ def api_auth_radius_restart(request):
     proxy_running = proxy_check.stdout.strip() != ''
 
     _log_auth_operation('restart_radius', f'{{proxy_secret: *****, proxy_running: {proxy_running}}}')
+    log_operation(request, '重启RADIUS服务', '认证服务', '', f'proxy_running: {proxy_running}')
     return JsonResponse({
         'success': True,
         'message': 'Radius 服务已重启',
@@ -5939,6 +6048,7 @@ def api_auth_ldap_config(request):
                             f'{{base_dn: {base_dn}, admin_dn: {admin_dn}, '
                             f'user_filter: {user_filter}, group_filter: {group_filter}, '
                             f'password_updated: {pw_updated}}}')
+        log_operation(request, '配置LDAP', '认证服务', '', f'base_dn: {base_dn}')
 
         msg = 'LDAP 配置已更新'
         if pw_updated:
@@ -5961,6 +6071,7 @@ def api_auth_ldap_restart(request):
     _run_sudo(['systemctl', 'stop', 'slapd'])
     _run_sudo(['systemctl', 'start', 'slapd'])
     _log_auth_operation('restart_ldap')
+    log_operation(request, '重启LDAP服务', '认证服务', '', '')
     return JsonResponse({'success': True, 'message': 'LDAP 服务已重启'})
 
 
@@ -6005,6 +6116,7 @@ def api_links_add(request):
             return JsonResponse({'success': False, 'error': '最多只能添加 3 个关联地址'})
 
         LinkAddress.objects.create(name=name, url=url)
+        log_operation(request, '新增关联地址', '关联地址', '', f'名称: {name}, URL: {url}')
         return JsonResponse({'success': True, 'message': '关联地址已添加'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -6030,6 +6142,7 @@ def api_links_update(request):
         link.name = name
         link.url = url
         link.save()
+        log_operation(request, '更新关联地址', '关联地址', link_id, f'名称: {name}, URL: {url}')
         return JsonResponse({'success': True, 'message': '关联地址已更新'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -6049,6 +6162,7 @@ def api_links_delete(request):
             return JsonResponse({'success': False, 'error': '关联地址不存在'})
 
         link.delete()
+        log_operation(request, '删除关联地址', '关联地址', link_id, f'名称: {name}, URL: {url}')
         return JsonResponse({'success': True, 'message': '关联地址已删除'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -6132,6 +6246,8 @@ def api_bandwidth_start(request):
 
         result = BandwidthTestManager.start_test(data, client_ip)
 
+        if result.get('success'):
+            log_operation(request, '启动带宽测试', '带宽测试', '', f'client_ip: {client_ip}')
         return JsonResponse(result)
 
     except Exception as e:
@@ -6153,6 +6269,8 @@ def api_bandwidth_stop(request):
 
         result = BandwidthTestManager.stop_test(test_id)
 
+        if result.get('success'):
+            log_operation(request, '停止带宽测试', '带宽测试', '', f'test_id: {test_id}')
         return JsonResponse(result)
 
     except Exception as e:
@@ -6306,6 +6424,7 @@ def api_start_port_test(request):
             # 使用 request.get_host() 获取正确的 host 和端口
             host = request.get_host()
             result['websocket_url'] = f"ws://{host}/ws/port-test/{result['test_id']}/"
+            log_operation(request, '启动网口测试', '网口测试', '', f'device_id: {device_id}')
 
         return JsonResponse(result)
     except Exception as e:
@@ -6326,6 +6445,8 @@ def api_stop_port_test(request):
 
         from main.port_test_utils import PortTestManager
         result = PortTestManager.stop_test(test_id)
+        if result.get('success'):
+            log_operation(request, '停止网口测试', '网口测试', '', f'test_id: {test_id}')
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -6390,6 +6511,7 @@ def api_start_port_test_v2(request):
         )
         test_thread.start()
 
+        log_operation(request, '启动网口测试v2', '网口测试', '', f'device: {device_id}, port: {firewall_port}, agent: {agent_id}')
         return JsonResponse({
             'success': True,
             'test_id': test_id,
