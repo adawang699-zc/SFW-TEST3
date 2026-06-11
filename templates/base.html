@@ -143,6 +143,53 @@
             width: 20px;
         }
 
+        .nav-group {
+            margin-bottom: 4px;
+        }
+
+        .nav-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: color 0.2s;
+            user-select: none;
+        }
+
+        .nav-group-header:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-group-header .group-arrow {
+            font-size: 0.7rem;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-group-header.collapsed .group-arrow {
+            transform: rotate(-90deg);
+        }
+
+        .nav-group-content {
+            overflow: hidden;
+            transition: max-height 0.25s ease;
+        }
+
+        .nav-group-content.collapsed {
+            max-height: 0 !important;
+        }
+
+        .nav-group-content .nav-link {
+            padding-left: 28px;
+            font-size: 0.85rem;
+        }
+
         /* 内容区 */
         .content {
             margin-left: 220px;
@@ -555,75 +602,95 @@
                 <i>🏠</i>首页
             </a>
         </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'agent_manage' %}active{% endif %}" href="{% url 'main:agent_manage' %}">
-                <i>🔌</i>Agent 管理
-            </a>
+
+        <div class="nav-group">
+            <div class="nav-group-header" onclick="toggleGroup(this)">
+                <span>📦 资源管理</span>
+                <i class="fas fa-chevron-down group-arrow"></i>
+            </div>
+            <div class="nav-group-content">
+                <a class="nav-link {% if request.resolver_match.url_name == 'agent_manage' %}active{% endif %}" href="{% url 'main:agent_manage' %}">
+                    <i>🔌</i>Agent 管理
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'device_monitor' %}active{% endif %}" href="{% url 'main:device_monitor' %}">
+                    <i>🖥️</i>测试设备
+                </a>
+            </div>
         </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'device_monitor' %}active{% endif %}" href="{% url 'main:device_monitor' %}">
-                <i>🖥️</i>测试设备
-            </a>
+
+        <div class="nav-group">
+            <div class="nav-group-header" onclick="toggleGroup(this)">
+                <span>🧪 业务测试</span>
+                <i class="fas fa-chevron-down group-arrow"></i>
+            </div>
+            <div class="nav-group-content">
+                <a class="nav-link {% if request.resolver_match.url_name == 'packet_send' %}active{% endif %}" href="{% url 'main:packet_send' %}">
+                    <i>📡</i>报文发送
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'service_deploy' %}active{% endif %}" href="{% url 'main:service_deploy' %}">
+                    <i>🔧</i>服务下发
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'industrial_protocol' %}active{% endif %}" href="{% url 'main:industrial_protocol' %}">
+                    <i>⚙️</i>工控协议
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'packet_replay' %}active{% endif %}" href="{% url 'main:packet_replay' %}">
+                    <i>🔄</i>报文回放
+                </a>
+            </div>
         </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'packet_send' %}active{% endif %}" href="{% url 'main:packet_send' %}">
-                <i>📡</i>报文发送
-            </a>
+
+        <div class="nav-group">
+            <div class="nav-group-header" onclick="toggleGroup(this)">
+                <span>🌐 网络测试</span>
+                <i class="fas fa-chevron-down group-arrow"></i>
+            </div>
+            <div class="nav-group-content">
+                <a class="nav-link {% if request.resolver_match.url_name == 'port_scan' %}active{% endif %}" href="{% url 'main:port_scan' %}">
+                    <i>🔍</i>端口扫描
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'bandwidth_test' %}active{% endif %}" href="{% url 'main:bandwidth_test' %}">
+                    <i>⚡</i>带宽测试
+                </a>
+            </div>
         </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'service_deploy' %}active{% endif %}" href="{% url 'main:service_deploy' %}">
-                <i>🔧</i>服务下发
-            </a>
+
+        <div class="nav-group">
+            <div class="nav-group-header" onclick="toggleGroup(this)">
+                <span>📊 监控诊断</span>
+                <i class="fas fa-chevron-down group-arrow"></i>
+            </div>
+            <div class="nav-group-content">
+                <a class="nav-link {% if request.resolver_match.url_name == 'syslog_receiver' %}active{% endif %}" href="{% url 'main:syslog_receiver' %}">
+                    <i>📋</i>Syslog 接收
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'snmp' %}active{% endif %}" href="{% url 'main:snmp' %}">
+                    <i>📊</i>SNMP 管理
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'dhcp_client' %}active{% endif %}" href="{% url 'main:dhcp_client' %}">
+                    <i>🖥️</i>DHCP 客户端
+                </a>
+            </div>
         </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'industrial_protocol' %}active{% endif %}" href="{% url 'main:industrial_protocol' %}">
-                <i>⚙️</i>工控协议
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'port_scan' %}active{% endif %}" href="{% url 'main:port_scan' %}">
-                <i>🔍</i>端口扫描
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'packet_replay' %}active{% endif %}" href="{% url 'main:packet_replay' %}">
-                <i>🔄</i>报文回放
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'syslog_receiver' %}active{% endif %}" href="{% url 'main:syslog_receiver' %}">
-                <i>📋</i>Syslog 接收
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'snmp' %}active{% endif %}" href="{% url 'main:snmp' %}">
-                <i>📊</i>SNMP 管理
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'dhcp_client' %}active{% endif %}" href="{% url 'main:dhcp_client' %}">
-                <i>🖥️</i>DHCP 客户端
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'bandwidth_test' %}active{% endif %}" href="{% url 'main:bandwidth_test' %}">
-                <i>⚡</i>带宽测试
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'knowledge_base' %}active{% endif %}" href="{% url 'main:knowledge_base' %}">
-                <i>📚</i>知识库管理
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'license_management' %}active{% endif %}" href="{% url 'main:license_management' %}">
-                <i>🔑</i>授权管理
-            </a>
-        </div>
-        <div class="nav-item">
-            <a class="nav-link {% if request.resolver_match.url_name == 'system_config' %}active{% endif %}" href="{% url 'main:system_config' %}">
-                <i>⚙️</i>其他配置
-            </a>
+
+        <div class="nav-group">
+            <div class="nav-group-header" onclick="toggleGroup(this)">
+                <span>🔧 系统管理</span>
+                <i class="fas fa-chevron-down group-arrow"></i>
+            </div>
+            <div class="nav-group-content">
+                <a class="nav-link {% if request.resolver_match.url_name == 'knowledge_base' %}active{% endif %}" href="{% url 'main:knowledge_base' %}">
+                    <i>📚</i>知识库管理
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'license_management' %}active{% endif %}" href="{% url 'main:license_management' %}">
+                    <i>🔑</i>授权管理
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'system_config' %}active{% endif %}" href="{% url 'main:system_config' %}">
+                    <i>⚙️</i>系统配置
+                </a>
+                <a class="nav-link {% if request.resolver_match.url_name == 'operation_log' %}active{% endif %}" href="{% url 'main:operation_log' %}">
+                    <i>📋</i>日志管理
+                </a>
+            </div>
         </div>
     </div>
 
@@ -797,6 +864,33 @@
                 confirmCallback();
             }
             hideConfirmModal();
+        });
+
+        // 侧边栏分组折叠
+        function toggleGroup(header) {
+            const content = header.nextElementSibling;
+            const isCollapsed = content.classList.contains('collapsed');
+            content.classList.toggle('collapsed');
+            header.classList.toggle('collapsed');
+            // 展开时恢复高度
+            if (isCollapsed) {
+                content.style.maxHeight = content.scrollHeight + 'px';
+                requestAnimationFrame(() => {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                });
+            }
+        }
+
+        // 页面加载时自动展开当前页面所在的分组
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.nav-group-content').forEach(group => {
+                if (group.querySelector('.nav-link.active')) {
+                    const header = group.previousElementSibling;
+                    header.classList.remove('collapsed');
+                    group.classList.remove('collapsed');
+                    group.style.maxHeight = group.scrollHeight + 'px';
+                }
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}

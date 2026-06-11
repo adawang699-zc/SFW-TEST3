@@ -137,7 +137,10 @@ urlpatterns = [
     path('api/knowledge/virus/create/', views.api_virus_create, name='api_virus_create'),
     path('api/knowledge/virus/upgrade/', views.api_virus_upgrade, name='api_virus_upgrade'),
 
-    # ========== 其他配置 ==========
+    # ========== 日志管理 ==========
+    path('operation-log/', views.operation_log, name='operation_log'),
+
+    # ========== 系统配置 ==========
     path('system-config/', views.system_config, name='system_config'),
     path('api/system-config/log-generate/', views.api_system_config_log_generate, name='api_system_config_log_generate'),
     path('api/system-config/log-status/', views.api_system_config_log_status, name='api_system_config_log_status'),

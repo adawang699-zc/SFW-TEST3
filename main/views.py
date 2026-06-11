@@ -4860,10 +4860,17 @@ def _update_task_output(task_id, text):
         pass
 
 
-# ========== 其他配置 API ==========
+# ========== 日志管理 ==========
+
+def operation_log(request):
+    """操作日志页面"""
+    return render(request, 'operation_log.html')
+
+
+# ========== 系统配置 ==========
 
 def system_config(request):
-    """其他配置页面"""
+    """系统配置页面"""
     return render(request, 'system_config.html')
 
 
