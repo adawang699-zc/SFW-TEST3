@@ -4533,9 +4533,10 @@ def api_namespace_setup_interface(request):
         if not ip_cidr:
             return JsonResponse({'success': False, 'error': 'IP地址不能为空'})
 
-        # 执行 setup-interface
+        # 执行 setup-interface-with-bridge（IP配在bridge上，支持veth桥接主namespace）
+        bridge_name = f"br{interface_name.replace('eth', '')}"
         result = subprocess.run(
-            ['sudo', '/opt/SFW-TEST3/scripts/network-namespace-setup.sh', 'setup-interface', interface_name, ip_cidr],
+            ['sudo', '/opt/SFW-TEST3/scripts/network-namespace-setup.sh', 'setup-interface-with-bridge', interface_name, ip_cidr, '', bridge_name],
             capture_output=True, text=True, timeout=60
         )
 
