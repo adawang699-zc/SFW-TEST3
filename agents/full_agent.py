@@ -22,6 +22,7 @@
 
 import os
 import sys
+import re
 import logging
 import argparse
 import subprocess
