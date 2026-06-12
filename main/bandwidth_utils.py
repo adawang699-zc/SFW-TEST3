@@ -298,11 +298,19 @@ class BandwidthTestMonitor(threading.Thread):
             )
             if success and result.get('success'):
                 stats = result.get('stats', {})
-                # 判断此Agent是server还是client
-                if stats.get('server', {}).get('running'):
-                    return stats['server']
-                if stats.get('client', {}).get('running'):
-                    return stats['client']
+                # 判断此Agent是server还是client：取有数据的那个
+                server_stats = stats.get('server', {})
+                client_stats = stats.get('client', {})
+                # 优先返回 running 的，其次返回有数据的
+                if server_stats.get('running') or server_stats.get('instant_bps', 0) > 0:
+                    return server_stats
+                if client_stats.get('running') or client_stats.get('instant_bps', 0) > 0:
+                    return client_stats
+                # 都没数据时，如果之前有记录则返回
+                if server_stats.get('avg_bps', 0) > 0:
+                    return server_stats
+                if client_stats.get('avg_bps', 0) > 0:
+                    return client_stats
             return {}
         except Exception as e:
             logger.warning(f"轮询Agent stats失败: {e}")
