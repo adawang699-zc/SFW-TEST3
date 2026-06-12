@@ -569,27 +569,59 @@
                 </div>
             </div>
 
-            <!-- 数据统计 -->
-            <div class="stats-container">
-                <div class="stat-card instant">
-                    <div class="stat-value" id="bw-instant">0.0</div>
-                    <div class="stat-label">瞬时速度</div>
-                    <div class="stat-unit">Mbps</div>
+            <!-- 数据统计 - 发送端/接收端对比 -->
+            <div class="stats-container" style="grid-template-columns: repeat(2, 1fr); gap: 16px;">
+                <!-- 发送端 -->
+                <div style="background: #0f0f23; border-radius: 12px; padding: 14px; border: 1px solid rgba(255, 107, 53, 0.3);">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; color: #ff6b35; font-size: 0.85rem; font-weight: 600;">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #ff6b35;"></span>
+                        发送端 (CLIENT)
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                        <div style="text-align: center;">
+                            <div class="stat-value" id="bw-sender-instant" style="color: #ff6b35; font-size: 1.4rem;">0.0</div>
+                            <div style="color: #6c6c8c; font-size: 0.7rem;">瞬时 Mbps</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div class="stat-value" id="bw-sender-avg" style="color: #f9c74f; font-size: 1.4rem;">0.0</div>
+                            <div style="color: #6c6c8c; font-size: 0.7rem;">平均 Mbps</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div class="stat-value" id="bw-sender-peak" style="color: #ff9f1c; font-size: 1.4rem;">0.0</div>
+                            <div style="color: #6c6c8c; font-size: 0.7rem;">峰值 Mbps</div>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a4a;">
+                        <span style="color: #6c6c8c; font-size: 0.75rem;">已发送 </span>
+                        <span id="bw-sender-total" style="color: #ff6b35; font-weight: 600;">0.0</span>
+                        <span style="color: #6c6c8c; font-size: 0.75rem;"> MB</span>
+                    </div>
                 </div>
-                <div class="stat-card avg">
-                    <div class="stat-value" id="bw-avg">0.0</div>
-                    <div class="stat-label">平均速度</div>
-                    <div class="stat-unit">Mbps</div>
-                </div>
-                <div class="stat-card peak">
-                    <div class="stat-value" id="bw-peak">0.0</div>
-                    <div class="stat-label">峰值速度</div>
-                    <div class="stat-unit">Mbps</div>
-                </div>
-                <div class="stat-card total">
-                    <div class="stat-value" id="bw-total">0.0</div>
-                    <div class="stat-label">传输总量</div>
-                    <div class="stat-unit">MB</div>
+                <!-- 接收端 -->
+                <div style="background: #0f0f23; border-radius: 12px; padding: 14px; border: 1px solid rgba(0, 201, 177, 0.3);">
+                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px; color: #00c9b1; font-size: 0.85rem; font-weight: 600;">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #00c9b1;"></span>
+                        接收端 (SERVER)
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                        <div style="text-align: center;">
+                            <div class="stat-value" id="bw-receiver-instant" style="color: #00c9b1; font-size: 1.4rem;">0.0</div>
+                            <div style="color: #6c6c8c; font-size: 0.7rem;">瞬时 Mbps</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div class="stat-value" id="bw-receiver-avg" style="color: #f9c74f; font-size: 1.4rem;">0.0</div>
+                            <div style="color: #6c6c8c; font-size: 0.7rem;">平均 Mbps</div>
+                        </div>
+                        <div style="text-align: center;">
+                            <div class="stat-value" id="bw-receiver-peak" style="color: #38b000; font-size: 1.4rem;">0.0</div>
+                            <div style="color: #6c6c8c; font-size: 0.7rem;">峰值 Mbps</div>
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a4a;">
+                        <span style="color: #6c6c8c; font-size: 0.75rem;">已接收 </span>
+                        <span id="bw-receiver-total" style="color: #00c9b1; font-weight: 600;">0.0</span>
+                        <span style="color: #6c6c8c; font-size: 0.75rem;"> MB</span>
+                    </div>
                 </div>
             </div>
 
@@ -648,11 +680,14 @@ let selectedClientAgent = null;
 let currentTestId = null;
 let websocket = null;
 let bandwidthData = {
-    instant_speed: 0,
-    avg_speed: 0,
-    peak_speed: 0,
-    total_bytes: 0,
-    transfer: 0
+    sender_speed: 0,
+    sender_avg: 0,
+    sender_peak: 0,
+    sender_total: 0,
+    receiver_speed: 0,
+    receiver_avg: 0,
+    receiver_peak: 0,
+    receiver_total: 0,
 };
 let agentDataList = [];
 
@@ -919,22 +954,20 @@ async function startBandwidthTest() {
             connectWebSocket(result.websocket_url);
             initCanvasAnimation();
 
-            bandwidthData = { instant_speed: 0, avg_speed: 0, peak_speed: 0, total_bytes: 0, transfer: 0 };
+            bandwidthData = { sender_speed: 0, sender_avg: 0, sender_peak: 0, sender_total: 0, receiver_speed: 0, receiver_avg: 0, receiver_peak: 0, receiver_total: 0 };
             updateStatsDisplay();
 
             document.getElementById('bw-summary').innerHTML = `
-                <div class="summary-grid">
-                    <div class="summary-item">
+                <div class="summary-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <div class="summary-item" style="border: 1px solid rgba(255,107,53,0.3);">
+                        <div style="color: #ff6b35; font-size: 0.8rem; margin-bottom: 8px; font-weight: 600;">发送端</div>
                         <div class="summary-value" style="color: #6c6c8c;">--</div>
-                        <div class="summary-label">平均带宽</div>
+                        <div class="summary-label">平均 Mbps</div>
                     </div>
-                    <div class="summary-item">
+                    <div class="summary-item" style="border: 1px solid rgba(0,201,177,0.3);">
+                        <div style="color: #00c9b1; font-size: 0.8rem; margin-bottom: 8px; font-weight: 600;">接收端</div>
                         <div class="summary-value" style="color: #6c6c8c;">--</div>
-                        <div class="summary-label">峰值带宽</div>
-                    </div>
-                    <div class="summary-item">
-                        <div class="summary-value" style="color: #6c6c8c;">--</div>
-                        <div class="summary-label">传输总量</div>
+                        <div class="summary-label">平均 Mbps</div>
                     </div>
                 </div>
                 <div style="margin-top: 12px; color: #00c9b1; font-size: 0.85rem; text-align: center;">
@@ -968,24 +1001,28 @@ async function stopBandwidthTest() {
 }
 
 function displayStoppedSummary() {
-    // 手动停止时显示当前统计数据
-    const avgSpeed = bandwidthData.avg_speed || 0;
-    const peakSpeed = bandwidthData.peak_speed || 0;
-    const totalTransfer = bandwidthData.transfer || 0;
+    const senderAvg = bandwidthData.sender_avg || 0;
+    const senderPeak = bandwidthData.sender_peak || 0;
+    const senderTotal = bandwidthData.sender_total || 0;
+    const receiverAvg = bandwidthData.receiver_avg || 0;
+    const receiverPeak = bandwidthData.receiver_peak || 0;
+    const receiverTotal = bandwidthData.receiver_total || 0;
 
     document.getElementById('bw-summary').innerHTML = `
-        <div class="summary-grid">
-            <div class="summary-item">
-                <div class="summary-value" style="color: #f9c74f;">${avgSpeed.toFixed(1)}</div>
-                <div class="summary-label">平均带宽 (Mbps)</div>
+        <div class="summary-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="summary-item" style="border: 1px solid rgba(255,107,53,0.3);">
+                <div style="color: #ff6b35; font-size: 0.8rem; margin-bottom: 8px; font-weight: 600;">发送端</div>
+                <div class="summary-value" style="color: #ff6b35;">${senderAvg.toFixed(1)}</div>
+                <div class="summary-label">平均 Mbps</div>
+                <div style="margin-top: 6px; font-size: 0.85rem; color: #8c8c9c;">峰值: ${senderPeak.toFixed(1)} Mbps</div>
+                <div style="font-size: 0.85rem; color: #8c8c9c;">总量: ${senderTotal.toFixed(1)} MB</div>
             </div>
-            <div class="summary-item">
-                <div class="summary-value" style="color: #f9c74f;">${peakSpeed.toFixed(1)}</div>
-                <div class="summary-label">峰值带宽 (Mbps)</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-value" style="color: #f9c74f;">${totalTransfer.toFixed(1)}</div>
-                <div class="summary-label">传输总量 (MB)</div>
+            <div class="summary-item" style="border: 1px solid rgba(0,201,177,0.3);">
+                <div style="color: #00c9b1; font-size: 0.8rem; margin-bottom: 8px; font-weight: 600;">接收端</div>
+                <div class="summary-value" style="color: #00c9b1;">${receiverAvg.toFixed(1)}</div>
+                <div class="summary-label">平均 Mbps</div>
+                <div style="margin-top: 6px; font-size: 0.85rem; color: #8c8c9c;">峰值: ${receiverPeak.toFixed(1)} Mbps</div>
+                <div style="font-size: 0.85rem; color: #8c8c9c;">总量: ${receiverTotal.toFixed(1)} MB</div>
             </div>
         </div>
         <div style="margin-top: 12px; color: #f9c74f; font-size: 0.85rem; text-align: center;">
@@ -1046,30 +1083,37 @@ function handleWebSocketMessage(data) {
 }
 
 function updateStatsDisplay() {
-    document.getElementById('bw-instant').textContent = bandwidthData.instant_speed.toFixed(1);
-    document.getElementById('bw-avg').textContent = bandwidthData.avg_speed.toFixed(1);
-    document.getElementById('bw-peak').textContent = bandwidthData.peak_speed.toFixed(1);
-    document.getElementById('bw-total').textContent = bandwidthData.transfer.toFixed(1);
+    document.getElementById('bw-sender-instant').textContent = bandwidthData.sender_speed.toFixed(1);
+    document.getElementById('bw-sender-avg').textContent = bandwidthData.sender_avg.toFixed(1);
+    document.getElementById('bw-sender-peak').textContent = bandwidthData.sender_peak.toFixed(1);
+    document.getElementById('bw-sender-total').textContent = bandwidthData.sender_total.toFixed(1);
+    document.getElementById('bw-receiver-instant').textContent = bandwidthData.receiver_speed.toFixed(1);
+    document.getElementById('bw-receiver-avg').textContent = bandwidthData.receiver_avg.toFixed(1);
+    document.getElementById('bw-receiver-peak').textContent = bandwidthData.receiver_peak.toFixed(1);
+    document.getElementById('bw-receiver-total').textContent = bandwidthData.receiver_total.toFixed(1);
 }
 
 function displayTestSummary(summary) {
+    const lossRate = summary.sender_avg > 0 ? ((summary.sender_avg - summary.receiver_avg) / summary.sender_avg * 100).toFixed(1) : '0.0';
     document.getElementById('bw-summary').innerHTML = `
-        <div class="summary-grid">
-            <div class="summary-item">
-                <div class="summary-value">${summary.avg_bandwidth.toFixed(1)}</div>
-                <div class="summary-label">平均带宽 (Mbps)</div>
+        <div class="summary-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="summary-item" style="border: 1px solid rgba(255,107,53,0.3);">
+                <div style="color: #ff6b35; font-size: 0.8rem; margin-bottom: 8px; font-weight: 600;">发送端</div>
+                <div class="summary-value" style="color: #ff6b35;">${summary.sender_avg.toFixed(1)}</div>
+                <div class="summary-label">平均 Mbps</div>
+                <div style="margin-top: 6px; font-size: 0.85rem; color: #8c8c9c;">峰值: ${summary.sender_peak.toFixed(1)} Mbps</div>
+                <div style="font-size: 0.85rem; color: #8c8c9c;">总量: ${summary.sender_total.toFixed(1)} MB</div>
             </div>
-            <div class="summary-item">
-                <div class="summary-value">${summary.peak_bandwidth.toFixed(1)}</div>
-                <div class="summary-label">峰值带宽 (Mbps)</div>
-            </div>
-            <div class="summary-item">
-                <div class="summary-value">${summary.total_transfer.toFixed(1)}</div>
-                <div class="summary-label">传输总量 (MB)</div>
+            <div class="summary-item" style="border: 1px solid rgba(0,201,177,0.3);">
+                <div style="color: #00c9b1; font-size: 0.8rem; margin-bottom: 8px; font-weight: 600;">接收端</div>
+                <div class="summary-value" style="color: #00c9b1;">${summary.receiver_avg.toFixed(1)}</div>
+                <div class="summary-label">平均 Mbps</div>
+                <div style="margin-top: 6px; font-size: 0.85rem; color: #8c8c9c;">峰值: ${summary.receiver_peak.toFixed(1)} Mbps</div>
+                <div style="font-size: 0.85rem; color: #8c8c9c;">总量: ${summary.receiver_total.toFixed(1)} MB</div>
             </div>
         </div>
         <div style="margin-top: 12px; color: #6c6c8c; font-size: 0.85rem; text-align: center;">
-            测试时长: ${summary.duration} 秒 | 协议: ${currentProtocol.toUpperCase()}
+            测试时长: ${summary.duration} 秒 | 协议: ${currentProtocol.toUpperCase()} | 速率差异: ${lossRate}%
         </div>
     `;
 }
@@ -1137,17 +1181,28 @@ function animateFlow() {
     // 绘制流动光带（从Client流向Server）
     drawFlowingLight(ctx, width, height);
 
-    // 带宽显示（发光文字）
+    // 带宽显示（发送端/接收端对比）
+    ctx.shadowColor = '#ff6b35';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = '#ff6b35';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${bandwidthData.sender_speed.toFixed(1)} Mbps`, 90, height/2 + 25);
     ctx.shadowColor = '#00c9b1';
-    ctx.shadowBlur = 10;
     ctx.fillStyle = '#00c9b1';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${bandwidthData.instant_speed.toFixed(1)} Mbps`, width/2, height - 15);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${bandwidthData.receiver_speed.toFixed(1)} Mbps`, width - 90, height/2 + 25);
     ctx.shadowBlur = 0;
 
-    // 更新流动时间（调慢速度）
-    const speed = 1 + Math.min(bandwidthData.instant_speed / 50, 3);
+    // 中间速率差异
+    const diff = bandwidthData.sender_speed > 0 ? ((bandwidthData.sender_speed - bandwidthData.receiver_speed) / bandwidthData.sender_speed * 100) : 0;
+    ctx.fillStyle = diff > 5 ? '#f9c74f' : '#6c6c8c';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(diff > 5 ? `差异 ${diff.toFixed(1)}%` : '', width/2, height - 10);
+
+    // 更新流动时间
+    const speed = 1 + Math.min(bandwidthData.sender_speed / 50, 3);
     flowTime += 0.012 * speed;
 
     animationId = requestAnimationFrame(animateFlow);
@@ -1176,7 +1231,7 @@ function drawFlowingLight(ctx, width, height) {
     const centerY = height / 2;
 
     // 根据带宽计算光带宽度
-    const lightWidth = 6 + Math.min(bandwidthData.instant_speed / 20, 10);
+    const lightWidth = 6 + Math.min(bandwidthData.sender_speed / 20, 10);
 
     // 绘制多条流动光带
     flowSegments.forEach((seg, idx) => {
@@ -1290,9 +1345,8 @@ function animateGauge() {
     // 仪表盘背景
     drawGaugeArc(ctx, centerX, centerY, radius);
 
-    gaugeTargetAngle = mapBandwidthToAngle(bandwidthData.instant_speed, 200);
+    gaugeTargetAngle = mapBandwidthToAngle(bandwidthData.sender_speed, 200);
     gaugeAngle += (gaugeTargetAngle - gaugeAngle) * 0.08;
-
     // 指针
     const rad = gaugeAngle * Math.PI / 180;
     const pointerLen = radius - 20;
@@ -1313,7 +1367,7 @@ function animateGauge() {
     ctx.fillStyle = '#00c9b1';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(bandwidthData.instant_speed.toFixed(1) + ' Mbps', centerX, centerY - 20);
+    ctx.fillText(bandwidthData.sender_speed.toFixed(1) + ' Mbps', centerX, centerY - 20);
 
     gaugeAnimationId = requestAnimationFrame(animateGauge);
 }

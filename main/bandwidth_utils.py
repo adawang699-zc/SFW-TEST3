@@ -1,8 +1,7 @@
 """
 带宽测试后端逻辑
-管理iperf进程、解析输出、推送WebSocket数据
+管理iperf进程、轮询Agent获取真实数据、推送WebSocket数据
 """
-import re
 import logging
 import threading
 import time
@@ -16,7 +15,7 @@ logger = logging.getLogger('main')
 class BandwidthTestManager:
     """带宽测试管理器"""
 
-    active_tests = {}  # {test_id: {server_pid, client_pid, ...}}
+    active_tests = {}  # {test_id: {server_agent, client_agent, ...}}
 
     @classmethod
     def start_test(cls, test_params, client_ip):
@@ -130,7 +129,7 @@ class BandwidthTestManager:
             'start_time': datetime.now(),
             'duration': test_params.get('duration', 10),
             'protocol': test_params.get('protocol', 'tcp'),
-            'bandwidth': test_params.get('bandwidth', 0),  # UDP带宽限制
+            'bandwidth': test_params.get('bandwidth', 0),
         }
 
         logger.info(f"带宽测试启动成功: test_id={test_id}")
@@ -151,7 +150,7 @@ class BandwidthTestManager:
             data={}, timeout=5
         )
         if not success:
-            logger.warning(f"停止iperf server失败")
+            logger.warning("停止iperf server失败")
 
     @classmethod
     def stop_test(cls, test_id):
@@ -171,7 +170,7 @@ class BandwidthTestManager:
                 data={}, timeout=5
             )
             if not success:
-                logger.warning(f"停止iperf client失败")
+                logger.warning("停止iperf client失败")
 
         # 停止server
         server_agent = test_info.get('server_agent')
@@ -185,71 +184,18 @@ class BandwidthTestManager:
 
         return {'success': True}
 
-    @classmethod
-    def parse_iperf_output(cls, line):
-        """解析iperf单行输出
-
-        Returns:
-            dict: {instant_speed, avg_speed, peak_speed, total_bytes, interval, transfer}
-        """
-        # iperf3 输出格式: [  5]   1.00-2.00   sec  12.5 MBytes  125.6 Mbits/sec
-        pattern = r'\[\s*\d+\]\s+(\d+\.\d+)-(\d+\.\d+)\s+sec\s+(\d+\.\d+)\s+(MBytes|KBytes|GBytes)\s+(\d+\.\d+)\s+(Mbits/sec|Kbits/sec|Gbits/sec)'
-
-        match = re.search(pattern, line)
-        if not match:
-            return None
-
-        interval_start = float(match.group(1))
-        interval_end = float(match.group(2))
-        transfer = float(match.group(3))
-        transfer_unit = match.group(4)
-        bandwidth = float(match.group(5))
-        bandwidth_unit = match.group(6)
-
-        # 转换单位
-        if transfer_unit == 'KBytes':
-            transfer = transfer / 1024  # -> MBytes
-        elif transfer_unit == 'GBytes':
-            transfer = transfer * 1024  # -> MBytes
-
-        if bandwidth_unit == 'Kbits/sec':
-            bandwidth = bandwidth / 1000  # -> Mbits/sec
-        elif bandwidth_unit == 'Gbits/sec':
-            bandwidth = bandwidth * 1000  # -> Mbits/sec
-
-        return {
-            'interval': interval_end - interval_start,
-            'transfer': transfer,  # MBytes
-            'instant_speed': bandwidth,  # Mbits/sec
-            'avg_speed': 0.0,  # 后续计算
-            'peak_speed': 0.0,  # 后续计算
-            'total_bytes': 0,  # 后续计算
-        }
-
 
 class BandwidthTestMonitor(threading.Thread):
-    """带宽测试监控线程"""
+    """带宽测试监控线程 - 轮询Agent获取真实iperf3数据"""
 
     def __init__(self, test_id: str, consumer: Any) -> None:
-        """初始化监控线程
-
-        Args:
-            test_id: 测试ID
-            consumer: WebSocket消费者实例
-        """
         super().__init__()
         self.test_id = test_id
         self.consumer = consumer
         self.running = True
         self.daemon = True
 
-        # 累计统计
-        self.total_bytes = 0.0
-        self.peak_speed = 0.0
-        self.all_speeds: list = []
-
     def run(self) -> None:
-        """监控iperf输出并推送数据"""
         from asgiref.sync import async_to_sync
 
         if self.test_id not in BandwidthTestManager.active_tests:
@@ -257,88 +203,118 @@ class BandwidthTestMonitor(threading.Thread):
             return
 
         test_info = BandwidthTestManager.active_tests[self.test_id]
-        client_ip = test_info['client_ip']
-        client_port = test_info['client_port']
         duration = test_info['duration']
         protocol = test_info.get('protocol', 'tcp')
-        bandwidth_limit = test_info.get('bandwidth', 0)  # UDP带宽限制
+        client_agent = test_info['client_agent']
+        server_agent = test_info['server_agent']
 
         start_time = time.time()
 
+        # 累计统计（发送端）
+        sender_peak = 0.0
+        sender_all_speeds = []
+        sender_total_bytes = 0.0
+
+        # 累计统计（接收端）
+        receiver_peak = 0.0
+        receiver_all_speeds = []
+        receiver_total_bytes = 0.0
+
         try:
-            # 模拟实时数据推送（实际需要iperf进程输出解析）
-            # 由于iperf输出不能实时获取，这里使用估算方法
             while self.running and time.time() - start_time < duration + 5:
                 elapsed = time.time() - start_time
 
-                if elapsed >= duration:
-                    # 测试结束
-                    self._send_complete()
+                # 轮询两端 Agent 的 stats API
+                sender_stats = self._poll_agent_stats(client_agent)
+                receiver_stats = self._poll_agent_stats(server_agent)
+
+                # 提取发送端数据
+                sender_instant = sender_stats.get('instant_bps', 0)
+                if sender_instant > 0:
+                    sender_all_speeds.append(sender_instant)
+                    sender_peak = max(sender_peak, sender_instant)
+                    sender_total_bytes = sender_stats.get('total_bytes', 0)
+
+                # 提取接收端数据
+                receiver_instant = receiver_stats.get('instant_bps', 0)
+                if receiver_instant > 0:
+                    receiver_all_speeds.append(receiver_instant)
+                    receiver_peak = max(receiver_peak, receiver_instant)
+                    receiver_total_bytes = receiver_stats.get('total_bytes', 0)
+
+                # 推送数据
+                data = {
+                    'sender_speed': round(sender_instant, 2),
+                    'sender_avg': round(sum(sender_all_speeds) / len(sender_all_speeds), 2) if sender_all_speeds else 0,
+                    'sender_peak': round(sender_peak, 2),
+                    'sender_total': round(sender_total_bytes, 2),
+                    'receiver_speed': round(receiver_instant, 2),
+                    'receiver_avg': round(sum(receiver_all_speeds) / len(receiver_all_speeds), 2) if receiver_all_speeds else 0,
+                    'receiver_peak': round(receiver_peak, 2),
+                    'receiver_total': round(receiver_total_bytes, 2),
+                }
+
+                async_to_sync(self.consumer.channel_layer.group_send)(
+                    self.consumer.group_name,
+                    {
+                        'type': 'iperf_data_message',
+                        'data': {
+                            'type': 'iperf_data',
+                            'timestamp': datetime.now().isoformat(),
+                            'data': data
+                        }
+                    }
+                )
+
+                # 检查是否结束
+                if elapsed >= duration + 2 and not sender_stats.get('running', False):
                     break
 
-                # 模拟数据推送（每秒一次）
-                # UDP时使用带宽限制值，TCP时模拟波动
-                if protocol == 'udp' and bandwidth_limit > 0:
-                    # UDP带宽限制生效，模拟围绕限制值波动（±10%）
-                    simulated_speed = bandwidth_limit * (0.9 + 0.2 * (elapsed % 3) / 3)
-                else:
-                    # TCP无限制，模拟正常波动
-                    simulated_speed = 50.0 + (elapsed % 5) * 10.0  # 模拟波动
-                self._push_simulated_data(elapsed, simulated_speed)
                 time.sleep(1)
+
+            # 推送完成
+            self._send_complete(sender_all_speeds, sender_peak, sender_total_bytes,
+                                receiver_all_speeds, receiver_peak, receiver_total_bytes,
+                                duration)
 
         except Exception as e:
             logger.exception(f"iperf监控异常: {e}")
             self._send_error(str(e))
 
         finally:
-            # 清理测试
             BandwidthTestManager.stop_test(self.test_id)
 
     def stop(self) -> None:
-        """停止监控"""
         self.running = False
 
-    def _push_simulated_data(self, elapsed: float, speed: float) -> None:
-        """推送模拟数据（临时方案）
+    def _poll_agent_stats(self, agent) -> dict:
+        """轮询Agent的iperf stats API"""
+        from main.views import forward_to_agent
 
-        Args:
-            elapsed: 已运行时间
-            speed: 当前速度 Mbps
-        """
+        try:
+            success, result, _ = forward_to_agent(
+                agent, 'GET', '/api/iperf/stats',
+                data=None, timeout=5
+            )
+            if success and result.get('success'):
+                stats = result.get('stats', {})
+                # 判断此Agent是server还是client
+                if stats.get('server', {}).get('running'):
+                    return stats['server']
+                if stats.get('client', {}).get('running'):
+                    return stats['client']
+            return {}
+        except Exception as e:
+            logger.warning(f"轮询Agent stats失败: {e}")
+            return {}
+
+    def _send_complete(self, sender_speeds, sender_peak, sender_total,
+                       receiver_speeds, receiver_peak, receiver_total,
+                       duration) -> None:
         from asgiref.sync import async_to_sync
 
-        # 更新统计
-        self.all_speeds.append(speed)
-        self.peak_speed = max(self.peak_speed, speed)
-        self.total_bytes += speed * 0.125  # Mbps * 1秒 -> MB
-
-        data = {
-            'instant_speed': speed,
-            'avg_speed': sum(self.all_speeds) / len(self.all_speeds),
-            'peak_speed': self.peak_speed,
-            'transfer': self.total_bytes,
-            'total_bytes': self.total_bytes,
-            'interval': 1.0,
-        }
-
-        async_to_sync(self.consumer.channel_layer.group_send)(
-            self.consumer.group_name,
-            {
-                'type': 'iperf_data_message',
-                'data': {
-                    'type': 'iperf_data',
-                    'timestamp': datetime.now().isoformat(),
-                    'data': data
-                }
-            }
-        )
-
-    def _send_complete(self) -> None:
-        """推送测试完成"""
-        from asgiref.sync import async_to_sync
-
-        avg_speed = sum(self.all_speeds) / len(self.all_speeds) if self.all_speeds else 0.0
+        sender_avg = sum(sender_speeds) / len(sender_speeds) if sender_speeds else 0.0
+        receiver_avg = sum(receiver_speeds) / len(receiver_speeds) if receiver_speeds else 0.0
 
         async_to_sync(self.consumer.channel_layer.group_send)(
             self.consumer.group_name,
@@ -347,17 +323,19 @@ class BandwidthTestMonitor(threading.Thread):
                 'data': {
                     'type': 'test_complete',
                     'summary': {
-                        'avg_bandwidth': avg_speed,
-                        'peak_bandwidth': self.peak_speed,
-                        'total_transfer': self.total_bytes,
-                        'duration': len(self.all_speeds)
+                        'sender_avg': round(sender_avg, 2),
+                        'sender_peak': round(sender_peak, 2),
+                        'sender_total': round(sender_total, 2),
+                        'receiver_avg': round(receiver_avg, 2),
+                        'receiver_peak': round(receiver_peak, 2),
+                        'receiver_total': round(receiver_total, 2),
+                        'duration': duration
                     }
                 }
             }
         )
 
     def _send_error(self, message: str) -> None:
-        """推送错误"""
         from asgiref.sync import async_to_sync
 
         async_to_sync(self.consumer.channel_layer.group_send)(

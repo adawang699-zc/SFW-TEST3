@@ -2658,13 +2658,69 @@ except Exception as e:
 
 # ========== 带宽测试 iperf 接口 ==========
 
-# iperf 进程跟踪
+# iperf 进程跟踪 + 实时统计
 iperf_processes = {}
 iperf_processes_lock = threading.Lock()
+iperf_stats = {
+    'server': {'running': False, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0},
+    'client': {'running': False, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0},
+}
+iperf_stats_lock = threading.Lock()
+
+
+def _iperf_stdout_reader(role, proc):
+    """后台线程：读取 iperf3 --json-stream 的 stdout，实时解析速率"""
+    key = role  # 'server' or 'client'
+    all_speeds = []
+    peak = 0.0
+    total = 0.0
+
+    with iperf_stats_lock:
+        iperf_stats[key] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
+
+    try:
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
+                continue
+
+            # iperf3 --json-stream 每秒输出一个 interval 对象
+            intervals = obj.get('intervals')
+            if not intervals:
+                continue
+
+            for iv in intervals:
+                stream = iv.get('streams', [{}])[0]
+                bps = stream.get('bits_per_second', 0)
+                speed_mbps = bps / 1_000_000  # bps -> Mbps
+
+                all_speeds.append(speed_mbps)
+                peak = max(peak, speed_mbps)
+                total += stream.get('bytes', 0) / (1024 * 1024)  # bytes -> MB
+
+                with iperf_stats_lock:
+                    iperf_stats[key] = {
+                        'running': True,
+                        'instant_bps': round(speed_mbps, 2),
+                        'avg_bps': round(sum(all_speeds) / len(all_speeds), 2),
+                        'peak_bps': round(peak, 2),
+                        'total_bytes': round(total, 2),
+                    }
+    except Exception as e:
+        logger.exception(f"iperf {key} stdout reader error: {e}")
+    finally:
+        with iperf_stats_lock:
+            iperf_stats[key]['running'] = False
+        logger.info(f"iperf {key} stdout reader exited")
+
 
 @app.route('/api/iperf/server/start', methods=['POST'])
 def iperf_server_start():
-    """启动 iperf server"""
+    """启动 iperf server (--json-stream)"""
     try:
         data = request.get_json()
         port = data.get('port', 5201)
@@ -2685,16 +2741,22 @@ def iperf_server_start():
                         'error': 'iperf server已在运行'
                     })
 
-        # 启动 iperf3 server
+        # 启动 iperf3 server with --json-stream
         proc = subprocess.Popen(
-            ['iperf3', '-s', '-p', str(port)],
+            ['iperf3', '-s', '-p', str(port), '--json-stream'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            bufsize=1,
         )
 
         with iperf_processes_lock:
             iperf_processes['iperf_server'] = proc
+
+        # 启动后台读取线程
+        t = threading.Thread(target=_iperf_stdout_reader, args=('server', proc), daemon=True)
+        t.start()
+
         logger.info(f"iperf server启动成功: port={port}, pid={proc.pid}")
 
         return jsonify({
@@ -2725,6 +2787,9 @@ def iperf_server_stop():
                 del iperf_processes['iperf_server']
                 logger.info("iperf server已停止")
 
+        with iperf_stats_lock:
+            iperf_stats['server'] = {'running': False, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
+
         return jsonify({'success': True})
 
     except Exception as e:
@@ -2734,7 +2799,7 @@ def iperf_server_stop():
 
 @app.route('/api/iperf/client/start', methods=['POST'])
 def iperf_client_start():
-    """启动 iperf client"""
+    """启动 iperf client (--json-stream)"""
     try:
         data = request.get_json()
         server_ip = data.get('server_ip')
@@ -2747,8 +2812,8 @@ def iperf_client_start():
         if not server_ip:
             return jsonify({'success': False, 'error': '缺少server_ip参数'})
 
-        # 构建命令
-        cmd = ['iperf3', '-c', server_ip, '-p', str(port), '-t', str(duration), '-l', str(mtu)]
+        # 构建命令 (--json-stream 输出每秒 JSON)
+        cmd = ['iperf3', '-c', server_ip, '-p', str(port), '-t', str(duration), '-l', str(mtu), '--json-stream']
 
         if protocol == 'udp':
             cmd.append('-u')
@@ -2759,11 +2824,16 @@ def iperf_client_start():
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            bufsize=1,
         )
 
         with iperf_processes_lock:
             iperf_processes['iperf_client'] = proc
+
+        # 启动后台读取线程
+        t = threading.Thread(target=_iperf_stdout_reader, args=('client', proc), daemon=True)
+        t.start()
 
         logger.info(f"iperf client启动: cmd={' '.join(cmd)}, pid={proc.pid}")
 
@@ -2795,6 +2865,9 @@ def iperf_client_stop():
                 del iperf_processes['iperf_client']
                 logger.info("iperf client已停止")
 
+        with iperf_stats_lock:
+            iperf_stats['client'] = {'running': False, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
+
         return jsonify({'success': True})
 
     except Exception as e:
@@ -2802,28 +2875,15 @@ def iperf_client_stop():
         return jsonify({'success': False, 'error': str(e)})
 
 
-@app.route('/api/iperf/status', methods=['GET'])
-def iperf_status():
-    """获取iperf进程状态"""
-    try:
-        status = {}
-
-        with iperf_processes_lock:
-            for name, proc in list(iperf_processes.items()):
-                if proc.poll() is None:
-                    status[name] = 'running'
-                else:
-                    status[name] = 'stopped'
-                    del iperf_processes[name]
-
-        return jsonify({
-            'success': True,
-            'status': status
-        })
-
-    except Exception as e:
-        logger.exception(f"获取iperf状态失败: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+@app.route('/api/iperf/stats', methods=['GET'])
+def iperf_stats_api():
+    """获取 iperf 实时统计（发送端 + 接收端）"""
+    with iperf_stats_lock:
+        stats = {
+            'server': dict(iperf_stats['server']),
+            'client': dict(iperf_stats['client']),
+        }
+    return jsonify({'success': True, 'stats': stats})
 
 
 # ========== 主入口 ==========
