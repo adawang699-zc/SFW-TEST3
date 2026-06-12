@@ -2669,7 +2669,7 @@ iperf_stats_lock = threading.Lock()
 
 
 def _iperf_stdout_reader(role, proc):
-    """后台线程：读取 iperf3 --json-stream 的 stdout，实时解析速率"""
+    """后台线程：读取 iperf3 文本输出，正则解析每秒速率"""
     key = role  # 'server' or 'client'
     all_speeds = []
     peak = 0.0
@@ -2678,38 +2678,55 @@ def _iperf_stdout_reader(role, proc):
     with iperf_stats_lock:
         iperf_stats[key] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
 
+    # 匹配 iperf3 interval 行: [  5]   1.00-2.00   sec  12.5 MBytes  125.6 Mbits/sec
+    interval_re = re.compile(
+        r'\[\s*\d+\]\s+[\d.]+-[\d.]+\s+sec\s+([\d.]+)\s+'
+        r'(KBytes|MBytes|GBytes)\s+([\d.]+)\s+'
+        r'(Kbits/sec|Mbits/sec|Gbits/sec)'
+    )
+
     try:
         for line in proc.stdout:
             line = line.strip()
             if not line:
                 continue
-            try:
-                obj = json.loads(line)
-            except (json.JSONDecodeError, ValueError):
+            m = interval_re.search(line)
+            if not m:
                 continue
 
-            # iperf3 --json-stream 每秒输出一个 interval 对象
-            intervals = obj.get('intervals')
-            if not intervals:
-                continue
+            transfer_val = float(m.group(1))
+            transfer_unit = m.group(2)
+            speed_val = float(m.group(3))
+            speed_unit = m.group(4)
 
-            for iv in intervals:
-                stream = iv.get('streams', [{}])[0]
-                bps = stream.get('bits_per_second', 0)
-                speed_mbps = bps / 1_000_000  # bps -> Mbps
+            # 转换为 Mbps
+            if speed_unit == 'Kbits/sec':
+                speed_mbps = speed_val / 1000
+            elif speed_unit == 'Gbits/sec':
+                speed_mbps = speed_val * 1000
+            else:
+                speed_mbps = speed_val
 
-                all_speeds.append(speed_mbps)
-                peak = max(peak, speed_mbps)
-                total += stream.get('bytes', 0) / (1024 * 1024)  # bytes -> MB
+            # 转换为 MB
+            if transfer_unit == 'KBytes':
+                transfer_mb = transfer_val / 1024
+            elif transfer_unit == 'GBytes':
+                transfer_mb = transfer_val * 1024
+            else:
+                transfer_mb = transfer_val
 
-                with iperf_stats_lock:
-                    iperf_stats[key] = {
-                        'running': True,
-                        'instant_bps': round(speed_mbps, 2),
-                        'avg_bps': round(sum(all_speeds) / len(all_speeds), 2),
-                        'peak_bps': round(peak, 2),
-                        'total_bytes': round(total, 2),
-                    }
+            all_speeds.append(speed_mbps)
+            peak = max(peak, speed_mbps)
+            total += transfer_mb
+
+            with iperf_stats_lock:
+                iperf_stats[key] = {
+                    'running': True,
+                    'instant_bps': round(speed_mbps, 2),
+                    'avg_bps': round(sum(all_speeds) / len(all_speeds), 2),
+                    'peak_bps': round(peak, 2),
+                    'total_bytes': round(total, 2),
+                }
     except Exception as e:
         logger.exception(f"iperf {key} stdout reader error: {e}")
     finally:
@@ -2741,9 +2758,9 @@ def iperf_server_start():
                         'error': 'iperf server已在运行'
                     })
 
-        # 启动 iperf3 server with --json-stream
+        # 启动 iperf3 server
         proc = subprocess.Popen(
-            ['iperf3', '-s', '-p', str(port), '--json-stream'],
+            ['iperf3', '-s', '-p', str(port)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -2812,8 +2829,8 @@ def iperf_client_start():
         if not server_ip:
             return jsonify({'success': False, 'error': '缺少server_ip参数'})
 
-        # 构建命令 (--json-stream 输出每秒 JSON)
-        cmd = ['iperf3', '-c', server_ip, '-p', str(port), '-t', str(duration), '-l', str(mtu), '--json-stream']
+        # 构建命令
+        cmd = ['iperf3', '-c', server_ip, '-p', str(port), '-t', str(duration), '-l', str(mtu)]
 
         if protocol == 'udp':
             cmd.append('-u')

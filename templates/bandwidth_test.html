@@ -1181,17 +1181,16 @@ function animateFlow() {
     // 绘制流动光带（从Client流向Server）
     drawFlowingLight(ctx, width, height);
 
-    // 带宽显示（发送端/接收端对比）
+    // 带宽显示（发送端/接收端，显示在节点正下方）
     ctx.shadowColor = '#ff6b35';
     ctx.shadowBlur = 8;
     ctx.fillStyle = '#ff6b35';
     ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${bandwidthData.sender_speed.toFixed(1)} Mbps`, 90, height/2 + 25);
+    ctx.textAlign = 'center';
+    ctx.fillText(`${bandwidthData.sender_speed.toFixed(1)} Mbps`, 65, height/2 + 40);
     ctx.shadowColor = '#00c9b1';
     ctx.fillStyle = '#00c9b1';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${bandwidthData.receiver_speed.toFixed(1)} Mbps`, width - 90, height/2 + 25);
+    ctx.fillText(`${bandwidthData.receiver_speed.toFixed(1)} Mbps`, width - 65, height/2 + 40);
     ctx.shadowBlur = 0;
 
     // 中间速率差异
