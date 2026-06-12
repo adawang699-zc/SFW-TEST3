@@ -1,0 +1,141 @@
+- generic [ref=e48]:
+  - complementary [ref=e49]:
+    - generic [ref=e51]:
+      - img [ref=e52]
+      - generic [ref=e56]: ATP
+    - navigation [ref=e57]:
+      - generic [ref=e58] [cursor=pointer]:
+        - img [ref=e60]
+        - generic [ref=e64]: 仪表盘
+      - generic [ref=e65] [cursor=pointer]:
+        - img [ref=e67]
+        - generic [ref=e71]: 产品管理
+      - generic [ref=e72] [cursor=pointer]:
+        - img [ref=e74]
+        - generic [ref=e76]: 场景列表
+      - generic [ref=e77] [cursor=pointer]:
+        - img [ref=e79]
+        - generic [ref=e81]: 任务执行
+      - generic [ref=e82] [cursor=pointer]:
+        - img [ref=e84]
+        - generic [ref=e86]: 报告中心
+      - generic [ref=e87] [cursor=pointer]:
+        - img [ref=e89]
+        - generic [ref=e91]: 环境管理
+      - generic [ref=e92] [cursor=pointer]:
+        - img [ref=e94]
+        - generic [ref=e96]: 浏览器设置
+      - generic [ref=e97] [cursor=pointer]:
+        - img [ref=e99]
+        - generic [ref=e102]: AI助手
+    - img [ref=e106] [cursor=pointer]
+  - generic [ref=e108]:
+    - banner [ref=e109]:
+      - navigation "面包屑" [ref=e111]:
+        - generic [ref=e112]:
+          - link "首页" [ref=e113]
+          - text: /
+        - link "仪表盘" [ref=e115]
+      - generic [ref=e116]:
+        - button [ref=e117] [cursor=pointer]:
+          - img [ref=e120]
+        - button "A admin" [ref=e125] [cursor=pointer]:
+          - generic [ref=e126]:
+            - generic [ref=e128]: A
+            - generic [ref=e129]: admin
+            - img [ref=e131]
+    - main [ref=e133]:
+      - generic [ref=e134]:
+        - generic [ref=e135]:
+          - generic [ref=e136]:
+            - heading "仪表盘" [level=1] [ref=e137]
+            - paragraph [ref=e138]: 自动化测试平台运行概览
+          - generic [ref=e139]:
+            - button "新建场景" [ref=e140] [cursor=pointer]:
+              - generic [ref=e141]:
+                - img [ref=e143]
+                - text: 新建场景
+            - button "执行任务" [ref=e145] [cursor=pointer]:
+              - generic [ref=e146]:
+                - img [ref=e148]
+                - text: 执行任务
+        - generic [ref=e150]:
+          - generic [ref=e151]:
+            - img [ref=e154]
+            - generic [ref=e158]:
+              - generic [ref=e159]: "10"
+              - generic [ref=e160]: 产品总数
+          - generic [ref=e161]:
+            - img [ref=e164]
+            - generic [ref=e168]:
+              - generic [ref=e169]: "81"
+              - generic [ref=e170]: 模块总数
+          - generic [ref=e171]:
+            - img [ref=e174]
+            - generic [ref=e176]:
+              - generic [ref=e177]: "1"
+              - generic [ref=e178]: 场景总数
+          - generic [ref=e179]:
+            - img [ref=e182]
+            - generic [ref=e184]:
+              - generic [ref=e185]: "1"
+              - generic [ref=e186]: 执行次数
+        - generic [ref=e187]:
+          - generic [ref=e188]:
+            - generic [ref=e189]:
+              - heading "最近任务" [level=3] [ref=e190]
+              - generic [ref=e192] [cursor=pointer]: 查看全部
+            - generic [ref=e194]:
+              - generic [ref=e195]:
+                - generic [ref=e196]: "执行: 场景列表测试"
+                - generic [ref=e197]: 06-12 14:28
+              - generic:
+                - generic: 失败
+          - generic [ref=e198]:
+            - heading "产品模块分布" [level=3] [ref=e200]
+            - generic [ref=e201]:
+              - generic [ref=e202]:
+                - generic [ref=e203]:
+                  - generic [ref=e204]: 防火墙
+                  - generic [ref=e205]: 16 模块
+                - progressbar [ref=e206]
+              - generic [ref=e210]:
+                - generic [ref=e211]:
+                  - generic [ref=e212]: 网关
+                  - generic [ref=e213]: 9 模块
+                - progressbar [ref=e214]
+              - generic [ref=e218]:
+                - generic [ref=e219]:
+                  - generic [ref=e220]: 审计
+                  - generic [ref=e221]: 8 模块
+                - progressbar [ref=e222]
+              - generic [ref=e226]:
+                - generic [ref=e227]:
+                  - generic [ref=e228]: IDS
+                  - generic [ref=e229]: 8 模块
+                - progressbar [ref=e230]
+              - generic [ref=e234]:
+                - generic [ref=e235]:
+                  - generic [ref=e236]: 安管平台
+                  - generic [ref=e237]: 9 模块
+                - progressbar [ref=e238]
+              - generic [ref=e242]:
+                - generic [ref=e243]:
+                  - generic [ref=e244]: 日志审计
+                  - generic [ref=e245]: 7 模块
+                - progressbar [ref=e246]
+              - generic [ref=e250]:
+                - generic [ref=e251]:
+                  - generic [ref=e252]: USB安全
+                  - generic [ref=e253]: 7 模块
+                - progressbar [ref=e254]
+              - generic [ref=e258]:
+                - generic [ref=e259]:
+                  - generic [ref=e260]: Windows主机卫士
+                  - generic [ref=e261]: 8 模块
+                - progressbar [ref=e262]
+              - generic [ref=e266]:
+                - generic [ref=e267]:
+                  - generic [ref=e268]: Linux主机卫士
+                  - generic [ref=e269]: 6 模块
+                - progressbar [ref=e270]

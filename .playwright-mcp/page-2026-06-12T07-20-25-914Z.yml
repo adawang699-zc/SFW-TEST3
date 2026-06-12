@@ -1,0 +1,24 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - img [ref=e7]
+    - heading "自动化测试平台" [level=1] [ref=e11]
+    - paragraph [ref=e12]: Industrial Control Security Test Platform
+  - generic [ref=e13]:
+    - heading "登录" [level=2] [ref=e14]
+    - paragraph [ref=e15]: 请输入账号密码登录系统
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]: "*用户名"
+        - generic [ref=e21]:
+          - img [ref=e24]
+          - textbox "*用户名" [ref=e26]:
+            - /placeholder: 请输入用户名
+      - generic [ref=e27]:
+        - generic [ref=e28]: "*密码"
+        - generic [ref=e31]:
+          - img [ref=e34]
+          - textbox "*密码" [ref=e37]:
+            - /placeholder: 请输入密码
+      - button "登 录" [ref=e40] [cursor=pointer]:
+        - generic [ref=e41]: 登 录
+  - paragraph [ref=e42]: Auto Test Platform v1.0 © 2026

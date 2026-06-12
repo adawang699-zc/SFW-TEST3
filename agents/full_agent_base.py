@@ -1312,8 +1312,13 @@ def api_statistics():
 def api_stop():
     """停止发送"""
     global stop_sending
-    
+
     stop_sending.set()
+
+    # 立即更新状态，避免前端轮询时读到旧值导致停止按钮重新出现
+    with stats_lock:
+        statistics['sending'] = False
+
     return jsonify({
         'success': True,
         'message': '已停止发送'
