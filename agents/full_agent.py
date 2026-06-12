@@ -2768,12 +2768,12 @@ def iperf_server_start():
                         'error': 'iperf server已在运行'
                     })
 
-        # 启动 iperf3 server（输出到文件，避免 Gunicorn PIPE 问题）
+        # 启动 iperf3 server（输出到文件，用 stdbuf 关闭缓冲）
         output_file = f'/tmp/iperf_server_{port}.log'
         with open(output_file, 'w') as f:
             f.write('')
         proc = subprocess.Popen(
-            ['iperf3', '-s', '-p', str(port)],
+            ['stdbuf', '-oL', 'iperf3', '-s', '-p', str(port)],
             stdout=open(output_file, 'a'),
             stderr=subprocess.DEVNULL,
             text=True,
@@ -2859,12 +2859,12 @@ def iperf_client_start():
             if bandwidth:
                 cmd.extend(['-b', f'{bandwidth}M'])
 
-        # 启动 iperf3 client（输出到文件，避免 Gunicorn PIPE 问题）
+        # 启动 iperf3 client（输出到文件，用 stdbuf 关闭缓冲）
         output_file = f'/tmp/iperf_client_{port}.log'
         with open(output_file, 'w') as f:
             f.write('')
         proc = subprocess.Popen(
-            cmd,
+            ['stdbuf', '-oL'] + cmd,
             stdout=open(output_file, 'a'),
             stderr=subprocess.DEVNULL,
             text=True,
