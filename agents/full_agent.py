@@ -2667,72 +2667,73 @@ iperf_stats = {
 }
 iperf_stats_lock = threading.Lock()
 
+# 累计统计
+_iperf_all_speeds = {'server': [], 'client': []}
+_iperf_peak = {'server': 0.0, 'client': 0.0}
+_iperf_total = {'server': 0.0, 'client': 0.0}
 
-def _iperf_stdout_reader(role, proc):
-    """后台线程：读取 iperf3 文本输出，正则解析每秒速率"""
-    key = role  # 'server' or 'client'
-    all_speeds = []
-    peak = 0.0
-    total = 0.0
+_INTERVAL_RE = re.compile(
+    r'\[\s*\d+\]\s+[\d.]+-[\d.]+\s+sec\s+([\d.]+)\s+'
+    r'(KBytes|MBytes|GBytes)\s+([\d.]+)\s+'
+    r'(Kbits/sec|Mbits/sec|Gbits/sec)'
+)
 
-    with iperf_stats_lock:
-        iperf_stats[key] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
 
-    # 匹配 iperf3 interval 行: [  5]   1.00-2.00   sec  12.5 MBytes  125.6 Mbits/sec
-    interval_re = re.compile(
-        r'\[\s*\d+\]\s+[\d.]+-[\d.]+\s+sec\s+([\d.]+)\s+'
-        r'(KBytes|MBytes|GBytes)\s+([\d.]+)\s+'
-        r'(Kbits/sec|Mbits/sec|Gbits/sec)'
-    )
+def _parse_iperf_line(line):
+    """解析一行 iperf3 文本输出，返回 (speed_mbps, transfer_mb) 或 None"""
+    m = _INTERVAL_RE.search(line)
+    if not m:
+        return None
 
-    try:
-        for line in proc.stdout:
-            line = line.strip()
+    transfer_val = float(m.group(1))
+    transfer_unit = m.group(2)
+    speed_val = float(m.group(3))
+    speed_unit = m.group(4)
+
+    if speed_unit == 'Kbits/sec':
+        speed_mbps = speed_val / 1000
+    elif speed_unit == 'Gbits/sec':
+        speed_mbps = speed_val * 1000
+    else:
+        speed_mbps = speed_val
+
+    if transfer_unit == 'KBytes':
+        transfer_mb = transfer_val / 1024
+    elif transfer_unit == 'GBytes':
+        transfer_mb = transfer_val * 1024
+    else:
+        transfer_mb = transfer_val
+
+    return speed_mbps, transfer_mb
+
+
+def _drain_iperf_stdout(role, proc):
+    """非阻塞读取 iperf3 进程的所有可用 stdout 行并更新统计"""
+    key = role
+    while True:
+        try:
+            line = proc.stdout.readline()
             if not line:
+                break
+            result = _parse_iperf_line(line)
+            if result is None:
                 continue
-            m = interval_re.search(line)
-            if not m:
-                continue
+            speed_mbps, transfer_mb = result
 
-            transfer_val = float(m.group(1))
-            transfer_unit = m.group(2)
-            speed_val = float(m.group(3))
-            speed_unit = m.group(4)
-
-            # 转换为 Mbps
-            if speed_unit == 'Kbits/sec':
-                speed_mbps = speed_val / 1000
-            elif speed_unit == 'Gbits/sec':
-                speed_mbps = speed_val * 1000
-            else:
-                speed_mbps = speed_val
-
-            # 转换为 MB
-            if transfer_unit == 'KBytes':
-                transfer_mb = transfer_val / 1024
-            elif transfer_unit == 'GBytes':
-                transfer_mb = transfer_val * 1024
-            else:
-                transfer_mb = transfer_val
-
-            all_speeds.append(speed_mbps)
-            peak = max(peak, speed_mbps)
-            total += transfer_mb
+            _iperf_all_speeds[key].append(speed_mbps)
+            _iperf_peak[key] = max(_iperf_peak[key], speed_mbps)
+            _iperf_total[key] += transfer_mb
 
             with iperf_stats_lock:
                 iperf_stats[key] = {
                     'running': True,
                     'instant_bps': round(speed_mbps, 2),
-                    'avg_bps': round(sum(all_speeds) / len(all_speeds), 2),
-                    'peak_bps': round(peak, 2),
-                    'total_bytes': round(total, 2),
+                    'avg_bps': round(sum(_iperf_all_speeds[key]) / len(_iperf_all_speeds[key]), 2),
+                    'peak_bps': round(_iperf_peak[key], 2),
+                    'total_bytes': round(_iperf_total[key], 2),
                 }
-    except Exception as e:
-        logger.exception(f"iperf {key} stdout reader error: {e}")
-    finally:
-        with iperf_stats_lock:
-            iperf_stats[key]['running'] = False
-        logger.info(f"iperf {key} stdout reader exited")
+        except Exception:
+            break
 
 
 @app.route('/api/iperf/server/start', methods=['POST'])
@@ -2770,9 +2771,12 @@ def iperf_server_start():
         with iperf_processes_lock:
             iperf_processes['iperf_server'] = proc
 
-        # 启动后台读取线程
-        t = threading.Thread(target=_iperf_stdout_reader, args=('server', proc), daemon=True)
-        t.start()
+        # 重置统计
+        _iperf_all_speeds['server'] = []
+        _iperf_peak['server'] = 0.0
+        _iperf_total['server'] = 0.0
+        with iperf_stats_lock:
+            iperf_stats['server'] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
 
         logger.info(f"iperf server启动成功: port={port}, pid={proc.pid}")
 
@@ -2806,6 +2810,9 @@ def iperf_server_stop():
 
         with iperf_stats_lock:
             iperf_stats['server'] = {'running': False, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
+        _iperf_all_speeds['server'] = []
+        _iperf_peak['server'] = 0.0
+        _iperf_total['server'] = 0.0
 
         return jsonify({'success': True})
 
@@ -2848,9 +2855,12 @@ def iperf_client_start():
         with iperf_processes_lock:
             iperf_processes['iperf_client'] = proc
 
-        # 启动后台读取线程
-        t = threading.Thread(target=_iperf_stdout_reader, args=('client', proc), daemon=True)
-        t.start()
+        # 重置统计
+        _iperf_all_speeds['client'] = []
+        _iperf_peak['client'] = 0.0
+        _iperf_total['client'] = 0.0
+        with iperf_stats_lock:
+            iperf_stats['client'] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
 
         logger.info(f"iperf client启动: cmd={' '.join(cmd)}, pid={proc.pid}")
 
@@ -2884,6 +2894,9 @@ def iperf_client_stop():
 
         with iperf_stats_lock:
             iperf_stats['client'] = {'running': False, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
+        _iperf_all_speeds['client'] = []
+        _iperf_peak['client'] = 0.0
+        _iperf_total['client'] = 0.0
 
         return jsonify({'success': True})
 
@@ -2894,7 +2907,19 @@ def iperf_client_stop():
 
 @app.route('/api/iperf/stats', methods=['GET'])
 def iperf_stats_api():
-    """获取 iperf 实时统计（发送端 + 接收端）"""
+    """获取 iperf 实时统计（每次调用时先读取新数据）"""
+    # 先读取所有可用的 stdout
+    with iperf_processes_lock:
+        for key, proc_key in [('server', 'iperf_server'), ('client', 'iperf_client')]:
+            proc = iperf_processes.get(proc_key)
+            if proc and proc.poll() is None:
+                _drain_iperf_stdout(key, proc)
+            elif proc and proc.poll() is not None:
+                # 进程已结束，读取剩余输出
+                _drain_iperf_stdout(key, proc)
+                with iperf_stats_lock:
+                    iperf_stats[key]['running'] = False
+
     with iperf_stats_lock:
         stats = {
             'server': dict(iperf_stats['server']),
