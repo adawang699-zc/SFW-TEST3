@@ -493,6 +493,7 @@ def api_stop():
         statistics['bandwidth'] = 0
         statistics['start_time'] = None
         statistics['last_update'] = None
+        statistics['sending'] = False
 
     logger.info("停止发送报文，统计数据已清除")
     return jsonify({

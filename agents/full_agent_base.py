@@ -1082,15 +1082,11 @@ def send_packets_worker(interface, packet_config, send_config):
     except Exception as e:
         print(f"发送线程错误: {e}")
     finally:
-        # 清除停止标志
         stop_sending.clear()
-        # 只有未被强制停止时才更新最终统计（强制停止时 api_stop 已清除）
-        # 注意：如果被强制停止，statistics 已在 api_stop 中清除，这里不更新
-        # 如果是正常完成（sent >= total_to_send），更新最终统计
-        if sent >= total_to_send:
-            with stats_lock:
+        with stats_lock:
+            statistics['sending'] = False
+            if sent >= total_to_send:
                 statistics['total_sent'] = sent
-                statistics['sending'] = False
                 if start_time:
                     elapsed = time.time() - start_time
                     statistics['rate'] = int(sent / elapsed) if elapsed > 0 else 0
