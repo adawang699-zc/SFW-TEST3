@@ -2672,6 +2672,10 @@ _iperf_all_speeds = {'server': [], 'client': []}
 _iperf_peak = {'server': 0.0, 'client': 0.0}
 _iperf_total = {'server': 0.0, 'client': 0.0}
 
+# iperf 输出文件路径（Gunicorn --preload 下 stdout PIPE 不可靠，改用文件）
+_iperf_output_files = {'server': '', 'client': ''}
+_iperf_output_pos = {'server': 0, 'client': 0}
+
 _INTERVAL_RE = re.compile(
     r'\[\s*\d+\]\s+[\d.]+-[\d.]+\s+sec\s+([\d.]+)\s+'
     r'(KBytes|MBytes|GBytes)\s+([\d.]+)\s+'
@@ -2707,33 +2711,37 @@ def _parse_iperf_line(line):
     return speed_mbps, transfer_mb
 
 
-def _drain_iperf_stdout(role, proc):
-    """非阻塞读取 iperf3 进程的所有可用 stdout 行并更新统计"""
+def _read_iperf_output_file(role):
+    """从 iperf3 输出文件中读取新增内容并解析统计"""
     key = role
-    while True:
-        try:
-            line = proc.stdout.readline()
-            if not line:
-                break
-            result = _parse_iperf_line(line)
-            if result is None:
-                continue
-            speed_mbps, transfer_mb = result
+    filepath = _iperf_output_files.get(key)
+    if not filepath or not os.path.exists(filepath):
+        return
 
-            _iperf_all_speeds[key].append(speed_mbps)
-            _iperf_peak[key] = max(_iperf_peak[key], speed_mbps)
-            _iperf_total[key] += transfer_mb
+    try:
+        with open(filepath, 'r') as f:
+            f.seek(_iperf_output_pos[key])
+            for line in f:
+                result = _parse_iperf_line(line)
+                if result is None:
+                    continue
+                speed_mbps, transfer_mb = result
 
-            with iperf_stats_lock:
-                iperf_stats[key] = {
-                    'running': True,
-                    'instant_bps': round(speed_mbps, 2),
-                    'avg_bps': round(sum(_iperf_all_speeds[key]) / len(_iperf_all_speeds[key]), 2),
-                    'peak_bps': round(_iperf_peak[key], 2),
-                    'total_bytes': round(_iperf_total[key], 2),
-                }
-        except Exception:
-            break
+                _iperf_all_speeds[key].append(speed_mbps)
+                _iperf_peak[key] = max(_iperf_peak[key], speed_mbps)
+                _iperf_total[key] += transfer_mb
+
+                with iperf_stats_lock:
+                    iperf_stats[key] = {
+                        'running': True,
+                        'instant_bps': round(speed_mbps, 2),
+                        'avg_bps': round(sum(_iperf_all_speeds[key]) / len(_iperf_all_speeds[key]), 2),
+                        'peak_bps': round(_iperf_peak[key], 2),
+                        'total_bytes': round(_iperf_total[key], 2),
+                    }
+            _iperf_output_pos[key] = f.tell()
+    except Exception as e:
+        logger.warning(f"读取 iperf 输出文件失败: {e}")
 
 
 @app.route('/api/iperf/server/start', methods=['POST'])
@@ -2759,13 +2767,15 @@ def iperf_server_start():
                         'error': 'iperf server已在运行'
                     })
 
-        # 启动 iperf3 server
+        # 启动 iperf3 server（输出到文件，避免 Gunicorn PIPE 问题）
+        output_file = f'/tmp/iperf_server_{port}.log'
+        with open(output_file, 'w') as f:
+            f.write('')
         proc = subprocess.Popen(
             ['iperf3', '-s', '-p', str(port)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=open(output_file, 'a'),
+            stderr=subprocess.DEVNULL,
             text=True,
-            bufsize=1,
         )
 
         with iperf_processes_lock:
@@ -2775,6 +2785,8 @@ def iperf_server_start():
         _iperf_all_speeds['server'] = []
         _iperf_peak['server'] = 0.0
         _iperf_total['server'] = 0.0
+        _iperf_output_files['server'] = output_file
+        _iperf_output_pos['server'] = 0
         with iperf_stats_lock:
             iperf_stats['server'] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
 
@@ -2813,6 +2825,8 @@ def iperf_server_stop():
         _iperf_all_speeds['server'] = []
         _iperf_peak['server'] = 0.0
         _iperf_total['server'] = 0.0
+        _iperf_output_files['server'] = ''
+        _iperf_output_pos['server'] = 0
 
         return jsonify({'success': True})
 
@@ -2844,12 +2858,15 @@ def iperf_client_start():
             if bandwidth:
                 cmd.extend(['-b', f'{bandwidth}M'])
 
+        # 启动 iperf3 client（输出到文件，避免 Gunicorn PIPE 问题）
+        output_file = f'/tmp/iperf_client_{port}.log'
+        with open(output_file, 'w') as f:
+            f.write('')
         proc = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=open(output_file, 'a'),
+            stderr=subprocess.DEVNULL,
             text=True,
-            bufsize=1,
         )
 
         with iperf_processes_lock:
@@ -2859,6 +2876,8 @@ def iperf_client_start():
         _iperf_all_speeds['client'] = []
         _iperf_peak['client'] = 0.0
         _iperf_total['client'] = 0.0
+        _iperf_output_files['client'] = output_file
+        _iperf_output_pos['client'] = 0
         with iperf_stats_lock:
             iperf_stats['client'] = {'running': True, 'instant_bps': 0, 'avg_bps': 0, 'peak_bps': 0, 'total_bytes': 0}
 
@@ -2897,6 +2916,8 @@ def iperf_client_stop():
         _iperf_all_speeds['client'] = []
         _iperf_peak['client'] = 0.0
         _iperf_total['client'] = 0.0
+        _iperf_output_files['client'] = ''
+        _iperf_output_pos['client'] = 0
 
         return jsonify({'success': True})
 
@@ -2907,18 +2928,17 @@ def iperf_client_stop():
 
 @app.route('/api/iperf/stats', methods=['GET'])
 def iperf_stats_api():
-    """获取 iperf 实时统计（每次调用时先读取新数据）"""
-    # 先读取所有可用的 stdout
+    """获取 iperf 实时统计（每次调用时读取输出文件更新统计）"""
     with iperf_processes_lock:
         for key, proc_key in [('server', 'iperf_server'), ('client', 'iperf_client')]:
             proc = iperf_processes.get(proc_key)
-            if proc and proc.poll() is None:
-                _drain_iperf_stdout(key, proc)
-            elif proc and proc.poll() is not None:
-                # 进程已结束，读取剩余输出
-                _drain_iperf_stdout(key, proc)
-                with iperf_stats_lock:
-                    iperf_stats[key]['running'] = False
+            if proc:
+                if proc.poll() is None:
+                    _read_iperf_output_file(key)
+                else:
+                    _read_iperf_output_file(key)
+                    with iperf_stats_lock:
+                        iperf_stats[key]['running'] = False
 
     with iperf_stats_lock:
         stats = {
