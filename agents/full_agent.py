@@ -30,12 +30,9 @@ import threading
 import time
 from datetime import datetime
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s %(name)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# 配置日志（集中配置：按模块分文件 + RotatingFileHandler 轮转）
+from agents.logging_config import setup_agent_logging
+setup_agent_logging()
 logger = logging.getLogger('agent')
 
 # ========== 从环境变量读取配置 ==========

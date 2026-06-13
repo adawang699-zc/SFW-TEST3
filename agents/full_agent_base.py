@@ -21,6 +21,7 @@ import struct
 import random
 import sqlite3
 import os
+import logging
 from concurrent.futures import ThreadPoolExecutor
 
 # 全局变量
@@ -111,8 +112,10 @@ client_states = {
 }
 
 
+_service_logger = logging.getLogger('agents.service')
+
 def add_service_log(source, message, level='info'):
-    """记录服务相关日志"""
+    """Record service log (in-memory deque + Python logging file persistence)"""
     entry = {
         'timestamp': datetime.now().strftime('%H:%M:%S'),
         'source': source,
@@ -121,16 +124,8 @@ def add_service_log(source, message, level='info'):
     }
     with service_lock:
         service_logs.appendleft(entry)
-    # 同时输出到控制台（用于调试）- 过滤 emoji 字符避免 Windows GBK 编码问题
-    filtered_message = message
-    try:
-        # 尝试用 GBK 编码，如果失败则移除 emoji
-        filtered_message.encode('gbk')
-    except UnicodeEncodeError:
-        # 移除 emoji 和其他非 GBK 字符
-        import re
-        filtered_message = re.sub(r'[^\x00-\x7F\u4e00-\u9fa5]', '', message)
-    print(f"[{entry['timestamp']}] [{level.upper()}] {source}: {filtered_message}")
+    log_level = getattr(logging, level.upper(), logging.INFO)
+    _service_logger.log(log_level, f"{source}: {message}")
 
 
 

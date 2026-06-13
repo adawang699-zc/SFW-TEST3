@@ -18,12 +18,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from pathlib import Path
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s %(name)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# 日志配置由 agents.logging_config.setup_agent_logging() 集中管理
 logger = logging.getLogger('industrial_protocol')
 
 try:
@@ -1251,51 +1246,8 @@ def save_s7_db_to_database(server_id, db_number, data):
 # 初始化数据库（延迟到add_log函数定义后）
 # init_s7_database()  # 将在add_log函数定义后调用
 
-# Modbus服务器专用日志文件
-MODBUS_SERVER_LOG_FILE = 'industrial_protocol.log'
-modbus_server_logger = None
-modbus_server_logger_lock = threading.Lock()
-
-def setup_modbus_server_logger():
-    """设置Modbus服务器专用日志记录器"""
-    global modbus_server_logger
-    if modbus_server_logger is None:
-        with modbus_server_logger_lock:
-            if modbus_server_logger is None:
-                # 创建日志记录器
-                modbus_server_logger = logging.getLogger('industrial_protocol')
-                modbus_server_logger.setLevel(logging.DEBUG)
-                
-                # 避免重复添加处理器
-                if not modbus_server_logger.handlers:
-                    # 创建文件处理器
-                    file_handler = logging.FileHandler(MODBUS_SERVER_LOG_FILE, encoding='utf-8')
-                    file_handler.setLevel(logging.DEBUG)
-                    
-                    # 创建格式器
-                    formatter = logging.Formatter(
-                        '%(asctime)s [%(levelname)s] %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S'
-                    )
-                    file_handler.setFormatter(formatter)
-                    
-                    # 添加处理器
-                    modbus_server_logger.addHandler(file_handler)
-                    
-                    # 同时输出到控制台
-                    console_handler = logging.StreamHandler()
-                    console_handler.setLevel(logging.DEBUG)
-                    console_handler.setFormatter(formatter)
-                    modbus_server_logger.addHandler(console_handler)
-                
-                modbus_server_logger.info("=" * 80)
-                modbus_server_logger.info("Modbus服务器日志系统初始化完成")
-                modbus_server_logger.info("=" * 80)
-    
-    return modbus_server_logger
-
-# 初始化日志记录器
-setup_modbus_server_logger()
+# 工业协议日志（由 agents.logging_config dictConfig 配置 handler）
+modbus_server_logger = logging.getLogger('industrial_protocol')
 
 
 def add_log(level: str, message: str):

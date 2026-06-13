@@ -239,33 +239,33 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        # Agent 模块独立日志
-        'agents.packet_capture': {
+        # Agent 模块独立日志（logger 名称匹配 __name__）
+        'agents.modules.packet_capture': {
             'handlers': ['console', 'agent_packet_capture'],
             'level': 'INFO',
             'propagate': False,
         },
-        'agents.port_scanner': {
+        'agents.modules.port_scanner': {
             'handlers': ['console', 'agent_port_scanner'],
             'level': 'INFO',
             'propagate': False,
         },
-        'agents.packet_sender': {
+        'agents.modules.packet_sender': {
             'handlers': ['console', 'agent_packet_sender'],
             'level': 'INFO',
             'propagate': False,
         },
-        'agents.packet_replay': {
+        'agents.modules.packet_replay': {
             'handlers': ['console', 'agent_packet_replay'],
             'level': 'INFO',
             'propagate': False,
         },
-        'agents.mail_service': {
+        'agents.modules.mail_service': {
             'handlers': ['console', 'agent_mail_service'],
             'level': 'INFO',
             'propagate': False,
         },
-        'agents.dhcp_client': {
+        'agents.modules.dhcp_client_module': {
             'handlers': ['console', 'agent_dhcp_client'],
             'level': 'INFO',
             'propagate': False,
