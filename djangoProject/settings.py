@@ -103,6 +103,18 @@ AGENT_WORK_DIR = os.environ.get('AGENT_WORK_DIR', '/opt/SFW-TEST3')
 # Agent Python 虚拟环境路径
 AGENT_VENV_PYTHON = os.environ.get('AGENT_VENV_PYTHON', '/usr/bin/python3')
 
+# Agent 虚拟环境 site-packages 路径
+AGENT_VENV_SITE_PACKAGES = os.environ.get(
+    'AGENT_VENV_SITE_PACKAGES',
+    os.path.join(AGENT_WORK_DIR, 'sfw', 'lib', 'python3.10', 'site-packages')
+)
+
+# Agent PYTHONPATH（服务文件使用）
+AGENT_PYTHONPATH = os.environ.get(
+    'AGENT_PYTHONPATH',
+    f'{AGENT_WORK_DIR}:{AGENT_VENV_SITE_PACKAGES}'
+)
+
 # ========== 文件上传配置 ==========
 
 # 最大请求体大小 (100MB)

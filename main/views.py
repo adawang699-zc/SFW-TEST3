@@ -901,7 +901,7 @@ Requires=network.target
 [Service]
 Type=simple
 WorkingDirectory={settings.AGENT_WORK_DIR}
-Environment=PYTHONPATH={settings.AGENT_WORK_DIR}
+Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
 ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
 ExecStop=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -c "import sys; sys.exit(0)"
 Restart=always
@@ -993,6 +993,7 @@ Environment="BIND_IP={agent.interface.ip_address}"
 Environment="BIND_INTERFACE={agent.interface.name}"
 Environment="AGENT_PORT={agent.port}"
 WorkingDirectory={settings.AGENT_WORK_DIR}
+Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
 ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
 Restart=always
 RestartSec=5
