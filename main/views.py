@@ -903,7 +903,7 @@ Type=simple
 WorkingDirectory={settings.AGENT_WORK_DIR}
 Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
 ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
-ExecStop=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -c "import sys; sys.exit(0)"
+ExecStop=/bin/bash -c 'sudo ip netns exec {ns} fuser -k {agent.port}/tcp 2>/dev/null || true'
 Restart=always
 RestartSec=5
 StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{agent.interface.name}_ns.log
