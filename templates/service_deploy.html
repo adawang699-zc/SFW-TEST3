@@ -2865,26 +2865,43 @@ async function testNetworkConnect() {
     }
 }
 
-// 状态轮询 - 已改为按需获取，不再定时轮询
-// 启动/停止操作后自动刷新，也可手动点击刷新按钮
-let statusPollInterval = null;
+// 状态轮询
+let serverPollInterval = null;
+let clientPollInterval = null;
 
-function startStatusPoll() {
-    // 不再启动定时轮询，仅保留函数以兼容其他调用
-    // 状态获取改为：页面加载一次、启停操作后、手动刷新
+function startServerStatusPoll() {
+    stopServerStatusPoll();
+    serverPollInterval = setInterval(refreshServerStatus, 2000);
 }
 
-function stopStatusPoll() {
-    if (statusPollInterval) {
-        clearInterval(statusPollInterval);
-        statusPollInterval = null;
+function stopServerStatusPoll() {
+    if (serverPollInterval) {
+        clearInterval(serverPollInterval);
+        serverPollInterval = null;
     }
 }
 
-// 保留旧函数名以兼容其他调用
-function startServerStatusPoll() { startStatusPoll(); }
-function stopServerStatusPoll() { stopStatusPoll(); }
-function startClientStatusPoll() { startStatusPoll(); }
+function startClientStatusPoll() {
+    stopClientStatusPoll();
+    clientPollInterval = setInterval(refreshClientStatus, 2000);
+}
+
+function stopClientStatusPoll() {
+    if (clientPollInterval) {
+        clearInterval(clientPollInterval);
+        clientPollInterval = null;
+    }
+}
+
+function startStatusPoll() {
+    startServerStatusPoll();
+    startClientStatusPoll();
+}
+
+function stopStatusPoll() {
+    stopServerStatusPoll();
+    stopClientStatusPoll();
+}
 function stopClientStatusPoll() { stopStatusPoll(); }
 
 async function refreshClientStatus() {
@@ -2944,7 +2961,7 @@ async function refreshClientStatus() {
                 statusHtml += `
                     <div class="status-item">
                         <span class="status-label">目标地址</span>
-                        <span class="status-value">${state.server_ip}:${state.server_port}</span>
+                        <span class="status-value">${state.server_ip || '-'}:${state.server_port || '-'}</span>
                     </div>
                     <div class="status-item">
                         <span class="status-label">发送状态</span>
@@ -2966,6 +2983,56 @@ async function refreshClientStatus() {
                             <span class="status-value">${state.packets_sent} 包</span>
                         </div>
                     `;
+                }
+                // 客户端连接列表
+                const conns = state.connections || [];
+                if (conns.length > 0) {
+                    const connecting = conns.filter(c => c.status === 'connecting').length;
+                    const connected = conns.filter(c => c.status === 'connected').length;
+                    const closed = conns.filter(c => c.status === 'closed').length;
+                    statusHtml += `
+                        <div class="status-item">
+                            <span class="status-label">连接数</span>
+                            <span class="status-value">${conns.length} 个 (已连接 ${connected}, 正在连接 ${connecting}, 已断开 ${closed})</span>
+                        </div>
+                    `;
+                }
+                // TCP 客户端连接详情
+                if (clientProtocol === 'tcp') {
+                    const clientTable = document.getElementById('tcp-client-table');
+                    const connList = document.getElementById('tcp-client-connections-list');
+                    if (clientTable && conns.length > 0) {
+                        clientTable.style.display = 'block';
+                    }
+                    if (connList) {
+                        const activeConns = conns.filter(c => c.status !== 'closed');
+                        if (activeConns.length > 0) {
+                            let connHtml = '';
+                            activeConns.forEach(conn => {
+                                const statusColor = conn.status === 'connected' ? 'var(--success)' : conn.status === 'connecting' ? 'var(--warning)' : 'var(--text-muted)';
+                                const statusText = conn.status === 'connected' ? '已连接' : conn.status === 'connecting' ? '正在连接...' : conn.status;
+                                connHtml += `
+                                    <div class="connection-item">
+                                        <span style="color: ${statusColor};">●</span>
+                                        <span class="connection-info">${conn.address || conn.id}</span>
+                                        <span class="connection-info" style="color: ${statusColor};">${statusText}</span>
+                                        <span class="connection-info">${conn.bytes_sent || 0} bytes</span>
+                                    </div>
+                                `;
+                            });
+                            connList.innerHTML = connHtml;
+                        } else if (conns.length > 0) {
+                            connList.innerHTML = '<div style="color:var(--text-muted)">暂无活跃连接</div>';
+                        }
+                    }
+                }
+            } else {
+                // 客户端已停止，隐藏连接列表
+                if (clientProtocol === 'tcp') {
+                    const clientTable = document.getElementById('tcp-client-table');
+                    const connList = document.getElementById('tcp-client-connections-list');
+                    if (clientTable) clientTable.style.display = 'none';
+                    if (connList) connList.innerHTML = '';
                 }
             }
 
