@@ -1976,34 +1976,38 @@ class TCPClientManager:
         self.send_complete = False  # 发送完成标志
 
     def connect(self):
-        """只建立连接，不发送数据"""
+        """只建立连接，不发送数据（后台线程执行）"""
         add_service_log('TCP客户端', f"准备连接 {self.server_ip}:{self.server_port}，连接数: {self.connection_target}")
         self.send_stop_event.clear()  # 重置发送停止标志
-        for _ in range(self.connection_target):
-            if self.stop_event.is_set():
-                break
-            conn_id = str(uuid.uuid4())
-            conn_stop = threading.Event()
-            self.connection_context[conn_id] = {
-                'stop_event': conn_stop,
-                'socket': None,
-                'connected': False
-            }
-            with service_lock:
-                self.state['connections'][conn_id] = {
-                    'id': conn_id,
-                    'address': f"{self.server_ip}:{self.server_port}",
-                    'bytes_sent': 0,
-                    'status': 'connecting'
+        # 在后台线程中逐个建立连接，避免阻塞 API 请求
+        def _connect_all():
+            for _ in range(self.connection_target):
+                if self.stop_event.is_set():
+                    break
+                conn_id = str(uuid.uuid4())
+                conn_stop = threading.Event()
+                self.connection_context[conn_id] = {
+                    'stop_event': conn_stop,
+                    'socket': None,
+                    'connected': False
                 }
-            thread = threading.Thread(
-                target=self._run_connection,
-                args=(conn_id, conn_stop),
-                daemon=True
-            )
-            self.threads.append(thread)
-            thread.start()
-            time.sleep(max(0.01, 1.0 / self.connect_rate))
+                with service_lock:
+                    self.state['connections'][conn_id] = {
+                        'id': conn_id,
+                        'address': f"{self.server_ip}:{self.server_port}",
+                        'bytes_sent': 0,
+                        'status': 'connecting'
+                    }
+                thread = threading.Thread(
+                    target=self._run_connection,
+                    args=(conn_id, conn_stop),
+                    daemon=True
+                )
+                self.threads.append(thread)
+                thread.start()
+                time.sleep(max(0.01, 1.0 / self.connect_rate))
+        connect_thread = threading.Thread(target=_connect_all, daemon=True)
+        connect_thread.start()
 
     def start_send(self):
         """开始发送数据（需要先连接）"""
@@ -2090,6 +2094,10 @@ class TCPClientManager:
                 if conn_info:
                     conn_info['status'] = 'closed'
             self.connection_context.pop(conn_id, None)
+            # 所有连接都已关闭时更新状态
+            if not self.connection_context and not self.stop_event.is_set():
+                with service_lock:
+                    self.state['running'] = False
 
     def _run_send(self, conn_id, payload):
         """发送数据"""
@@ -9080,7 +9088,7 @@ def replay_pcap_worker(interface, pcap_files, replay_rate, replay_count, replay_
                                 if last_timestamp is not None:
                                     interval = (packet_time - last_timestamp) / multiplier
                                     if interval > 0:
-                                        time.sleep(interval)
+                                        stop_replay.wait(interval)
                                 
                                 last_timestamp = packet_time
                                 
@@ -9351,7 +9359,7 @@ def replay_pcap_worker(interface, pcap_files, replay_rate, replay_count, replay_
                                     bytes_per_sec = (mbps_limit * 1024 * 1024) / 8
                                     interval = packet_size / bytes_per_sec
                                     if interval > 0:
-                                        time.sleep(interval)
+                                        stop_replay.wait(interval)
                             
                             except Exception as e:
                                 add_service_log('报文回放', f'发送报文失败: {e}', 'error')

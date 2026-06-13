@@ -10,6 +10,7 @@ import threading
 import time
 import re
 import os
+import signal
 import logging
 from typing import Tuple, Dict, List, Optional
 
@@ -263,19 +264,37 @@ def start_replay_tcpreplay(pcap_files: List[str], interface: str,
             logger.info(f'执行 tcpreplay: {cmd}')
 
             try:
-                # 启动 tcpreplay
+                # 启动 tcpreplay（新进程组，便于整组杀掉）
                 process = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                    text=True, bufsize=1
+                    text=True, bufsize=1,
+                    preexec_fn=os.setsid
                 )
 
                 with replay_lock:
                     replay_state['process'] = process
 
+                # 独立监听线程：stop_replay_event 触发时立即杀进程
+                def _stop_watcher(proc):
+                    while proc.poll() is None:
+                        if stop_replay_event.is_set():
+                            try:
+                                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+                            except (ProcessLookupError, PermissionError):
+                                pass
+                            try:
+                                proc.kill()
+                            except (ProcessLookupError, OSError):
+                                pass
+                            return
+                        time.sleep(0.3)
+
+                watcher_thread = threading.Thread(target=_stop_watcher, args=(process,), daemon=True)
+                watcher_thread.start()
+
                 # 实时读取输出
                 while True:
                     if stop_replay_event.is_set():
-                        process.terminate()
                         logger.info('回放被用户中断')
                         break
 
@@ -344,20 +363,17 @@ def stop_replay() -> Tuple[bool, str]:
     stop_replay_event.set()
 
     with replay_lock:
-        if not replay_state['running']:
-            stop_replay_event.clear()
-            return False, "没有运行的回放任务"
-
-        # 终止 tcpreplay 进程
-        if replay_state['process']:
+        # 终止 tcpreplay 进程（杀整个进程组，包括 sudo 下的子进程）
+        if replay_state['process'] and replay_state['process'].poll() is None:
             try:
-                replay_state['process'].terminate()
-                replay_state['process'].wait(timeout=5)
-            except:
-                try:
-                    replay_state['process'].kill()
-                except:
-                    pass
+                pgid = os.getpgid(replay_state['process'].pid)
+                os.killpg(pgid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                pass
+            try:
+                replay_state['process'].kill()
+            except (ProcessLookupError, OSError):
+                pass
 
         sent = replay_state['packets_sent']
         replay_state['running'] = False

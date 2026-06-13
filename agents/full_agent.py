@@ -806,10 +806,22 @@ def api_services_status():
         # 客户端状态
         from agents.services.clients import client_states
         client_state = client_states.get(protocol, {'running': False})
-        clients_summary[protocol] = {
+        client_info = {
             'running': client_state.get('running', False),
-            'connected': client_state.get('connected', False)
+            'connected': client_state.get('connected', False),
+            'sending': client_state.get('sending', False),
+            'server_ip': client_state.get('server_ip', ''),
+            'server_port': client_state.get('server_port', 0),
+            'send_interval': client_state.get('send_interval', ''),
+            'packets_sent': client_state.get('packets_sent', 0)
         }
+        # 返回客户端连接列表
+        client_conns = client_state.get('connections', {})
+        if isinstance(client_conns, dict) and client_conns:
+            client_info['connections'] = list(client_conns.values())
+        else:
+            client_info['connections'] = []
+        clients_summary[protocol] = client_info
 
     return jsonify({
         'success': True,

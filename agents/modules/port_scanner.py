@@ -7,7 +7,9 @@
 
 import subprocess
 import logging
+import os
 import re
+import signal
 import socket
 import threading
 import time
@@ -51,7 +53,8 @@ scan_state = {
     'target': '',
     'error': None,
     'stop_flag': False,
-    'thread': None
+    'thread': None,
+    'process': None,
 }
 
 
@@ -73,6 +76,28 @@ def parse_port_range(port_range: str) -> List[int]:
     return sorted(set(ports))
 
 
+def _kill_process(proc: subprocess.Popen) -> None:
+    """强制杀掉 nmap 进程及其子进程"""
+    try:
+        pgid = os.getpgid(proc.pid)
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    try:
+        proc.kill()
+    except (ProcessLookupError, OSError):
+        pass
+
+
+def _stop_watcher(proc: subprocess.Popen, stop_flag_getter: Callable) -> None:
+    """独立线程监听 stop_flag，一旦为 True 立即杀掉 nmap 进程"""
+    while proc.poll() is None:
+        if stop_flag_getter():
+            _kill_process(proc)
+            return
+        time.sleep(0.3)
+
+
 def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
                     timeout: int = 300, progress_callback: Callable = None,
                     stop_check: Callable = None) -> Tuple[bool, Dict]:
@@ -84,7 +109,7 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
         ports: 端口范围
         scan_type: 扫描类型 (S/T/U/N/F/X/A/W/M)
         timeout: 超时时间
-        progress_callback: 进度回调函数
+        progress_callback: 进度回调函数 progress_cb(progress_percent, open_ports)
         stop_check: 停止检查函数
 
     Returns:
@@ -93,45 +118,58 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
     scan_info = SCAN_TYPES.get(scan_type, SCAN_TYPES['S'])
     nmap_flag = scan_info['nmap_flag']
 
-    # 需要 root 权限的扫描类型
     needs_root = scan_type in ['S', 'U', 'N', 'F', 'X', 'A', 'W', 'M']
 
-    # 构建命令 - 需要 root 权限时使用 sudo
     if needs_root:
         cmd = ['sudo', 'nmap', nmap_flag, '-p', ports, '-T4', '--open', '-Pn', target_ip]
     else:
         cmd = ['nmap', nmap_flag, '-p', ports, '-T4', '--open', '-Pn', target_ip]
 
+    process = None
     try:
-        # 启动 nmap 进程
+        # 启动 nmap 进程（新进程组，便于整组杀掉）
         process = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, bufsize=1
+            text=True, bufsize=1,
+            preexec_fn=os.setsid
         )
+
+        # 存储 process 引用到 scan_state，供 stop_scan 使用
+        scan_state['process'] = process
 
         open_ports = []
         progress = 0
         start_time = time.time()
+        stopped = False
+
+        # 启动独立监听线程，确保 stop_flag 被及时响应
+        watcher = threading.Thread(
+            target=_stop_watcher,
+            args=(process, lambda: scan_state['stop_flag']),
+            daemon=True
+        )
+        watcher.start()
 
         # 实时读取输出
         while True:
-            # 检查是否需要停止
-            if stop_check and stop_check():
-                process.terminate()
-                logger.info("扫描被用户中断")
-                return True, {'stopped': True, 'open_ports': open_ports}
-
-            # 检查超时
-            if time.time() - start_time > timeout:
-                process.terminate()
-                return False, {'error': f'扫描超时（{timeout}秒）'}
-
-            # 读取一行输出
+            # 读取一行输出（非阻塞方式，配合 stop_check）
             line = process.stdout.readline()
             if not line and process.poll() is not None:
                 break
 
+            # 检查是否被停止监听线程杀掉
+            if scan_state['stop_flag']:
+                stopped = True
+                break
+
+            # 检查超时
+            if time.time() - start_time > timeout:
+                _kill_process(process)
+                return False, {'error': f'扫描超时（{timeout}秒）'}
+
             line = line.strip()
+            if not line:
+                continue
 
             # 解析端口信息 - 支持 open 和 open|filtered 状态
             match = re.match(r'(\d+)/(\w+)\s+(open|open\|filtered)\s+(.+)', line)
@@ -141,7 +179,6 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
                 state = match.group(3)
                 service_raw = match.group(4).strip()
 
-                # 识别服务
                 service = COMMON_PORTS.get(port, service_raw.split()[0] if service_raw else 'unknown')
 
                 open_ports.append({
@@ -151,9 +188,8 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
                     'state': state
                 })
 
-                # 更新进度（基于发现数量估算）
                 if progress_callback:
-                    progress_callback(len(open_ports), open_ports)
+                    progress_callback(progress, open_ports)
 
             # 解析进度信息（nmap 可能输出进度百分比）
             progress_match = re.search(r'about (\d+)% done', line)
@@ -162,9 +198,18 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
                 if progress_callback:
                     progress_callback(progress, open_ports)
 
-        process.wait()
+        # 等待进程结束，清理僵尸
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _kill_process(process)
+            process.wait(timeout=3)
 
-        if process.returncode != 0:
+        if stopped:
+            logger.info("扫描被用户中断")
+            return True, {'stopped': True, 'open_ports': open_ports}
+
+        if process.returncode != 0 and not scan_state['stop_flag']:
             stderr = process.stderr.read()
             return False, {'error': stderr.strip() if stderr else 'nmap 执行失败'}
 
@@ -181,6 +226,8 @@ def nmap_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
     except Exception as e:
         logger.exception(f"nmap 扫描失败：{e}")
         return False, {'error': str(e)}
+    finally:
+        scan_state['process'] = None
 
 
 def socket_async_scan(target_ip: str, ports: str,
@@ -194,7 +241,6 @@ def socket_async_scan(target_ip: str, ports: str,
     open_ports = []
 
     for i, port in enumerate(port_list):
-        # 检查是否需要停止
         if stop_check and stop_check():
             logger.info("Socket 扫描被中断")
             return True, {'stopped': True, 'open_ports': open_ports}
@@ -217,7 +263,6 @@ def socket_async_scan(target_ip: str, ports: str,
         except Exception:
             pass
 
-        # 更新进度
         progress = int((i + 1) / total * 100)
         if progress_callback:
             progress_callback(progress, open_ports)
@@ -243,6 +288,11 @@ def start_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
     if scan_state['running']:
         return {'status': 'already_running', 'error': '已有扫描任务在运行'}
 
+    # 如果有残留进程，先杀掉
+    old_process = scan_state.get('process')
+    if old_process and old_process.poll() is None:
+        _kill_process(old_process)
+
     # 重置状态
     scan_state['running'] = True
     scan_state['progress'] = 0
@@ -250,12 +300,13 @@ def start_async_scan(target_ip: str, ports: str, scan_type: str = 'S',
     scan_state['target'] = target_ip
     scan_state['error'] = None
     scan_state['stop_flag'] = False
+    scan_state['process'] = None
 
     def scan_thread():
         global scan_state
 
-        def progress_cb(progress, results):
-            scan_state['progress'] = progress
+        def progress_cb(progress_percent, results):
+            scan_state['progress'] = progress_percent
             scan_state['results'] = results
 
         def stop_check():
@@ -293,6 +344,13 @@ def stop_scan() -> Dict:
     """停止当前扫描"""
     global scan_state
     scan_state['stop_flag'] = True
+    scan_state['running'] = False
+
+    # 立即杀掉 nmap 进程
+    proc = scan_state.get('process')
+    if proc and proc.poll() is None:
+        _kill_process(proc)
+
     return {'status': 'stopping'}
 
 

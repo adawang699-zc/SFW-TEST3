@@ -101,7 +101,7 @@ AGENT_PORT_RANGE_START = int(os.environ.get('AGENT_PORT_START', '8888'))
 AGENT_WORK_DIR = os.environ.get('AGENT_WORK_DIR', '/opt/SFW-TEST3')
 
 # Agent Python 虚拟环境路径
-AGENT_VENV_PYTHON = os.environ.get('AGENT_VENV_PYTHON', '/opt/SFW-TEST3/sfw/bin/python')
+AGENT_VENV_PYTHON = os.environ.get('AGENT_VENV_PYTHON', '/usr/bin/python3')
 
 # ========== 文件上传配置 ==========
 

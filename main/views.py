@@ -901,6 +901,7 @@ Requires=network.target
 [Service]
 Type=simple
 WorkingDirectory={settings.AGENT_WORK_DIR}
+Environment=PYTHONPATH={settings.AGENT_WORK_DIR}
 ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
 ExecStop=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -c "import sys; sys.exit(0)"
 Restart=always
@@ -949,10 +950,29 @@ WantedBy=multi-user.target
                     log_operation(request, '启动Agent', 'Agent', agent_id, f'namespace: {ns}, 状态: running')
                     return JsonResponse({'success': True, 'status': 'running', 'namespace': ns})
                 else:
-                    agent.status = 'starting'
+                    # systemctl start 返回成功但实际未运行，获取详细错误
+                    agent.status = 'error'
                     agent.save()
-                    log_operation(request, '启动Agent', 'Agent', agent_id, f'namespace: {ns}, 状态: starting')
-                    return JsonResponse({'success': True, 'status': 'starting', 'namespace': ns})
+                    err_result = subprocess.run(
+                        ['sudo', 'systemctl', 'status', service_name, '--no-pager', '-l'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    error_detail = err_result.stdout.strip() or err_result.stderr.strip() or 'Agent 启动后未运行'
+                    log_result = subprocess.run(
+                        ['sudo', 'journalctl', '-u', service_name, '--no-pager', '-n', '20'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    log_detail = log_result.stdout.strip()
+                    logger.error(f"Agent {agent_id} (namespace {ns}) 启动后状态异常: {error_detail}")
+                    log_operation(request, '启动Agent', 'Agent', agent_id,
+                                  f'namespace: {ns}, 启动后状态异常: {error_detail}', result='failure')
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'Agent 启动后未正常运行',
+                        'detail': error_detail,
+                        'log': log_detail,
+                        'namespace': ns
+                    })
             else:
                 logger.error(f"启动 Agent {agent_id} 失败: {result.stderr}")
                 log_operation(request, '启动Agent', 'Agent', agent_id, f'systemctl启动失败: {result.stderr}', result='failure')
@@ -999,24 +1019,48 @@ WantedBy=multi-user.target
             )
 
             if result.returncode == 0:
-                time.sleep(3)
-                try:
-                    resp = requests.get(
-                        f"http://{agent.interface.ip_address}:{agent.port}/api/status",
-                        timeout=5
-                    )
-                    if resp.status_code == 200:
-                        agent.status = 'running'
-                        agent.last_start_time = datetime.now()
-                        agent.save()
-                        logger.info(f"Agent {agent_id} 启动成功")
-                        log_operation(request, '启动Agent', 'Agent', agent_id, '状态: running')
-                        return JsonResponse({'success': True, 'status': 'running'})
-                except:
+                # 等待启动后多次重试健康检查
+                agent_started = False
+                for i in range(6):  # 最多等 18 秒
+                    time.sleep(3)
+                    try:
+                        resp = requests.get(
+                            f"http://{agent.interface.ip_address}:{agent.port}/api/status",
+                            timeout=3
+                        )
+                        if resp.status_code == 200:
+                            agent_started = True
+                            break
+                    except:
+                        pass
+                if agent_started:
+                    agent.status = 'running'
+                    agent.last_start_time = datetime.now()
+                    agent.save()
+                    logger.info(f"Agent {agent_id} 启动成功")
+                    log_operation(request, '启动Agent', 'Agent', agent_id, '状态: running')
+                    return JsonResponse({'success': True, 'status': 'running'})
+                else:
                     agent.status = 'error'
                     agent.save()
-                    log_operation(request, '启动Agent', 'Agent', agent_id, '状态: starting(error)')
-                    return JsonResponse({'success': True, 'status': 'starting'})
+                    err_result = subprocess.run(
+                        ['sudo', 'systemctl', 'status', agent.get_service_name(), '--no-pager', '-l'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    error_detail = err_result.stdout.strip() or err_result.stderr.strip() or 'Agent 启动后未运行'
+                    log_result = subprocess.run(
+                        ['sudo', 'journalctl', '-u', agent.get_service_name(), '--no-pager', '-n', '20'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    log_detail = log_result.stdout.strip()
+                    logger.error(f"Agent {agent_id} 启动后状态异常: {error_detail}")
+                    log_operation(request, '启动Agent', 'Agent', agent_id, f'启动后状态异常: {error_detail}', result='failure')
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Agent 启动后未正常运行',
+                        'detail': error_detail,
+                        'log': log_detail
+                    })
             else:
                 logger.error(f"启动 Agent 失败: {result.stderr}")
                 log_operation(request, '启动Agent', 'Agent', agent_id, f'systemctl启动失败: {result.stderr}', result='failure')
