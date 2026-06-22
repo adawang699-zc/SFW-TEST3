@@ -12,16 +12,16 @@
 #   sudo systemctl status network-namespace.service  # 查看状态
 
 [Unit]
-Description=Network Namespace Setup for eth1/eth2 isolation
-After=network.target
-Before=agent-eth1.service agent-eth2.service
-Conflicts=agent-eth1.service agent-eth2.service
+Description=Network Namespace Setup for Agent isolation
+After=network-online.target
+Wants=network-online.target
+Before=agent-eth1-ns.service agent-eth2-ns.service agent-eth3-ns.service agent-eth5-ns.service agent-eth6-ns.service agent-eth7-ns.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/opt/SFW-TEST3/scripts/network-namespace-setup.sh setup
-ExecStop=/opt/SFW-TEST3/scripts/network-namespace-setup.sh restore
+ExecStart=/opt/SFW-TEST3/scripts/network-namespace-setup.sh setup-all
+ExecStop=/opt/SFW-TEST3/scripts/network-namespace-setup.sh restore-all
 StandardOutput=journal
 StandardError=journal
 

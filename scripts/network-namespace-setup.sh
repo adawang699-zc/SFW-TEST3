@@ -65,6 +65,11 @@ interface_exists_in_main() {
     ip link show "$interface" 2>/dev/null | grep -q "link/ether"
 }
 
+is_protected_interface() {
+    local interface="$1"
+    [ "$interface" = "eth0" ] || [ "$interface" = "br0" ]
+}
+
 # 检查网卡是否在namespace内
 interface_in_namespace() {
     local interface="$1"
@@ -90,7 +95,7 @@ setup_interface_with_bridge() {
     local ns=$(get_namespace_name "$interface")
 
     # 安全保护：绝对不能操作管理网口和桥接口
-    if [ "$interface" = "eth0" ] || [ "$interface" = "br0" ] || echo "$interface" | grep -qE '^(br|virbr|veth|vnet|vh|docker|bond|tun|tap)'; then
+    if is_protected_interface "$interface" || echo "$interface" | grep -qE '^(br|virbr|veth|vnet|vh|docker|bond|tun|tap)'; then
         log "错误: 禁止操作接口 $interface！"
         return 1
     fi
@@ -237,7 +242,7 @@ setup_interface() {
     local ns=$(get_namespace_name "$interface")
 
     # 安全保护：绝对不能操作管理网口和桥接口
-    if [ "$interface" = "eth0" ] || [ "$interface" = "br0" ] || echo "$interface" | grep -qE '^(br|virbr|veth|vnet|vh|docker|bond|tun|tap)'; then
+    if is_protected_interface "$interface" || echo "$interface" | grep -qE '^(br|virbr|veth|vnet|vh|docker|bond|tun|tap)'; then
         log "错误: 禁止操作接口 $interface！"
         return 1
     fi
@@ -500,7 +505,9 @@ django.setup()
 from main.models import NetworkInterface, LocalAgent
 
 for iface in NetworkInterface.objects.filter(is_management=False):
-    # 跳过桥接/虚拟接口
+    # 跳过管理/桥接/虚拟接口
+    if iface.name in ('eth0', 'br0'):
+        continue
     skip_prefixes = ('br', 'virbr', 'veth', 'vnet', 'vh', 'docker', 'bond', 'tun', 'tap')
     if iface.name.startswith(skip_prefixes):
         continue
@@ -523,9 +530,12 @@ for iface in NetworkInterface.objects.filter(is_management=False):
         local ip_cidr="${ip}/16"
 
         # 检查网卡是否在主namespace（未被其他namespace占用）
-        if interface_exists_in_main "$iface"; then
-            log "配置网卡: $iface (IP=$ip_cidr, Port=$port)"
-            setup_interface "$iface" "$ip_cidr" "$port"
+        if is_protected_interface "$iface"; then
+            log "跳过管理接口: $iface"
+        elif interface_exists_in_main "$iface"; then
+            local bridge_name="br${iface#eth}"
+            log "配置网卡: $iface (IP=$ip_cidr, Port=$port, Bridge=$bridge_name)"
+            setup_interface_with_bridge "$iface" "$ip_cidr" "$port" "$bridge_name"
         else
             log "跳过 $iface: 不在主namespace"
         fi
@@ -541,6 +551,10 @@ restore_all() {
     for ns in $(ip netns list | awk '{print $1}'); do
         # 提取网卡名（ns-eth1 -> eth1）
         interface=$(echo "$ns" | sed 's/ns-//')
+        if is_protected_interface "$interface"; then
+            log "跳过管理接口: $interface"
+            continue
+        fi
 
         remove_interface "$interface"
     done
