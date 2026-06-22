@@ -243,6 +243,7 @@ ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -
 ExecStop=/bin/bash -c 'sudo ip netns exec {ns} fuser -k {agent.port}/tcp 2>/dev/null || true'
 Restart=always
 RestartSec=5
+SuccessExitStatus=9 SIGKILL
 StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}_ns.log
 StandardError=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}_ns.log
 
@@ -271,6 +272,7 @@ ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.p
 ExecStop=/bin/bash -c 'fuser -k {agent.port}/tcp 2>/dev/null || true'
 Restart=always
 RestartSec=5
+SuccessExitStatus=9 SIGKILL
 StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}.log
 StandardError=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}.log
 

@@ -361,6 +361,7 @@ ExecStart=/usr/bin/ip netns exec $ns $PYTHON_PATH -m gunicorn -w 1 -b $ip:$port 
 ExecStop=/bin/bash -c 'ip netns exec $ns fuser -k $port/tcp 2>/dev/null || true'
 Restart=always
 RestartSec=5
+SuccessExitStatus=9 SIGKILL
 StandardOutput=append:$LOG_DIR/agent_${interface}_ns.log
 StandardError=append:$LOG_DIR/agent_${interface}_ns.log
 
