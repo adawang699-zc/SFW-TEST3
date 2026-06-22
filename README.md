@@ -31,6 +31,7 @@
 ## 网络架构
 
 - **管理网络**: 192.168.81.140（SSH、Django、Windows 可访问）
+- **管理接口保护**: `eth0` 和 `br0` 是管理网络接口，禁止绑定 Agent、迁移到 namespace、配置业务 IP 或参与 VM 桥接
 - **业务网络**: 192.168.11.x / 192.168.13.x 网段（Agent 监听，通过 Network Namespace 隔离）
 
 | 服务 | 地址 | 说明 |
@@ -135,6 +136,8 @@ python restart_ubuntu.py
 - 网卡-Agent 一一绑定
 - Agent ID 格式: `agent_eth{网卡号}`
 - 使用 Network Namespace 隔离各 Agent 网络
+- namespace bridge 模式下 Agent 自动绑定物理网口所属 bridge（如 `eth1 -> br1`）
+- systemd 服务统一写入 `AGENT_ID`、`BIND_IP`、`BIND_INTERFACE`、`AGENT_PORT`、`AGENT_LOG_DIR` 环境变量
 - 支持 systemd 服务管理（启动、停止、日志）
 - 系统重启后自动恢复
 

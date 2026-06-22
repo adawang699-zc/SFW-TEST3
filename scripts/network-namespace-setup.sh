@@ -350,8 +350,10 @@ Environment="AGENT_ID=$agent_id"
 Environment="BIND_IP=$ip"
 Environment="BIND_INTERFACE=$bind_iface"
 Environment="AGENT_PORT=$port"
-ExecStart=/usr/bin/ip netns exec $ns env PYTHONPATH=${PROJECT_PATH}:${PROJECT_PATH}/sfw/lib/python3.10/site-packages $PYTHON_PATH -m gunicorn -w 1 -b $ip:$port --preload --timeout 30 agents.full_agent:app
-ExecStop=/usr/bin/ip netns exec $ns env PYTHONPATH=${PROJECT_PATH}:${PROJECT_PATH}/sfw/lib/python3.10/site-packages $PYTHON_PATH -c "import sys; sys.exit(0)"
+Environment="AGENT_LOG_DIR=$LOG_DIR"
+Environment=PYTHONPATH=${PROJECT_PATH}:${PROJECT_PATH}/sfw/lib/python3.10/site-packages
+ExecStart=/usr/bin/ip netns exec $ns $PYTHON_PATH -m gunicorn -w 1 -b $ip:$port --preload --timeout 30 agents.full_agent:app
+ExecStop=/bin/bash -c 'ip netns exec $ns fuser -k $port/tcp 2>/dev/null || true'
 Restart=always
 RestartSec=5
 StandardOutput=append:$LOG_DIR/agent_${interface}_ns.log
@@ -581,6 +583,10 @@ case "$1" in
             echo "用法: $0 remove-interface [网卡名]"
             exit 1
         fi
+        if [ "$2" = "eth0" ] || [ "$2" = "br0" ]; then
+            echo "错误: 禁止操作管理接口 $2！"
+            exit 1
+        fi
         # 自动检测并选择正确的移除方式
         local ns_for_remove=$(get_namespace_name "$2")
         if ip netns exec "$ns_for_remove" ip link show "$2" 2>/dev/null | grep -q "master"; then
@@ -595,11 +601,19 @@ case "$1" in
             echo "用法: $0 start-agent [网卡名]"
             exit 1
         fi
+        if [ "$2" = "eth0" ] || [ "$2" = "br0" ]; then
+            echo "错误: 禁止操作管理接口 $2！"
+            exit 1
+        fi
         start_agent "$2"
         ;;
     stop-agent)
         if [ $# -lt 2 ]; then
             echo "用法: $0 stop-agent [网卡名]"
+            exit 1
+        fi
+        if [ "$2" = "eth0" ] || [ "$2" = "br0" ]; then
+            echo "错误: 禁止操作管理接口 $2！"
             exit 1
         fi
         stop_agent "$2"
@@ -619,6 +633,10 @@ case "$1" in
     test)
         if [ $# -lt 3 ]; then
             echo "用法: $0 test [网卡名] [目标IP]"
+            exit 1
+        fi
+        if [ "$2" = "eth0" ] || [ "$2" = "br0" ]; then
+            echo "错误: 禁止操作管理接口 $2！"
             exit 1
         fi
         test_namespace "$2" "$3"

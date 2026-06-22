@@ -60,6 +60,14 @@ except ImportError as e:
 
 logger = logging.getLogger('main')
 
+PROTECTED_MANAGEMENT_INTERFACES = {'eth0', 'br0'}
+
+
+def is_protected_management_interface(interface_name: str) -> bool:
+    """判断接口是否为管理接口。"""
+    return interface_name in PROTECTED_MANAGEMENT_INTERFACES
+
+
 # 认证服务器操作日志
 _auth_logger = None
 
@@ -197,6 +205,82 @@ def exec_in_namespace(namespace, command):
         return subprocess.run(full_cmd, capture_output=True, text=True, timeout=30)
     else:
         return subprocess.run(command, capture_output=True, text=True, timeout=30)
+
+
+def get_agent_bind_interface(agent: LocalAgent) -> str:
+    """获取 Agent 实际绑定接口。"""
+    interface_name = agent.interface.name
+    if is_protected_management_interface(interface_name):
+        raise ValueError(f'{interface_name} 是管理接口，禁止操作')
+
+    bridge_name = get_bridge_master_iface(interface_name, agent.interface.namespace)
+    return bridge_name or interface_name
+
+
+def build_agent_service_content(agent: LocalAgent) -> str:
+    """生成 Agent systemd 服务配置。"""
+    interface_name = agent.interface.name
+    ip_address = agent.interface.ip_address
+    bind_interface = get_agent_bind_interface(agent)
+    ns = agent.interface.namespace
+
+    if ns:
+        return f"""[Unit]
+Description=Packet Agent {agent.agent_id} (in namespace {ns})
+After=network.target
+Requires=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={settings.AGENT_WORK_DIR}
+Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
+Environment=AGENT_LOG_DIR={settings.AGENT_WORK_DIR}/logs
+Environment="AGENT_ID={agent.agent_id}"
+Environment="BIND_IP={ip_address}"
+Environment="BIND_INTERFACE={bind_interface}"
+Environment="AGENT_PORT={agent.port}"
+ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
+ExecStop=/bin/bash -c 'sudo ip netns exec {ns} fuser -k {agent.port}/tcp 2>/dev/null || true'
+Restart=always
+RestartSec=5
+StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}_ns.log
+StandardError=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}_ns.log
+
+LimitNOFILE=65535
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+    return f"""[Unit]
+Description=Packet Agent {agent.agent_id} ({interface_name})
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={settings.AGENT_WORK_DIR}
+Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
+Environment=AGENT_LOG_DIR={settings.AGENT_WORK_DIR}/logs
+Environment="AGENT_ID={agent.agent_id}"
+Environment="BIND_IP={ip_address}"
+Environment="BIND_INTERFACE={bind_interface}"
+Environment="AGENT_PORT={agent.port}"
+ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
+ExecStop=/bin/bash -c 'fuser -k {agent.port}/tcp 2>/dev/null || true'
+Restart=always
+RestartSec=5
+StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}.log
+StandardError=append:{settings.AGENT_WORK_DIR}/logs/agent_{interface_name}.log
+
+LimitNOFILE=65535
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
+"""
 
 
 def check_namespace_agent_status(namespace, ip_address, port, service_name=None):
@@ -770,7 +854,7 @@ def api_agent_create(request):
             return JsonResponse({'success': False, 'error': '网卡不存在'})
 
         # 检查网卡是否是管理网卡
-        if interface.is_management:
+        if interface.is_management or is_protected_management_interface(interface.name):
             return JsonResponse({'success': False, 'error': '管理网卡不能绑定 Agent'})
 
         # 检查网卡是否已绑定 Agent
@@ -876,6 +960,12 @@ def api_agent_start(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
 
+        if is_protected_management_interface(agent.interface.name):
+            return JsonResponse({
+                'success': False,
+                'error': f'{agent.interface.name} 是管理接口，禁止启动 Agent'
+            })
+
         # 检查网卡是否有 IP 地址
         if not agent.interface.ip_address:
             return JsonResponse({
@@ -893,30 +983,7 @@ def api_agent_start(request):
             service_file = f'/etc/systemd/system/{service_name}.service'
 
             # 创建 namespace 服务文件
-            service_content = f"""[Unit]
-Description=Packet Agent {agent.agent_id} (in namespace {ns})
-After=network.target
-Requires=network.target
-
-[Service]
-Type=simple
-WorkingDirectory={settings.AGENT_WORK_DIR}
-Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
-Environment=AGENT_LOG_DIR={settings.AGENT_WORK_DIR}/logs
-ExecStart=/usr/bin/ip netns exec {ns} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
-ExecStop=/bin/bash -c 'sudo ip netns exec {ns} fuser -k {agent.port}/tcp 2>/dev/null || true'
-Restart=always
-RestartSec=5
-StandardOutput=append:{settings.AGENT_WORK_DIR}/logs/agent_{agent.interface.name}_ns.log
-StandardError=append:{settings.AGENT_WORK_DIR}/logs/agent_{agent.interface.name}_ns.log
-
-LimitNOFILE=65535
-TimeoutStartSec=30
-TimeoutStopSec=10
-
-[Install]
-WantedBy=multi-user.target
-"""
+            service_content = build_agent_service_content(agent)
 
             # 写入服务文件
             subprocess.run(
@@ -983,25 +1050,7 @@ WantedBy=multi-user.target
             # ========== 主 namespace Agent 启动（原有逻辑）==========
             service_file = f'/etc/systemd/system/{agent.get_service_name()}.service'
 
-            service_content = f"""[Unit]
-Description=Packet Agent {agent.agent_id} ({agent.interface.name})
-After=network.target
-
-[Service]
-Type=simple
-Environment="AGENT_ID={agent.agent_id}"
-Environment="BIND_IP={agent.interface.ip_address}"
-Environment="BIND_INTERFACE={agent.interface.name}"
-Environment="AGENT_PORT={agent.port}"
-WorkingDirectory={settings.AGENT_WORK_DIR}
-Environment=PYTHONPATH={settings.AGENT_PYTHONPATH}
-ExecStart={settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {agent.interface.ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-"""
+            service_content = build_agent_service_content(agent)
 
             subprocess.run(
                 ['sudo', 'tee', service_file],
@@ -1222,6 +1271,11 @@ def api_agent_config_ip(request):
 
         agent = LocalAgent.objects.get(agent_id=agent_id)
         interface_name = agent.interface.name
+        if is_protected_management_interface(interface_name):
+            return JsonResponse({
+                'success': False,
+                'error': f'{interface_name} 是管理接口，禁止配置 IP 或重启网络'
+            })
         namespace = agent.interface.namespace
 
         # 检测网卡是否在 bridge 中（如 eth1 在 br1 中）
@@ -1260,36 +1314,9 @@ def api_agent_config_ip(request):
             agent.interface.save()
 
             # 更新 systemd 服务配置文件
-            if namespace:
-                service_name = agent.get_namespace_service_name()
-                exec_prefix = f'/usr/bin/ip netns exec {namespace}'
-            else:
-                service_name = agent.get_service_name()
-                exec_prefix = ''
-
+            service_name = agent.get_namespace_service_name() if namespace else agent.get_service_name()
             service_file = f'/etc/systemd/system/{service_name}.service'
-            if exec_prefix:
-                exec_start = f'{exec_prefix} {settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app'
-            else:
-                exec_start = f'{settings.AGENT_VENV_PYTHON} -m gunicorn -w 1 -b {ip_address}:{agent.port} --preload --timeout 30 agents.full_agent:app'
-            service_content = f"""[Unit]
-Description=Packet Agent {agent.agent_id} ({interface_name})
-After=network.target
-
-[Service]
-Type=simple
-Environment="AGENT_ID={agent.agent_id}"
-Environment="BIND_IP={ip_address}"
-Environment="BIND_INTERFACE={bind_interface}"
-Environment="AGENT_PORT={agent.port}"
-WorkingDirectory={settings.AGENT_WORK_DIR}
-ExecStart={exec_start}
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-"""
+            service_content = build_agent_service_content(agent)
             subprocess.run(
                 ['sudo', 'tee', service_file],
                 input=service_content,
@@ -3330,6 +3357,12 @@ def api_interface_config_ip(request):
         if not interface_name or not ip_address:
             return JsonResponse({'success': False, 'error': '缺少网卡名或 IP 地址'})
 
+        if is_protected_management_interface(interface_name):
+            return JsonResponse({
+                'success': False,
+                'error': f'{interface_name} 是管理接口，禁止配置 IP 或重启网络'
+            })
+
         # 检查网卡是否在 namespace 内
         iface = NetworkInterface.objects.filter(name=interface_name).first()
         namespace = iface.namespace if iface else None
@@ -3389,6 +3422,12 @@ def api_interface_startup(request):
 
         if not interface_name:
             return JsonResponse({'success': False, 'error': '缺少网卡名'})
+
+        if is_protected_management_interface(interface_name):
+            return JsonResponse({
+                'success': False,
+                'error': f'{interface_name} 是管理接口，禁止启动或重启网络'
+            })
 
         # 检查网卡是否在 namespace 内
         iface = NetworkInterface.objects.filter(name=interface_name).first()
@@ -4579,6 +4618,12 @@ def api_namespace_setup_interface(request):
         if not ip_cidr:
             return JsonResponse({'success': False, 'error': 'IP地址不能为空'})
 
+        if is_protected_management_interface(interface_name):
+            return JsonResponse({
+                'success': False,
+                'error': f'{interface_name} 是管理接口，禁止移动到 namespace'
+            })
+
         # 执行 setup-interface-with-bridge（IP配在bridge上，支持veth桥接主namespace）
         bridge_name = f"br{interface_name.replace('eth', '')}"
         result = subprocess.run(
@@ -4621,6 +4666,12 @@ def api_namespace_restore_interface(request):
 
         if not interface_name:
             return JsonResponse({'success': False, 'error': '网卡名称不能为空'})
+
+        if is_protected_management_interface(interface_name):
+            return JsonResponse({
+                'success': False,
+                'error': f'{interface_name} 是管理接口，禁止恢复或重启网络'
+            })
 
         # 执行 remove-interface
         result = subprocess.run(
@@ -7638,6 +7689,14 @@ def _vm_bridge_config_post(request):
 def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> dict:
     """为单个 VM 配置桥接到指定 NS 网口"""
     try:
+        if is_protected_management_interface(target_iface):
+            return {
+                'success': False,
+                'vm': vm_name,
+                'interface': target_iface,
+                'error': f'{target_iface} 是管理接口，禁止用于 VM 桥接'
+            }
+
         ns_name = f'ns-{target_iface}'
         ns_id = target_iface.replace('eth', '')
         bridge_host = f'brv{ns_id}'       # 主机网桥 (brv1)
@@ -7660,8 +7719,11 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
         steps = []
 
         # 1. 检查 ns 是否存在
-        ns_check = run(f'ip netns list | grep -q "^{ns_name}"')
-        if ns_check.returncode != 0:
+        ns_exists = subprocess.run(
+            ['ip', 'netns', 'list'],
+            capture_output=True, text=True, timeout=5
+        ).stdout.split()
+        if ns_name not in ns_exists:
             # 尝试创建 NS
             run(f'ip netns add {ns_name}')
             # 把网口移入 NS
@@ -7680,9 +7742,7 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
         # 3. 将物理网口加入 NS 网桥
         r2 = run_ns(ns_name, f'ip link show {target_iface}')
         if r2.returncode == 0:
-            r2b = run_ns(ns_name,
-                f'ip link show {target_iface} | grep -q "master {bridge_ns}"')
-            if r2b.returncode != 0:
+            if f'master {bridge_ns}' not in r2.stdout:
                 run_ns(ns_name, f'ip link set {target_iface} master {bridge_ns}')
                 run_ns(ns_name, f'ip link set {target_iface} up')
                 steps.append(f'将 {target_iface} 加入网桥 {bridge_ns}')
@@ -7712,8 +7772,8 @@ def _setup_single_vm_bridge(vm_name: str, target_iface: str, password: str) -> d
             steps.append(f'主机网桥 {bridge_host} 已存在')
 
         # 将 veth_host 加入主机网桥
-        r4b = run(f'ip link show {veth_host} | grep -q "master {bridge_host}"')
-        if r4b.returncode != 0:
+        veth_host_status = run(f'ip link show {veth_host}')
+        if f'master {bridge_host}' not in veth_host_status.stdout:
             run(f'ip link set {veth_host} master {bridge_host}')
             steps.append(f'将 {veth_host} 加入 {bridge_host}')
         else:
@@ -7848,11 +7908,36 @@ def _vm_bridge_config_get():
             for line in ns_result.stdout.strip().split('\n'):
                 ns_name = line.split()[0] if line.strip() else ''
                 if ns_name.startswith('ns-eth'):
-                    ns_names.append(ns_name)
                     iface_name = ns_name.replace('ns-', '')
+                    if is_protected_management_interface(iface_name):
+                        continue
+
+                    ns_names.append(ns_name)
+                    ns_id = iface_name.replace('eth', '')
+                    bridge_ns = f'br{ns_id}'
+                    bridge_host = f'brv{ns_id}'
+                    veth_host = f'vh{ns_id}h'
+                    veth_ns = f'vh{ns_id}n'
+                    bridge_ns_exists = subprocess.run(
+                        ['sudo', 'ip', 'netns', 'exec', ns_name, 'ip', 'link', 'show', bridge_ns],
+                        capture_output=True, text=True, timeout=5
+                    ).returncode == 0
+                    bridge_host_exists = subprocess.run(
+                        ['ip', 'link', 'show', bridge_host],
+                        capture_output=True, text=True, timeout=5
+                    ).returncode == 0
+                    iface_master = get_bridge_master_iface(iface_name, ns_name)
                     ns_interfaces.append({
                         'ns': ns_name,
-                        'interface': iface_name
+                        'interface': iface_name,
+                        'bridge_ns': bridge_ns,
+                        'bridge_ns_exists': bridge_ns_exists,
+                        'bridge_host': bridge_host,
+                        'bridge_host_exists': bridge_host_exists,
+                        'veth_host': veth_host,
+                        'veth_ns': veth_ns,
+                        'iface_master': iface_master,
+                        'display_name': f'{iface_name} / ns内{bridge_ns} / 主机{bridge_host}'
                     })
 
         # 检查已存在的桥接设备
